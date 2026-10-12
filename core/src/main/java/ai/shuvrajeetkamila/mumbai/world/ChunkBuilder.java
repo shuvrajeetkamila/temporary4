@@ -82,6 +82,9 @@ public final class ChunkBuilder {
         FloatList colliders = new FloatList(64);
         if (anyLand) {
             buildRoads(ox, oz, size, lod);
+            if (lod == 0) {
+                buildLocalStreets(ox, oz, size);
+            }
             buildRails(ox, oz, size, lod);
             if (lod <= 1) {
                 buildBuildings(cx, cz, ox, oz, size, lod, colliders, g);
@@ -212,6 +215,119 @@ public final class ChunkBuilder {
                     continue;
                 }
                 emitRoadSegment(ox, oz, ax, az, bx, bz, halfWidth, p.layer, p.cls, lod);
+            }
+        }
+    }
+
+    // ------------------------------------------------------- local street lattice
+    //
+    // The authored network only contains the 34 named arterials. A city is mostly the
+    // streets *between* those, so they are generated here instead of being authored.
+    //
+    // The lattice is a pure function of world position, never of the chunk, which is
+    // what makes it seamless: two neighbouring tiles evaluate the same lines and their
+    // asphalt meets exactly. Line k sits at k * BLOCK plus a hash-derived jitter, so
+    // the grid is irregular the way a real street plan is, without being random per
+    // frame or per tile.
+
+    /** Nominal block size between local streets, metres. */
+    private static final float BLOCK = 92f;
+    private static final float STREET_HALF_WIDTH = 5.2f;
+
+    /** Position of lattice line {@code k} on an axis, including its jitter. */
+    private static float latticeLine(int k, int axisSeed) {
+        return k * BLOCK + (Mth.rand01(k, axisSeed, 7717) - 0.5f) * BLOCK * 0.34f;
+    }
+
+    /** True where the land use supports a street grid at all. */
+    private static boolean streetsAllowed(int lu) {
+        return lu == LandUse.URBAN_LOW || lu == LandUse.SUBURBAN || lu == LandUse.URBAN
+                || lu == LandUse.URBAN_DENSE || lu == LandUse.CBD || lu == LandUse.INDUSTRIAL;
+    }
+
+    /**
+     * Distance from a point to the nearest local street centreline, or a large number
+     * where no street grid applies. Used both to draw the streets and to keep buildings
+     * off them.
+     */
+    public float localStreetDistance(double x, double z) {
+        if (!streetsAllowed(world.landUseAt(x, z))) {
+            return 1e9f;
+        }
+        int kx = (int) Math.floor(x / BLOCK);
+        int kz = (int) Math.floor(z / BLOCK);
+        double best = 1e9;
+        for (int d = -1; d <= 1; d++) {
+            best = Math.min(best, Math.abs(x - latticeLine(kx + d, 13)));
+            best = Math.min(best, Math.abs(z - latticeLine(kz + d, 29)));
+        }
+        return (float) best;
+    }
+
+    private void buildLocalStreets(double ox, double oz, float size) {
+        int k0x = (int) Math.floor(ox / BLOCK) - 1;
+        int k1x = (int) Math.floor((ox + size) / BLOCK) + 1;
+        int k0z = (int) Math.floor(oz / BLOCK) - 1;
+        int k1z = (int) Math.floor((oz + size) / BLOCK) + 1;
+
+        // North-south streets, then east-west, each clipped to the chunk and broken
+        // wherever the land under them is not built up.
+        for (int k = k0x; k <= k1x; k++) {
+            emitStreetRun(ox, oz, size, latticeLine(k, 13), true);
+        }
+        for (int k = k0z; k <= k1z; k++) {
+            emitStreetRun(ox, oz, size, latticeLine(k, 29), false);
+        }
+    }
+
+    /**
+     * Lay one lattice line across the chunk as a run of short quads, skipping the parts
+     * that fall on water, parkland or an existing arterial.
+     */
+    private void emitStreetRun(double ox, double oz, float size, double fixed, boolean northSouth) {
+        double lo = northSouth ? oz : ox;
+        if ((northSouth ? fixed - ox : fixed - oz) < -STREET_HALF_WIDTH
+                || (northSouth ? fixed - ox : fixed - oz) > size + STREET_HALF_WIDTH) {
+            return;
+        }
+        final float step = 11.5f;
+        int steps = Math.max(1, (int) Math.ceil(size / step));
+        for (int s = 0; s < steps; s++) {
+            double a = lo + s * (double) size / steps;
+            double b = lo + (s + 1) * (double) size / steps;
+            double midAlong = (a + b) * 0.5;
+            double mx = northSouth ? fixed : midAlong;
+            double mz = northSouth ? midAlong : fixed;
+
+            if (!streetsAllowed(world.landUseAt(mx, mz))) {
+                continue;
+            }
+            // Do not pave over an arterial: it already has its own, wider surface.
+            if (nearRoadDistance(mx, mz) < STREET_HALF_WIDTH + 2.0) {
+                continue;
+            }
+            float ground = world.heightAt(mx, mz);
+            if (ground < 0.4f) {
+                continue;
+            }
+            float y = ground + 0.14f;
+            float shade = 0.30f + Mth.rand01((int) (mx / BLOCK), (int) (mz / BLOCK), 83) * 0.05f;
+
+            float x0, z0, x1, z1, x2, z2, x3, z3;
+            if (northSouth) {
+                x0 = (float) (fixed - STREET_HALF_WIDTH - ox);
+                x1 = (float) (fixed + STREET_HALF_WIDTH - ox);
+                z0 = (float) (a - oz);
+                z1 = (float) (b - oz);
+                mesh.quadXYZ(x0, y, z0, x0, y, z1, x1, y, z1, x1, y, z0,
+                        shade, shade * 0.99f, shade * 0.97f, 0f);
+            } else {
+                z0 = (float) (fixed - STREET_HALF_WIDTH - oz);
+                z1 = (float) (fixed + STREET_HALF_WIDTH - oz);
+                x0 = (float) (a - ox);
+                x1 = (float) (b - ox);
+                mesh.quadXYZ(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1,
+                        shade, shade * 0.99f, shade * 0.97f, 0f);
             }
         }
     }
@@ -408,7 +524,10 @@ public final class ChunkBuilder {
                     }
                     double roadDist = nearRoadDistance(wx, wz);
                     if (roadDist < 9.0) {
-                        continue;   // keep the carriageway clear
+                        continue;   // keep the arterial carriageway clear
+                    }
+                    if (localStreetDistance(wx, wz) < STREET_HALF_WIDTH + 2.4f) {
+                        continue;   // and the local street in front of the plot
                     }
                     float ground = world.heightAt(wx, wz);
                     if (ground < 0.4f) {
@@ -742,7 +861,8 @@ public final class ChunkBuilder {
                         g.treeCount++;
                     }
                 } else if (LandUse.isUrban(lu)) {
-                    double rd = nearRoadDistance(wx, wz);
+                    double rd = Math.min(nearRoadDistance(wx, wz),
+                            localStreetDistance(wx, wz) - STREET_HALF_WIDTH);
                     if (rd > 0 && rd < 7 && rnd < 0.35f) {
                         // street tree / lamp post along the kerb
                         if (rnd < 0.18f) {

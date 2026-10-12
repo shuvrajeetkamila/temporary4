@@ -1,5 +1,10 @@
 package ai.shuvrajeetkamila.mumbai.game;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import ai.shuvrajeetkamila.mumbai.core.Mth;
 import ai.shuvrajeetkamila.mumbai.physics.CollisionWorld;
 import ai.shuvrajeetkamila.mumbai.world.LandUse;
@@ -59,6 +64,18 @@ public final class AgentSystem {
     private float[] pTimer;
     private int pCount;
 
+    /**
+     * Uniform hash grid over every road segment in the city, built once at load.
+     *
+     * <p>Without it, spawning meant picking a random road out of the whole 65 km AOI and
+     * hoping it happened to be nearby, which in practice spawned nothing at all: the
+     * city has thousands of segments and only a handful are ever within 420 m of the
+     * player. Each entry packs the road index and segment index into one int, and the
+     * key is the cell the segment midpoint falls in.
+     */
+    private static final int ROAD_CELL = 512;
+    private final Map<Long, int[]> roadGrid = new HashMap<>();
+
     private float[] vehicleInstances = new float[0];
     private float[] pedInstanceData = new float[0];
     private int rng = 0x5eed;
@@ -68,6 +85,67 @@ public final class AgentSystem {
         this.world = world;
         this.collision = collision;
         allocate(256, 256);
+        buildRoadGrid();
+    }
+
+    private static long cellKey(double x, double z) {
+        long cx = (long) Math.floor(x / ROAD_CELL);
+        long cz = (long) Math.floor(z / ROAD_CELL);
+        return (cx << 32) ^ (cz & 0xFFFFFFFFL);
+    }
+
+    private void buildRoadGrid() {
+        // Roads are at most a few hundred per city and a few thousand segments, so a
+        // plain list-per-cell pass is fine and happens once.
+        Map<Long, List<Integer>> acc = new HashMap<>();
+        for (int ri = 0; ri < world.roads.size(); ri++) {
+            WorldData.Polyline p = world.roads.get(ri);
+            if (p.pointCount() < 2 || ri > 0xFFFF) {
+                continue;
+            }
+            for (int si = 1; si < p.pointCount() && si <= 0xFFFF; si++) {
+                double ax = p.x(si - 1);
+                double az = p.z(si - 1);
+                double bx = p.x(si);
+                double bz = p.z(si);
+                // Long segments must appear in every cell they cross, otherwise a
+                // 4 km stretch of the Eastern Express Highway would only be spawnable
+                // from one 512 m box in the middle of it.
+                double len = Math.hypot(bx - ax, bz - az);
+                int steps = Math.max(1, (int) Math.ceil(len / (ROAD_CELL * 0.5)));
+                long lastKey = Long.MIN_VALUE;
+                for (int k = 0; k <= steps; k++) {
+                    double t = k / (double) steps;
+                    long key = cellKey(ax + (bx - ax) * t, az + (bz - az) * t);
+                    if (key == lastKey) {
+                        continue;
+                    }
+                    lastKey = key;
+                    List<Integer> bucket = acc.get(key);
+                    if (bucket == null) {
+                        bucket = new ArrayList<Integer>(4);
+                        acc.put(key, bucket);
+                    }
+                    int packed = (ri << 16) | si;
+                    if (!bucket.contains(packed)) {
+                        bucket.add(packed);
+                    }
+                }
+            }
+        }
+        for (Map.Entry<Long, List<Integer>> e : acc.entrySet()) {
+            List<Integer> v = e.getValue();
+            int[] arr = new int[v.size()];
+            for (int i = 0; i < arr.length; i++) {
+                arr[i] = v.get(i);
+            }
+            roadGrid.put(e.getKey(), arr);
+        }
+    }
+
+    /** Number of occupied road cells; used by the coverage tests. */
+    public int roadCellCount() {
+        return roadGrid.size();
     }
 
     private void allocate(int vehicles, int peds) {
@@ -164,39 +242,72 @@ public final class AgentSystem {
     }
 
     private void spawnVehicle(double fx, double fz) {
-        if (world.roads.isEmpty() || vCount >= vRoad.length) {
+        if (roadGrid.isEmpty() || vCount >= vRoad.length) {
             return;
         }
-        // Pick a road segment near the focus.
-        int tries = 12;
+        // Look only in the cells that can possibly contain a segment in the spawn
+        // annulus, rather than sampling the whole city and hoping.
+        int reach = (int) Math.ceil(SPAWN_RADIUS / (double) ROAD_CELL);
+        int span = reach * 2 + 1;
+        long baseX = (long) Math.floor(fx / ROAD_CELL);
+        long baseZ = (long) Math.floor(fz / ROAD_CELL);
+        int tries = 24;
         while (tries-- > 0) {
-            int ri = (int) (rand() * world.roads.size());
+            long cx = baseX + (long) (rand() * span) - reach;
+            long cz = baseZ + (long) (rand() * span) - reach;
+            int[] bucket = roadGrid.get((cx << 32) ^ (cz & 0xFFFFFFFFL));
+            if (bucket == null || bucket.length == 0) {
+                continue;
+            }
+            int packed = bucket[Math.min(bucket.length - 1, (int) (rand() * bucket.length))];
+            int ri = packed >>> 16;
+            int si = packed & 0xFFFF;
             if (ri >= world.roads.size()) {
                 continue;
             }
             WorldData.Polyline p = world.roads.get(ri);
-            if (p.pointCount() < 2) {
+            if (si < 1 || si >= p.pointCount()) {
                 continue;
             }
-            int si = 1 + (int) (rand() * (p.pointCount() - 1));
-            if (si >= p.pointCount()) {
-                si = p.pointCount() - 1;
+            // Spawn at a point *on* the segment near the player, not at its midpoint.
+            // Arterials here are single polyline segments kilometres long, so testing
+            // the midpoint rejected every road the player was actually standing on.
+            double ax = p.x(si - 1);
+            double az = p.z(si - 1);
+            double bx = p.x(si);
+            double bz = p.z(si);
+            double ex = bx - ax;
+            double ez = bz - az;
+            double len2 = ex * ex + ez * ez;
+            if (len2 < 1e-6) {
+                continue;
             }
-            double mx = (p.x(si - 1) + p.x(si)) * 0.5;
-            double mz = (p.z(si - 1) + p.z(si)) * 0.5;
+            double proj = ((fx - ax) * ex + (fz - az) * ez) / len2;
+            double len = Math.sqrt(len2);
+            // Offset along the road so traffic appears ahead of and behind the player.
+            double spread = (rand() * 2f - 1f) * (SPAWN_RADIUS * 0.92) / len;
+            double tt = proj + spread;
+            if (tt < 0.0 || tt > 1.0) {
+                continue;
+            }
+            double mx = ax + ex * tt;
+            double mz = az + ez * tt;
             double d2 = (mx - fx) * (mx - fx) + (mz - fz) * (mz - fz);
-            if (d2 > SPAWN_RADIUS * SPAWN_RADIUS || d2 < 900) {
+            // Not on top of the player, not beyond the ring.
+            if (d2 > SPAWN_RADIUS * SPAWN_RADIUS || d2 < 400) {
                 continue;
             }
             int i = vCount++;
             vRoad[i] = ri;
             vSeg[i] = si;
-            vT[i] = rand();
+            vT[i] = (float) tt;
             vDir[i] = rand() < 0.5f ? 1f : -1f;
             float r = rand();
             // Mumbai's road mix: lots of taxis, autos and two wheelers.
-            vType[i] = r < 0.22f ? 0 : r < 0.42f ? 1 : r < 0.60f ? 2 : r < 0.74f ? 3
-                    : r < 0.84f ? 4 : r < 0.92f ? 5 : r < 0.97f ? 6 : 7;
+            // Must stay within ProtoMeshes.VEHICLE_KINDS (0..6): hatchback, auto,
+            // sedan, taxi, bus, truck, motorcycle.
+            vType[i] = r < 0.26f ? 0 : r < 0.46f ? 1 : r < 0.62f ? 2 : r < 0.76f ? 3
+                    : r < 0.85f ? 4 : r < 0.92f ? 5 : 6;
             float lanes = Math.max(1, p.lanes);
             float laneWidth = 3.3f;
             int laneIdx = (int) (rand() * Math.max(1, lanes / 2f));

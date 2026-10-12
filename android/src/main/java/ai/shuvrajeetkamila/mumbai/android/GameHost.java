@@ -348,6 +348,9 @@ public final class GameHost implements WorldStreamer.TileSink {
      * eco profiles upload fewer tiles per frame, which is one of the ways eco mode
      * does less work rather than merely drawing less often.
      */
+    /** Marker for a resident tile that has no geometry to draw. */
+    private static final Object EMPTY_TILE = new Object();
+
     private void uploadReadyTiles(QualityProfile profile) {
         int budget = profile.isEco() ? 1 : (profile.targetFps >= 30 ? 3 : 2);
         readyScratch.clear();
@@ -355,23 +358,18 @@ public final class GameHost implements WorldStreamer.TileSink {
         for (int i = 0; i < readyScratch.size(); i++) {
             WorldStreamer.Tile t = readyScratch.get(i);
             if (t.geometry == null || t.geometry.triangles == 0) {
-                t.state = t.lod == 0 ? WorldStreamer.S_ACTIVE_HIGH
-                        : t.lod == 1 ? WorldStreamer.S_ACTIVE_MEDIUM
-                        : WorldStreamer.S_ACTIVE_LOW;
-                t.gpu = Boolean.TRUE;      // legitimately empty: open water, no geometry
-                t.geometry = null;
+                // Legitimately empty - open water, usually. Still mark it resident so
+                // the ring logic does not queue it again every frame.
+                engine.streamer.markUploaded(t, EMPTY_TILE);
                 continue;
             }
             TileGpu gpu = uploadTile(t);
             if (gpu == null) {
-                t.state = WorldStreamer.S_UNLOADED;
+                engine.streamer.markUploadFailed(t);
                 continue;
             }
             tileGpu.put(t.key, gpu);
-            t.gpu = gpu;
-            t.state = t.lod == 0 ? WorldStreamer.S_ACTIVE_HIGH
-                    : t.lod == 1 ? WorldStreamer.S_ACTIVE_MEDIUM : WorldStreamer.S_ACTIVE_LOW;
-            t.geometry = null;         // CPU copy is no longer needed
+            engine.streamer.markUploaded(t, gpu);
         }
         telemetry.chunksActive = engine.streamer.activeCount();
         telemetry.chunksPending = engine.streamer.pendingCount();

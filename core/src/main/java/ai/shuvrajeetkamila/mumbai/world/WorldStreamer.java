@@ -54,6 +54,8 @@ public final class WorldStreamer {
         public double centreX, centreZ;
         public float radius;
         public float minY, maxY;
+        /** Approximate GPU footprint once uploaded, for the memory readout. */
+        public int geometryBytes;
     }
 
     /** Lets the renderer release GPU resources when a tile is evicted. */
@@ -99,6 +101,8 @@ public final class WorldStreamer {
     public int statPending;
     public int statEvicted;
     public int statUploads;
+    public int statActivated;
+    public int statUploadFailures;
 
     public WorldStreamer(final WorldData world, int threads) {
         this.world = world;
@@ -432,6 +436,62 @@ public final class WorldStreamer {
         }
         statUploads += scratch.size();
         return scratch;
+    }
+
+    /**
+     * The host reports a successful GPU upload. This is the QUEUED_GPU -> ACTIVE_*
+     * edge of the streaming state machine; it lives here, rather than in the renderer,
+     * so the whole machine is owned and testable in one place. {@code gpuHandle} is
+     * opaque to the streamer: the renderer gets it back in {@link #collectRenderable}
+     * and on eviction, and a headless caller can pass any non-null marker.
+     *
+     * <p>Pass {@code sentinel} for a tile that legitimately has nothing to draw (open
+     * water, for instance) so it still counts as resident and is not re-queued forever.
+     */
+    public void markUploaded(Tile tile, Object gpuHandle) {
+        if (tile == null || gpuHandle == null) {
+            throw new IllegalArgumentException("markUploaded needs a tile and a handle");
+        }
+        if (tile.cancelled) {
+            // Raced with an eviction. Hand the freshly created resource straight back
+            // so the renderer deletes it instead of leaking it.
+            tile.gpu = gpuHandle;
+            tile.state = S_EVICTING;
+            if (sink != null) {
+                sink.onTileEvicted(tile);
+            }
+            tile.geometry = null;
+            tiles.remove(tile.key);
+            statEvicted++;
+            return;
+        }
+        tile.gpu = gpuHandle;
+        tile.geometryBytes = tile.geometry == null ? 0 : estimateBytes(tile.geometry);
+        tile.state = tile.lod == 0 ? S_ACTIVE_HIGH
+                : (tile.lod == 1 ? S_ACTIVE_MEDIUM : S_ACTIVE_LOW);
+        // The CPU copy has served its purpose; drop it so the decode arena can be reused.
+        tile.geometry = null;
+        statActivated++;
+    }
+
+    /**
+     * The host could not upload (out of GPU memory, context loss). The tile goes back
+     * to UNLOADED so the normal ring logic can decide whether to try again, rather than
+     * being stuck in QUEUED_GPU forever.
+     */
+    public void markUploadFailed(Tile tile) {
+        if (tile == null) {
+            return;
+        }
+        tile.geometry = null;
+        tile.gpu = null;
+        tile.state = S_UNLOADED;
+        statUploadFailures++;
+    }
+
+    private static int estimateBytes(ChunkBuilder.Geometry g) {
+        return (g.verts == null ? 0 : g.verts.length * 4)
+                + (g.indices == null ? 0 : g.indices.length * 4);
     }
 
     /** All tiles currently holding GPU resources, for the render pass. */

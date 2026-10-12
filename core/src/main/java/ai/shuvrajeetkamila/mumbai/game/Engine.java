@@ -716,6 +716,9 @@ public final class Engine {
                 telemetry.flapNotch = Math.round(plane.flaps * 2f);
                 telemetry.gearDown = plane.gearDown;
                 telemetry.altitudeM = plane.altitudeAgl(collision);
+                // The aeroplane has no ignition switch in this build: the powerplant is
+                // live whenever the throttle is, which is what the HUD should say.
+                telemetry.engineOn = plane.throttle > 0.01f;
                 break;
             case BOAT:
                 telemetry.engineOn = true;
