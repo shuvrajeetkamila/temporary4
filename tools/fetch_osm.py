@@ -84,8 +84,9 @@ def _osmium(args):
     _log("  $ " + " ".join(cmd))
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
-        sys.stderr.write(res.stdout + res.stderr)
-        raise RuntimeError(f"osmium failed: {' '.join(cmd)}")
+        raise RuntimeError(f"osmium exit {res.returncode}: {' '.join(cmd)}\n"
+                           f"--- stdout ---\n{res.stdout}\n"
+                           f"--- stderr ---\n{res.stderr}")
     return res.stdout
 
 
@@ -160,8 +161,17 @@ def main():
             _log(f"  could not verify published md5: {exc}")
 
     # --- the extract's own replication timestamp ---------------------------
-    header = _osmium(["fileinfo", "-e", "-g", "header.option.osmosis_replication_timestamp", src])
-    replication = header.strip() or "unknown"
+    # Ask for the whole header as JSON rather than one key: a missing key makes
+    # `osmium fileinfo -g` exit non-zero, and provenance metadata going missing
+    # is not a reason to fail the build.
+    replication = "unknown"
+    try:
+        hdr = json.loads(_osmium(["fileinfo", "-j", src]))
+        opts = hdr.get("header", {}).get("options", {}) or {}
+        replication = (opts.get("osmosis_replication_timestamp")
+                       or opts.get("timestamp") or "unknown")
+    except Exception as exc:                                      # noqa: BLE001
+        _log(f"  could not read the replication timestamp: {exc}")
     _log(f"  OSM data timestamp: {replication}")
 
     # --- clip to the AOI ---------------------------------------------------
@@ -175,8 +185,12 @@ def main():
     clip_size, clip_sha = _file_info(final)
     _log(f"  clipped extract {clip_size / 1e6:.1f} MB")
 
-    info = _osmium(["fileinfo", "-e", "-j", final])
-    counts = json.loads(info).get("data", {}).get("count", {})
+    counts = {}
+    try:
+        info = _osmium(["fileinfo", "-e", "-j", final])
+        counts = json.loads(info).get("data", {}).get("count", {})
+    except Exception as exc:                                      # noqa: BLE001
+        _log(f"  could not count objects: {exc}")
     _log(f"  nodes={counts.get('nodes')} ways={counts.get('ways')} "
          f"relations={counts.get('relations')}")
 

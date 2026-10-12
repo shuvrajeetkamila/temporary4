@@ -1,12 +1,13 @@
 name: world-data
 
 # Fetches the real OpenStreetMap and Copernicus DEM data for the AOI, extracts
-# the game layers, and reports exactly what came back.
+# the game layers, compiles the packaged world, and reports exactly what came
+# back.
 #
 # This has to run here rather than on a developer machine because the project's
-# build sandbox has no route to Geofabrik, Overpass or the AWS DEM bucket. The
-# small, reviewable outputs (provenance JSON and the extract report) are
-# committed back to the branch; the multi-hundred-megabyte inputs are not.
+# build sandbox has no route to Geofabrik, Overpass or the AWS DEM bucket. For
+# the same reason the raw Actions log is unreadable from there, so every step
+# tees into build.log and a failure posts the tail of it as an issue.
 
 on:
   workflow_dispatch:
@@ -21,6 +22,8 @@ on:
       - "tools/fetch_osm.py"
       - "tools/fetch_dem.py"
       - "tools/extract_osm.py"
+      - "tools/compile_world.py"
+      - "tools/world_format.py"
       - ".github/workflows/world-data.yml"
 
 concurrency:
@@ -29,53 +32,68 @@ concurrency:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   acquire:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
-
-      - name: Show the AOI we are about to cut
-        run: python3 tools/aoi.py
-
-      - name: Install osmium-tool
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq osmium-tool
-          osmium --version
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install Python dependencies
+      - name: Install tools
         run: |
+          set -o pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
           python -m pip install --upgrade pip
           pip install osmium shapely rasterio scipy numpy
+          { osmium --version; python -V; } 2>&1 | tee -a build.log
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+                      /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          df -h / | tee -a build.log
 
       - name: Restore cached source data
-        id: cache
         if: ${{ !inputs.refresh }}
         uses: actions/cache@v4
         with:
           path: data/_cache
-          key: srcdata-${{ hashFiles('tools/aoi.py') }}-v2
+          key: srcdata-${{ hashFiles('tools/aoi.py') }}-v3
 
-      - name: Free disk space
+      - name: AOI
         run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
-          df -h /
+          set -o pipefail
+          python3 tools/aoi.py 2>&1 | tee -a build.log
 
       - name: Fetch OpenStreetMap extract and clip to the AOI
-        run: python3 tools/fetch_osm.py --out data/osm --cache data/_cache
+        run: |
+          set -o pipefail
+          python3 tools/fetch_osm.py --out data/osm --cache data/_cache 2>&1 | tee -a build.log
 
       - name: Fetch Copernicus DEM and build the elevation grid
-        run: python3 tools/fetch_dem.py --out data/dem --cache data/_cache/dem
+        run: |
+          set -o pipefail
+          python3 tools/fetch_dem.py --out data/dem --cache data/_cache/dem 2>&1 | tee -a build.log
 
       - name: Extract game layers from the OSM data
-        run: python3 tools/extract_osm.py --pbf data/osm/mumbai-aoi.osm.pbf --out data/layers
+        run: |
+          set -o pipefail
+          python3 tools/extract_osm.py --pbf data/osm/mumbai-aoi.osm.pbf \
+            --out data/layers 2>&1 | tee -a build.log
+
+      - name: Compile the packaged world
+        run: |
+          set -o pipefail
+          python3 tools/compile_world.py --layers data/layers --dem data/dem \
+            --out android/src/main/assets/world 2>&1 | tee -a build.log
+          ls -l android/src/main/assets/world | tee -a build.log
 
       - name: Report
         if: always()
@@ -86,25 +104,20 @@ jobs:
             echo
             echo "Run \`${{ github.run_id }}\`, $(date -u +'%Y-%m-%dT%H:%M:%SZ')."
             echo
-            echo '## OpenStreetMap'
-            echo '```json'
-            cat data/provenance/osm.json 2>/dev/null || echo '{"error":"not produced"}'
+            for f in data/provenance/osm.json data/provenance/dem.json \
+                     data/layers/extract_summary.json data/reports/world_build.json; do
+              echo "## \`$f\`"
+              echo '```json'
+              if [ -f "$f" ]; then head -c 20000 "$f"; else echo '{"error":"not produced"}'; fi
+              echo
+              echo '```'
+            done
+            echo '## Sizes'
             echo '```'
-            echo '## Copernicus DEM'
-            echo '```json'
-            cat data/provenance/dem.json 2>/dev/null || echo '{"error":"not produced"}'
-            echo '```'
-            echo '## Extracted layers'
-            echo '```json'
-            cat data/layers/extract_summary.json 2>/dev/null || echo '{"error":"not produced"}'
-            echo '```'
-            echo '## Artefact sizes'
-            echo '```'
-            ls -lh data/osm data/dem data/layers 2>/dev/null || true
+            du -sh data/* android/src/main/assets/world 2>/dev/null || true
             df -h / | tail -1
             echo '```'
           } > data/reports/world_data.md
-          cat data/reports/world_data.md
 
       - name: Upload intermediates
         if: always()
@@ -113,8 +126,9 @@ jobs:
           name: world-layers
           path: |
             data/layers/
-            data/dem/elevation.npz
             data/provenance/
+            data/reports/
+            build.log
           retention-days: 14
           if-no-files-found: warn
 
@@ -128,7 +142,23 @@ jobs:
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else
-            git commit -m "world-data: provenance and acquisition report (run ${{ github.run_id }})"
+            git commit -m "world-data: provenance and report (run ${{ github.run_id }})"
             git pull --rebase origin "${GITHUB_REF_NAME}" || true
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || true
           fi
+
+      - name: Post the log where the sandbox can read it
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STATE="${{ job.status }}"
+          {
+            echo "Run ${{ github.run_id }} finished with status **$STATE**."
+            echo
+            echo '```'
+            tail -c 50000 build.log 2>/dev/null || echo "(no build.log)"
+            echo '```'
+          } > issue.md
+          gh issue create --title "world-data run ${{ github.run_id }}: $STATE" \
+            --body-file issue.md || true
