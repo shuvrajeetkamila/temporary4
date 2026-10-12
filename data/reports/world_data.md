@@ -1,22 +1,33 @@
 # World data acquisition
 
-Run `38264761781`, 2026-10-12T14:43:06Z.
+Run `38265362864`, 2026-10-12T14:54:31Z.
 
-## OpenStreetMap
+## `data/provenance/osm.json`
 ```json
 {"error":"not produced"}
+
 ```
-## Copernicus DEM
+## `data/provenance/dem.json`
 ```json
 {"error":"not produced"}
+
 ```
-## Extracted layers
+## `data/layers/extract_summary.json`
 ```json
 {"error":"not produced"}
+
 ```
-## Artefact sizes
+## `data/reports/world_build.json`
+```json
+{"error":"not produced"}
+
 ```
-data/osm:
-total 0
-/dev/root       145G   54G   91G  38% /
+## Sizes
+```
+24K	data/_cache
+20K	data/geodata
+4.0K	data/osm
+4.0K	data/provenance
+8.0K	data/reports
+/dev/root       145G   42G  103G  29% /
 ```
