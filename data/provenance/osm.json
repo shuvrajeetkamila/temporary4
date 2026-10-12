@@ -9,7 +9,7 @@
  "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
  "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T15:15:59+00:00",
+ "retrieved_utc": "2026-10-12T15:20:47+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
  "clip": {
   "tool": "osmium-tool",

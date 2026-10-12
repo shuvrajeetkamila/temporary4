@@ -1,6 +1,6 @@
 # World data acquisition
 
-Run `38268868992`, 2026-10-12T15:16:53Z.
+Run `38269428169`, 2026-10-12T15:22:25Z.
 
 ## `data/provenance/osm.json`
 ```json
@@ -15,7 +15,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
  "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
  "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T15:15:59+00:00",
+ "retrieved_utc": "2026-10-12T15:20:47+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
  "clip": {
   "tool": "osmium-tool",
@@ -45,7 +45,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T15:16:15+00:00",
+ "retrieved_utc": "2026-10-12T15:21:10+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -107,7 +107,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
  "land_rings": 23,
  "land_area_km2": 1571.76,
  "poi": 1283,
- "seconds": 12.2,
+ "seconds": 22.6,
  "detail": {
   "bheight_src_0": 166425,
   "bheight_src_1": 7214,
@@ -186,13 +186,13 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
 ## `data/reports/world_build.json`
 ```json
 {
- "seconds": 25.0,
- "total_bytes": 14556950,
+ "seconds": 51.8,
+ "total_bytes": 14556955,
  "files": {
   "terrain.mwl": 3058655,
   "chunks.mwl": 7865588,
   "network.mwl": 3629232,
-  "manifest.mwl": 3475
+  "manifest.mwl": 3480
  },
  "manifest": {
   "format": "MWL2",
@@ -409,15 +409,15 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
     "key": "thane_creek_north",
     "label": "Thane Creek north",
     "lat": 19.19,
-    "lon": 73.03,
+    "lon": 72.985,
     "expect": "water"
    },
    {
     "group": "thane_creek",
     "key": "thane_creek_mid",
-    "label": "Thane Creek mid",
+    "label": "Thane Creek navigable channel",
     "lat": 19.09,
-    "lon": 72.99,
+    "lon": 72.975,
     "expect": "water"
    },
    {
@@ -697,7 +697,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
     "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
     "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-12T15:15:59+00:00",
+    "retrieved_utc": "2026-10-12T15:20:47+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
     "clip": {
      "tool": "osmium-tool",
@@ -724,7 +724,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-12T15:16:15+00:00",
+    "retrieved_utc": "2026-10-12T15:21:10+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -786,7 +786,7 @@ Run `38268868992`, 2026-10-12T15:16:53Z.
 20K	data/geodata
 17M	data/layers
 19M	data/osm
-24M	data/pinned
+28M	data/pinned
 12K	data/provenance
 60K	data/reports
 14M	android/src/main/assets/world
