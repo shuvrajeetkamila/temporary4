@@ -1,7 +1,7 @@
 {
- "passed": 121,
+ "passed": 123,
  "total": 123,
- "failed": 2,
+ "failed": 0,
  "gates": [
   {
    "group": "files",
@@ -13,25 +13,25 @@
    "group": "files",
    "name": "terrain.mwl exists",
    "status": "PASS",
-   "detail": "2.44 MB"
+   "detail": "3.06 MB"
   },
   {
    "group": "files",
    "name": "chunks.mwl exists",
    "status": "PASS",
-   "detail": "6.80 MB"
+   "detail": "7.87 MB"
   },
   {
    "group": "files",
    "name": "network.mwl exists",
    "status": "PASS",
-   "detail": "3.05 MB"
+   "detail": "3.63 MB"
   },
   {
    "group": "files",
    "name": "all four files share one build id",
    "status": "PASS",
-   "detail": "e43c5d6b6e7b74194b55239672a68baa"
+   "detail": "ab19ba23e408ce9a817c663cee013a67"
   },
   {
    "group": "files",
@@ -49,13 +49,13 @@
    "group": "provenance",
    "name": "OSM retrieval date recorded",
    "status": "PASS",
-   "detail": "2026-10-12T15:02:50+00:00"
+   "detail": "2026-10-12T15:15:59+00:00"
   },
   {
    "group": "provenance",
    "name": "OSM extract sha256 recorded",
    "status": "PASS",
-   "detail": "6567c76221a6197c..."
+   "detail": "b537a1aa09386cfa..."
   },
   {
    "group": "provenance",
@@ -79,7 +79,7 @@
    "group": "extent",
    "name": "world spans >= 40 km east-west",
    "status": "PASS",
-   "detail": "48.3 km"
+   "detail": "52.5 km"
   },
   {
    "group": "extent",
@@ -91,7 +91,7 @@
    "group": "extent",
    "name": "land is 20-60% of the AOI",
    "status": "PASS",
-   "detail": "33.9% = 1190 km2"
+   "detail": "39.2% = 1497 km2"
   },
   {
    "group": "extent",
@@ -139,25 +139,25 @@
    "group": "chunks",
    "name": "index matches the declared grid",
    "status": "PASS",
-   "detail": "3577 entries, 49x73"
+   "detail": "3869 entries, 53x73"
   },
   {
    "group": "chunks",
    "name": "at least 800 chunks carry geometry",
    "status": "PASS",
-   "detail": "1299 non-empty"
+   "detail": "1592 non-empty"
   },
   {
    "group": "chunks",
    "name": "at least 100k real buildings",
    "status": "PASS",
-   "detail": "167,369"
+   "detail": "195,743"
   },
   {
    "group": "chunks",
    "name": "at least 50k road runs",
    "status": "PASS",
-   "detail": "106,490"
+   "detail": "124,592"
   },
   {
    "group": "cp:vasai_creek",
@@ -167,9 +167,9 @@
   },
   {
    "group": "cp:vasai_creek",
-   "name": "Vasai Creek at the rail crossing is water",
-   "status": "FAIL",
-   "detail": "19.33,72.848 -> land elev 0.3 m"
+   "name": "Vasai Creek channel is water",
+   "status": "PASS",
+   "detail": "19.32,72.82 -> water elev 0.0 m"
   },
   {
    "group": "cp:vasai_creek",
@@ -258,12 +258,12 @@
   {
    "group": "cp:thane_creek",
    "name": "Thane Creek north is water",
-   "status": "FAIL",
-   "detail": "19.19,72.995 -> land elev 5.9 m"
+   "status": "PASS",
+   "detail": "19.19,72.985 -> water elev 0.0 m"
   },
   {
    "group": "cp:thane_creek",
-   "name": "Thane Creek mid is water",
+   "name": "Thane Creek navigable channel is water",
    "status": "PASS",
    "detail": "19.09,72.975 -> water elev 0.0 m"
   },
@@ -655,7 +655,7 @@
    "group": "coverage",
    "name": "geometry spans >= 30 km west to east",
    "status": "PASS",
-   "detail": "36.9 km"
+   "detail": "41.0 km"
   },
   {
    "group": "coverage",
@@ -673,37 +673,37 @@
    "group": "network",
    "name": "graph has >= 100k nodes",
    "status": "PASS",
-   "detail": "310,246"
+   "detail": "370,415"
   },
   {
    "group": "network",
    "name": "graph has >= 100k edges",
    "status": "PASS",
-   "detail": "295,032"
+   "detail": "352,267"
   },
   {
    "group": "network",
    "name": "edge endpoints are in range",
    "status": "PASS",
-   "detail": "max index 310245"
+   "detail": "max index 370414"
   },
   {
    "group": "network",
    "name": ">= 3000 km of drivable road",
    "status": "PASS",
-   "detail": "11,478 km"
+   "detail": "13,983 km"
   },
   {
    "group": "network",
    "name": "95% of road nodes are on land",
    "status": "PASS",
-   "detail": "96.7% of 4030 sampled"
+   "detail": "99.0% of 4027 sampled"
   },
   {
    "group": "places",
    "name": "at least 400 named places",
    "status": "PASS",
-   "detail": "1217"
+   "detail": "1283"
   },
   {
    "group": "places",
@@ -733,13 +733,13 @@
    "group": "heights",
    "name": "building height provenance is recorded",
    "status": "PASS",
-   "detail": "{\"osm_height\": 20568, \"osm_levels\": 7008, \"neighbour_median\": 118490, \"class_default\": 21303}"
+   "detail": "{\"osm_height\": 20582, \"osm_levels\": 7363, \"neighbour_median\": 134171, \"class_default\": 33627}"
   },
   {
    "group": "heights",
    "name": "at least 10% of heights come from OSM tags",
    "status": "PASS",
-   "detail": "27,576 of 167,369 = 16.5%"
+   "detail": "27,945 of 195,743 = 14.3%"
   }
  ]
 }

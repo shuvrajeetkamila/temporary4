@@ -124,8 +124,8 @@ CHECKPOINTS = [
     ("national_park", "powai_lake", "Powai Lake", 19.1281, 72.9059, "water"),
     ("national_park", "aarey", "Aarey", 19.1600, 72.8800, "land"),
 
-    ("thane_creek", "thane_creek_north", "Thane Creek north", 19.1900, 73.0300, "water"),
-    ("thane_creek", "thane_creek_mid", "Thane Creek mid", 19.0900, 72.9900, "water"),
+    ("thane_creek", "thane_creek_north", "Thane Creek north", 19.1900, 72.9850, "water"),
+    ("thane_creek", "thane_creek_mid", "Thane Creek navigable channel", 19.0900, 72.9750, "water"),
     ("thane_creek", "thane_creek_mangrove", "Thane Creek mangroves", 19.1200, 72.9550, "land"),
 
     ("eastern_suburbs", "mulund", "Mulund", 19.1720, 72.9560, "land"),
