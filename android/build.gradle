@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ai.shuvrajeetkamila.mumbai'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ai.shuvrajeetkamila.mumbai.islandcity"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        resConfigs "en"
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+        release {
+            // No signing config is committed: the shipped artifact is the universal
+            // debug-signed APK. CI can inject an ephemeral key if a release build is wanted.
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    androidResources {
+        // World data is already deflate-friendly; keep raw layers uncompressed so they
+        // can be streamed with mmap-style sequential reads at runtime.
+        noCompress 'mwl'
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation project(':core')
+}

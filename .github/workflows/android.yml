@@ -1,0 +1,147 @@
+name: Build Mumbai Island City APK
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compile, test and package APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reset stale QA status
+        run: |
+          rm -f artifacts/BUILD_STATUS.json artifacts/*.sha256 || true
+          mkdir -p artifacts
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Validate world data manifests
+        run: |
+          if [ -f tools/verify_world.py ]; then
+            python3 tools/verify_world.py
+          else
+            echo "world verifier not present yet (milestone 0)"
+          fi
+
+      - name: Core unit tests (physics, geodata, streaming, packaged world)
+        run: gradle --no-daemon --stacktrace :core:test
+
+      - name: Assemble debug APK
+        run: gradle --no-daemon --stacktrace :android:assembleDebug
+
+      - name: Stage artifact
+        id: stage
+        run: |
+          set -euo pipefail
+          VERSION="1.0.${{ github.run_number }}"
+          NAME="Mumbai-The-Island-City-REALISTIC-PHYSICS-v${VERSION}.apk"
+          mkdir -p artifacts
+          cp android/build/outputs/apk/debug/android-debug.apk "artifacts/${NAME}"
+          cd artifacts
+          sha256sum "${NAME}" > "${NAME}.sha256"
+          SIZE=$(stat -c%s "${NAME}")
+          SHA=$(cut -d' ' -f1 "${NAME}.sha256")
+          echo "name=${NAME}"       >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE}"       >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}"         >> "$GITHUB_OUTPUT"
+          ls -lh
+
+      - name: Validate APK package
+        run: |
+          set -euo pipefail
+          APK="artifacts/${{ steps.stage.outputs.name }}"
+          unzip -t "$APK" > /dev/null && echo "zip integrity OK"
+          unzip -l "$APK" | grep -E "classes.*\.dex" || (echo "no dex!" && exit 1)
+          unzip -l "$APK" | grep -E "assets/world/" || (echo "no packaged world!" && exit 1)
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)aapt2
+          "$AAPT" dump badging "$APK" | head -20
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$APK" | head -10
+
+      - name: Build record
+        run: |
+          cat > artifacts/BUILD_STATUS.json <<EOF
+          {
+            "status": "PASSED",
+            "apk": "${{ steps.stage.outputs.name }}",
+            "version": "${{ steps.stage.outputs.version }}",
+            "bytes": ${{ steps.stage.outputs.size }},
+            "sha256": "${{ steps.stage.outputs.sha }}",
+            "commit": "${{ github.sha }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cat artifacts/BUILD_STATUS.json
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MumbaiIslandCity-APK
+          path: |
+            artifacts/*.apk
+            artifacts/*.sha256
+            artifacts/BUILD_STATUS.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.stage.outputs.version }}
+          name: Mumbai Island City v${{ steps.stage.outputs.version }}
+          body: |
+            **Mumbai: Island City** — automated Android build.
+
+            | field | value |
+            |---|---|
+            | APK | `${{ steps.stage.outputs.name }}` |
+            | Size | ${{ steps.stage.outputs.size }} bytes |
+            | SHA-256 | `${{ steps.stage.outputs.sha }}` |
+            | Package | `ai.shuvrajeetkamila.mumbai.islandcity` |
+            | Min Android | 8.0 (API 26) |
+            | Signing | debug keystore (universal, directly installable) |
+            | Commit | ${{ github.sha }} |
+
+            Install: download the `.apk` on an Android phone, open it and allow
+            "Install unknown apps" for your browser / file manager when prompted.
+          files: |
+            artifacts/*.apk
+            artifacts/*.sha256
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
