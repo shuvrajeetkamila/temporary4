@@ -30,6 +30,26 @@ public final class GlUtil {
         return lastError;
     }
 
+    /**
+     * Drains the GL error queue and returns the first code seen, or 0 for a clean
+     * frame. The CI device job greps for {@code glError=0}, so this is the one place
+     * that decides whether a run is reported as clean.
+     */
+    public static int drainGlError() {
+        int first = 0;
+        for (int guard = 0; guard < 16; guard++) {
+            int e = GLES30.glGetError();
+            if (e == GLES30.GL_NO_ERROR) {
+                break;
+            }
+            if (first == 0) {
+                first = e;
+            }
+            Log.e(TAG, "GL error 0x" + Integer.toHexString(e));
+        }
+        return first;
+    }
+
     public static FloatBuffer floatBuffer(int floats) {
         return ByteBuffer.allocateDirect(floats * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     }
@@ -56,7 +76,7 @@ public final class GlUtil {
         if (status[0] == 0) {
             String log = GLES30.glGetShaderInfoLog(shader);
             lastError = (type == GLES30.GL_VERTEX_SHADER ? "vertex" : "fragment") + " shader: " + log;
-            Log.e(TAG, "Shader compile failed: " + log);
+            Log.e(TAG, "SHADER COMPILE FAILED: " + log);
             Log.e(TAG, numberSource(source));
             GLES30.glDeleteShader(shader);
             return 0;
@@ -81,17 +101,27 @@ public final class GlUtil {
         }
         GLES30.glAttachShader(program, vs);
         GLES30.glAttachShader(program, fs);
+        // Lock the attribute slots from Java so the layout cannot drift from
+        // MeshBuilder.STRIDE even if a driver ignores layout qualifiers.
+        GLES30.glBindAttribLocation(program, 0, "aPos");
+        GLES30.glBindAttribLocation(program, 1, "aNormal");
+        GLES30.glBindAttribLocation(program, 2, "aColour");
+        GLES30.glBindAttribLocation(program, 3, "aAux");
+        GLES30.glBindAttribLocation(program, 4, "aInstance");
         GLES30.glLinkProgram(program);
         int[] status = new int[1];
         GLES30.glGetProgramiv(program, GLES30.GL_LINK_STATUS, status, 0);
         if (status[0] == 0) {
             String log = GLES30.glGetProgramInfoLog(program);
             lastError = "link: " + log;
-            Log.e(TAG, "Program link failed: " + log);
+            Log.e(TAG, "PROGRAM LINK FAILED: " + log);
             GLES30.glDeleteProgram(program);
             program = 0;
         }
-        GLES30.glDetachShader(program == 0 ? 0 : program, vs);
+        if (program != 0) {
+            GLES30.glDetachShader(program, vs);
+            GLES30.glDetachShader(program, fs);
+        }
         GLES30.glDeleteShader(vs);
         GLES30.glDeleteShader(fs);
         return program;

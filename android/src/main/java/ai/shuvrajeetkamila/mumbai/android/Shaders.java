@@ -125,7 +125,7 @@ final class Shaders {
      */
     static final String WATER_VS =
             "#version 300 es\n"
-                    + "layout(location = 0) in vec2 aOffset;\n"
+                    + "layout(location = 0) in vec2 aPos;\n"
                     + "uniform mat4 uViewProj;\n"
                     + "uniform vec3 uCamera;\n"
                     + "uniform vec2 uGridCentre;\n"
@@ -136,7 +136,7 @@ final class Shaders {
                     + "out float vDist;\n"
                     + "out vec3 vPos;\n"
                     + "void main() {\n"
-                    + "    vec2 p = uGridCentre + aOffset;\n"
+                    + "    vec2 p = uGridCentre + aPos;\n"
                     + "    float h = 0.0;\n"
                     + "    float dhdx = 0.0;\n"
                     + "    float dhdz = 0.0;\n"

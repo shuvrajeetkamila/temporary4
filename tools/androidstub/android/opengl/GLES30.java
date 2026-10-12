@@ -1,5 +1,6 @@
 package android.opengl;
 public class GLES30 extends GLES20 {
+    public static void glBindAttribLocation(int p, int i, String n) {}
     public static final int GL_ARRAY_BUFFER = 36363;
     public static final int GL_BACK = 51568;
     public static final int GL_CCW = 510;
@@ -14,7 +15,7 @@ public class GLES30 extends GLES20 {
     public static final int GL_FRAGMENT_SHADER = 53962;
     public static final int GL_LEQUAL = 49014;
     public static final int GL_LINK_STATUS = 3595;
-    public static final int GL_NO_ERROR = 2795;
+    public static final int GL_NO_ERROR = 0;
     public static final int GL_RENDERER = 43086;
     public static final int GL_STATIC_DRAW = 56377;
     public static final int GL_TRIANGLES = 46027;

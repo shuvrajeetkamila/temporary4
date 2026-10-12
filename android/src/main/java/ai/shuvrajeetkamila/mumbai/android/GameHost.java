@@ -40,6 +40,9 @@ public final class GameHost implements WorldStreamer.TileSink {
 
     private static final String TAG = "MumbaiHost";
 
+    private boolean loggedFirstFrame;
+    private boolean loggedFirstDraw;
+
     /** Vertex buffer objects for one streamed tile. */
     private static final class TileGpu {
         int vao;
@@ -262,6 +265,19 @@ public final class GameHost implements WorldStreamer.TileSink {
             return;
         }
 
+        if (!loggedFirstFrame) {
+            loggedFirstFrame = true;
+            // Deliberate, greppable markers. The CI emulator job asserts on these,
+            // so "the build runs" is something the pipeline checks rather than
+            // something anybody claims.
+            Log.i(TAG, "MUMBAI_WORLD_READY aoi=" + engine.world.aoiName
+                    + " version=" + engine.world.aoiVersion
+                    + " spawn=" + engine.world.spawnName
+                    + " roads=" + engine.world.roads.size()
+                    + " districts=" + engine.world.districts.size()
+                    + " chunks=" + (engine.world.chunksX * engine.world.chunksZ));
+        }
+
         engine.applyQuality(profile);
         touch.setProfile(engine.mode);
         engine.update(dt);
@@ -333,6 +349,17 @@ public final class GameHost implements WorldStreamer.TileSink {
         telemetry.drawCalls = drawCalls;
         telemetry.triangles = triangles;
         telemetry.gpuBytesMb = gpuBytes / (1024 * 1024);
+
+        if (!loggedFirstDraw && triangles > 0) {
+            loggedFirstDraw = true;
+            Log.i(TAG, "MUMBAI_FIRST_FRAME_DRAWN draws=" + drawCalls
+                    + " triangles=" + triangles
+                    + " tiles=" + engine.streamer.activeCount()
+                    + " traffic=" + engine.agents.vehicleCount()
+                    + " pedestrians=" + engine.agents.pedestrianCount()
+                    + " glError=" + GlUtil.drainGlError()
+                    + " lastShaderError='" + GlUtil.lastError() + "'");
+        }
     }
 
     private void drawLoadingScreen() {
