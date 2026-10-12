@@ -71,6 +71,31 @@ jobs:
           set -o pipefail
           gradle --no-daemon --stacktrace :core:test 2>&1 | tee -a /tmp/ci.log
 
+      - name: Summarise test results
+        if: always()
+        run: |
+          python3 - <<'PYEOF' | tee artifacts/TEST_STATUS.md | tee -a /tmp/ci.log
+          import glob, os, xml.etree.ElementTree as ET
+          rows, tot, fail, skip, secs = [], 0, 0, 0, 0.0
+          for f in sorted(glob.glob('core/build/test-results/test/TEST-*.xml')):
+              r = ET.parse(f).getroot()
+              t = int(r.get('tests', 0)); e = int(r.get('failures', 0)) + int(r.get('errors', 0))
+              s = int(r.get('skipped', 0)); d = float(r.get('time', 0))
+              tot += t; fail += e; skip += s; secs += d
+              rows.append((r.get('name', '?').split('.')[-1], t, e, s, d))
+          print('# Test status\n')
+          print(f'**{tot - fail - skip} passed, {fail} failed, {skip} skipped** in {secs:.1f}s\n')
+          print('| suite | tests | failed | skipped | seconds |')
+          print('|---|---:|---:|---:|---:|')
+          for n, t, e, s, d in rows:
+              print(f'| {n} | {t} | {e} | {s} | {d:.2f} |')
+          if not rows:
+              print('\n**No test XML found — treat this as a failure, not a pass.**')
+              raise SystemExit(1)
+          if fail:
+              raise SystemExit(1)
+          PYEOF
+
       - name: Assemble debug APK
         run: |
           set -o pipefail
@@ -105,6 +130,19 @@ jobs:
           "${BT}aapt2" dump badging "$APK" | head -12 | tee -a /tmp/ci.log
           "${BT}apksigner" verify --print-certs "$APK" | head -8 | tee -a /tmp/ci.log
 
+      - name: Collect reports
+        run: |
+          cp DATA_SOURCES.md ASSET_LICENSES.md artifacts/ 2>/dev/null || true
+          cp docs/TECH_STACK_DECISIONS.md artifacts/ 2>/dev/null || true
+          cp data/geodata/MUMBAI_AOI.geojson artifacts/ 2>/dev/null || true
+          python3 tools/verify_world.py > artifacts/AOI_COVERAGE_REPORT.txt
+          {
+            echo
+            echo "APK contents (world layers):"
+            unzip -l "artifacts/${{ steps.stage.outputs.name }}" | grep "assets/world/"
+          } >> artifacts/AOI_COVERAGE_REPORT.txt
+          cat artifacts/AOI_COVERAGE_REPORT.txt
+
       - name: Build record
         run: |
           cat > artifacts/BUILD_STATUS.json <<EOF
@@ -117,7 +155,12 @@ jobs:
             "commit": "${{ github.sha }}",
             "run_id": "${{ github.run_id }}",
             "run_number": "${{ github.run_number }}",
-            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "package": "ai.shuvrajeetkamila.mumbai.islandcity",
+            "min_sdk": 26,
+            "target_sdk": 34,
+            "abis": "universal (no native code)",
+            "signing": "android debug keystore"
           }
           EOF
           cat artifacts/BUILD_STATUS.json
@@ -130,6 +173,12 @@ jobs:
             artifacts/*.apk
             artifacts/*.sha256
             artifacts/BUILD_STATUS.json
+            artifacts/TEST_STATUS.md
+            artifacts/AOI_COVERAGE_REPORT.txt
+            artifacts/DATA_SOURCES.md
+            artifacts/ASSET_LICENSES.md
+            artifacts/TECH_STACK_DECISIONS.md
+            artifacts/MUMBAI_AOI.geojson
           if-no-files-found: error
           retention-days: 90
 
@@ -156,6 +205,9 @@ jobs:
           files: |
             artifacts/*.apk
             artifacts/*.sha256
+            artifacts/BUILD_STATUS.json
+            artifacts/TEST_STATUS.md
+            artifacts/AOI_COVERAGE_REPORT.txt
           draft: false
           prerelease: false
           make_latest: true
