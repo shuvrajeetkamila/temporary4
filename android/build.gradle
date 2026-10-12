@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ai.shuvrajeetkamila.mumbai.android'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ai.shuvrajeetkamila.mumbai.islandcity'
+        minSdk 26
+        targetSdk 34
+        versionCode project.hasProperty('versionCode') ? project.versionCode.toInteger() : 1
+        versionName project.hasProperty('versionName') ? project.versionName : '1.0.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    androidResources {
+        // The world is already deflated chunk by chunk inside the container.
+        // Letting aapt try again wastes build time and gains nothing, and the
+        // streamer needs to mmap slices out of the packaged file.
+        noCompress 'mwl'
+    }
+
+    packagingOptions {
+        jniLibs { useLegacyPackaging false }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            // Signed with the debug key in CI: this is a playable build, not
+            // a Play Store upload, and shipping a private key in a public
+            // repository would be worse than shipping an unsigned release.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation project(':core')
+}

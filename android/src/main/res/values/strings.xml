@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mumbai: The Island City</string>
+    <string name="attribution">Map data \u00a9 OpenStreetMap contributors (ODbL 1.0) \u2022 Elevation: Copernicus DEM \u00a9 DLR e.V. / Airbus DS, ESA</string>
+    <string name="loading">Loading Mumbai\u2026</string>
+</resources>

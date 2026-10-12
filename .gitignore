@@ -25,3 +25,6 @@ __pycache__/
 .venv/
 dist/
 out/
+
+# Local type-check output only; the real build uses the Android SDK.
+/tools/androidstub/**/*.class
