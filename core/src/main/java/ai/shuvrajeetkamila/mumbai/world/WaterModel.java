@@ -81,6 +81,26 @@ public final class WaterModel {
         }
     }
 
+    /**
+     * The wave trains for a class, as amplitude / wavelength / direction / speed rows.
+     * The renderer uploads exactly these numbers to the water shader, so what the
+     * player sees and what the buoyancy solver feels are the same surface rather than
+     * two approximations that drift apart.
+     */
+    public static float[][] trains(int waterClass) {
+        float[][] src = trainsFor(waterClass);
+        float[][] copy = new float[src.length][];
+        for (int i = 0; i < src.length; i++) {
+            copy[i] = src[i].clone();
+        }
+        return copy;
+    }
+
+    /** Wind-driven amplitude scale currently applied to every train. */
+    public float windScale() {
+        return windScale;
+    }
+
     private static float[][] trainsFor(int waterClass) {
         switch (waterClass) {
             case CLASS_SEA: return SEA;

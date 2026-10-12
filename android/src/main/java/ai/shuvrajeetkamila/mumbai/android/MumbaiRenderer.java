@@ -6,10 +6,6 @@ import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.util.Log;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
@@ -93,6 +89,7 @@ public class MumbaiRenderer implements GLSurfaceView.Renderer {
 
         if (host == null) {
             host = new GameHost(context, telemetry, input, touch, hud);
+            hud.setMinimapSource(host.minimapSource());
         }
         host.onGlContextCreated();
         lastFrameNanos = System.nanoTime();
@@ -160,29 +157,6 @@ public class MumbaiRenderer implements GLSurfaceView.Renderer {
         if (ms - lastHudInvalidate > 66) {
             lastHudInvalidate = ms;
             hud.postInvalidateOnAnimation();
-        }
-    }
-
-    /** Read a packaged asset fully into memory (world layers are small and compact). */
-    static byte[] readAsset(Context ctx, String path) throws IOException {
-        InputStream in = null;
-        try {
-            in = ctx.getAssets().open(path);
-            ByteArrayOutputStream bos = new ByteArrayOutputStream(Math.max(1024, in.available()));
-            byte[] buf = new byte[32 * 1024];
-            int n;
-            while ((n = in.read(buf)) > 0) {
-                bos.write(buf, 0, n);
-            }
-            return bos.toByteArray();
-        } finally {
-            if (in != null) {
-                try {
-                    in.close();
-                } catch (IOException ignored) {
-                    // ignore
-                }
-            }
         }
     }
 

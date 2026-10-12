@@ -67,6 +67,7 @@ public final class ChunkBuilder {
 
         float[] minMax = new float[]{Float.MAX_VALUE, -Float.MAX_VALUE};
         buildTerrain(ox, oz, size, lod, minMax);
+        buildInlandWater(ox, oz, size, minMax);
 
         boolean anyLand = false;
         for (int j = 0; j < span && !anyLand; j++) {
@@ -145,6 +146,47 @@ public final class ChunkBuilder {
                 int d = a + stride;
                 mesh.tri(a, d, c);
                 mesh.tri(a, c, b);
+            }
+        }
+    }
+
+    /**
+     * Lakes and rivers sit above sea level, so they cannot use the global tidal plane.
+     * The packaged height grid stores their bed; the surface is reconstructed here as
+     * bed + class depth, which is the identical rule the buoyancy solver applies, so
+     * a boat floats exactly where the water is drawn.
+     */
+    private void buildInlandWater(double ox, double oz, float size, float[] minMax) {
+        int n = TERRAIN_QUADS;
+        float step = size / n;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                double cxw = ox + (i + 0.5) * step;
+                double czw = oz + (j + 0.5) * step;
+                int lu = world.landUseAt(cxw, czw);
+                if (lu != LandUse.LAKE && lu != LandUse.RIVER) {
+                    continue;
+                }
+                int cls = WaterModel.classOf(lu);
+                float depth = WaterModel.inlandDepth(cls);
+                float lx = i * step;
+                float lz = j * step;
+                // Surface height from the four bed corners, so a sloping river bed
+                // still produces a flat-looking reach rather than a creased ribbon.
+                float h = 0.25f * (world.heightAt(ox + lx, oz + lz)
+                        + world.heightAt(ox + lx + step, oz + lz)
+                        + world.heightAt(ox + lx, oz + lz + step)
+                        + world.heightAt(ox + lx + step, oz + lz + step)) + depth;
+                int rgb = lu == LandUse.RIVER ? 0x4A6B5E : 0x3E6274;
+                float r = ((rgb >> 16) & 0xFF) / 255f;
+                float g = ((rgb >> 8) & 0xFF) / 255f;
+                float b = (rgb & 0xFF) / 255f;
+                // aux = -1 marks a water surface for the shader.
+                mesh.quadXYZ(lx, h, lz, lx, h, lz + step, lx + step, h, lz + step,
+                        lx + step, h, lz, r, g, b, -1f);
+                if (h > minMax[1]) {
+                    minMax[1] = h;
+                }
             }
         }
     }
