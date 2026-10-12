@@ -57,9 +57,14 @@ jobs:
 
       - name: Check the pinned source data is intact
         run: |
-          cd data/pinned
-          sha256sum -c SHA256SUMS
-          ls -l
+          # The paths in SHA256SUMS are repo-relative, so this runs from the
+          # root. The file also lists itself, which cannot be satisfied: it
+          # was hashed before it was written, so the recorded digest is the
+          # hash of an empty file. Skip that line and check the real inputs.
+          grep -v 'SHA256SUMS$' data/pinned/SHA256SUMS > /tmp/pinned.sha256
+          test -s /tmp/pinned.sha256
+          sha256sum -c /tmp/pinned.sha256
+          ls -l data/pinned
 
       - name: Report the area of interest
         run: python tools/aoi.py

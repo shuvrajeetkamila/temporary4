@@ -143,7 +143,11 @@ jobs:
           mkdir -p data/pinned
           cp data/osm/mumbai-aoi.osm.pbf data/pinned/mumbai-aoi.osm.pbf
           cp data/dem/elevation.npz      data/pinned/elevation.npz
-          sha256sum data/pinned/* > data/pinned/SHA256SUMS
+          # Exclude the digest file itself: globbing it in records the hash
+          # of whatever was there before the redirect truncated it, which is
+          # the empty-file hash, and no later check can ever satisfy it.
+          sha256sum data/pinned/elevation.npz data/pinned/mumbai-aoi.osm.pbf \
+            > data/pinned/SHA256SUMS
           ls -l data/pinned
           git add -f data/pinned
           if git diff --cached --quiet; then
