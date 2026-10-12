@@ -1,33 +1,779 @@
 # World data acquisition
 
-Run `38265362864`, 2026-10-12T14:54:31Z.
+Run `38266521439`, 2026-10-12T14:58:35Z.
 
 ## `data/provenance/osm.json`
 ```json
-{"error":"not produced"}
-
+{
+ "dataset": "OpenStreetMap",
+ "licence": "Open Database License (ODbL) v1.0",
+ "licence_url": "https://opendatacommons.org/licenses/odbl/1-0/",
+ "attribution": "\u00a9 OpenStreetMap contributors",
+ "copyright_url": "https://www.openstreetmap.org/copyright",
+ "source_url": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf",
+ "source_bytes": 221112187,
+ "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
+ "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
+ "osm_replication_timestamp": "unknown",
+ "retrieved_utc": "2026-10-12T14:57:08+00:00",
+ "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
+ "clip": {
+  "tool": "osmium-tool",
+  "tool_version": "osmium version 1.16.0",
+  "strategy": "complete_ways",
+  "aoi_name": "Mumbai / Salsette island",
+  "aoi_version": "2.0.0",
+  "aoi_vertices": 29,
+  "output": "data/osm/mumbai-aoi.osm.pbf",
+  "output_bytes": 16810962,
+  "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+  "counts": {
+   "changesets": 0,
+   "nodes": 1866056,
+   "ways": 284668,
+   "relations": 4207
+  }
+ }
+}
 ```
 ## `data/provenance/dem.json`
 ```json
-{"error":"not produced"}
-
+{
+ "dataset": "Copernicus DEM GLO-30 (COG)",
+ "producer": "European Space Agency / Airbus Defence and Space",
+ "licence": "Free, full and open \u2014 ESA Copernicus DEM licence",
+ "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
+ "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
+ "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
+ "retrieved_utc": "2026-10-12T14:57:29+00:00",
+ "tiles": [
+  {
+   "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E072_00_DEM/Copernicus_DSM_COG_10_N18_00_E072_00_DEM.tif",
+   "bytes": 4027713,
+   "sha256": "5b5e3ac02d569235d1f74ae9f092faa01094449786aeffec2c2862c51e95f15b"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N18_00_E073_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E073_00_DEM/Copernicus_DSM_COG_10_N18_00_E073_00_DEM.tif",
+   "bytes": 45785199,
+   "sha256": "e5e127b1a1b56c0415276707bbb8c4e7bb357cf0976030a19f8d166cd9d590c9"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N19_00_E072_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E072_00_DEM/Copernicus_DSM_COG_10_N19_00_E072_00_DEM.tif",
+   "bytes": 13336459,
+   "sha256": "b90f91a2b8cd69da327d8c133417d119a44f9880c8bb080114be5d8e9cf3dcdd"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N19_00_E073_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E073_00_DEM/Copernicus_DSM_COG_10_N19_00_E073_00_DEM.tif",
+   "bytes": 45865641,
+   "sha256": "9e2f952a8d5b1a880382a4e440bd44637c6f0011edf59ca35a4e352c7f4bfceb"
+  }
+ ],
+ "processing": {
+  "mosaic": "rasterio.merge",
+  "resample": "bilinear onto the local ENU metre grid",
+  "grid_m": 20.0,
+  "nx": 2417,
+  "nz": 3628,
+  "min_x": -29160.0,
+  "min_z": -44740.0,
+  "dsm_to_dtm": "grey morphological opening, disk radius 120 m, then 3-cell mean, clamped not to exceed the DSM",
+  "canopy": "DSM minus DTM, used as a fallback built-height estimate",
+  "storage": "int16 decimetres"
+ },
+ "statistics": {
+  "dtm_min_m": -16.05584716796875,
+  "dtm_max_m": 654.3840942382812,
+  "dtm_mean_m": 20.19338035583496,
+  "canopy_p95_m": 5.699481964111328,
+  "canopy_max_m": 97.58984375
+ }
+}
 ```
 ## `data/layers/extract_summary.json`
 ```json
-{"error":"not produced"}
-
+{
+ "source_pbf": "data/osm/mumbai-aoi.osm.pbf",
+ "roads": 90435,
+ "road_points": 615195,
+ "buildings": 168514,
+ "building_points": 1277583,
+ "landuse": 12603,
+ "water_areas": 1413,
+ "coastline_ways": 101,
+ "land_rings": 22,
+ "land_area_km2": 3.51,
+ "poi": 1217,
+ "seconds": 20.0,
+ "detail": {
+  "bheight_src_0": 138517,
+  "bheight_src_1": 6864,
+  "bheight_src_2": 20636,
+  "buildings": 166017,
+  "buildings_rel": 2497,
+  "coastline_ways": 101,
+  "land_airport_land": 23,
+  "land_airport_land_rel": 1,
+  "land_beach": 18,
+  "land_beach_rel": 1,
+  "land_cemetery": 66,
+  "land_cemetery_rel": 2,
+  "land_commercial": 679,
+  "land_commercial_rel": 4,
+  "land_construction": 945,
+  "land_construction_rel": 1,
+  "land_farmland": 404,
+  "land_farmland_rel": 2,
+  "land_forest": 537,
+  "land_forest_rel": 6,
+  "land_grass": 939,
+  "land_grass_rel": 2,
+  "land_industrial": 605,
+  "land_military": 44,
+  "land_park": 1822,
+  "land_park_rel": 15,
+  "land_parking": 350,
+  "land_parking_rel": 1,
+  "land_pitch": 715,
+  "land_pitch_rel": 12,
+  "land_quarry": 16,
+  "land_railway_land": 105,
+  "land_residential": 4638,
+  "land_residential_rel": 28,
+  "land_retail": 115,
+  "land_rock": 30,
+  "land_rock_rel": 2,
+  "land_sand": 131,
+  "land_sand_rel": 1,
+  "land_scrub": 341,
+  "land_scrub_rel": 2,
+  "poi": 1206,
+  "road_cycleway": 49,
+  "road_ferry": 19,
+  "road_footway": 3955,
+  "road_helipad": 61,
+  "road_living_street": 1880,
+  "road_monorail": 37,
+  "road_motorway": 384,
+  "road_path": 1286,
+  "road_pedestrian": 259,
+  "road_pier": 108,
+  "road_primary": 2579,
+  "road_rail": 1757,
+  "road_residential": 46238,
+  "road_runway": 11,
+  "road_secondary": 3835,
+  "road_service": 17049,
+  "road_steps": 1448,
+  "road_subway": 355,
+  "road_taxiway": 333,
+  "road_tertiary": 5945,
+  "road_track": 1261,
+  "road_trunk": 1206,
+  "road_unclassified": 380,
+  "water_mangrove": 262,
+  "water_mangrove_rel": 23,
+  "water_water": 950,
+  "water_water_rel": 20,
+  "water_wetland": 156,
+  "water_wetland_rel": 2
+ }
+}
 ```
 ## `data/reports/world_build.json`
 ```json
-{"error":"not produced"}
-
+{
+ "seconds": 45.2,
+ "total_bytes": 9920122,
+ "files": {
+  "terrain.mwl": 41421,
+  "chunks.mwl": 6823694,
+  "network.mwl": 3051709,
+  "manifest.mwl": 3298
+ },
+ "manifest": {
+  "format": "MWL2",
+  "aoi_name": "Mumbai / Salsette island",
+  "aoi_version": "2.0.0",
+  "build_id": "e43c5d6b6e7b74194b55239672a68baa",
+  "selftest": false,
+  "origin_lat": 19.076,
+  "origin_lon": 72.8777,
+  "bounds_lonlat": [
+   72.6,
+   18.825,
+   73.06,
+   19.48
+  ],
+  "bounds_xz": [
+   -29156.5,
+   -44720.9,
+   19150.7,
+   27783.6
+  ],
+  "raster": {
+   "nx": 2417,
+   "nz": 3628,
+   "grid_m": 20.0,
+   "min_x": -29160.0,
+   "min_z": -44740.0,
+   "land_fraction": 0.001,
+   "land_km2": 3.5,
+   "elev_min_m": 0.0,
+   "elev_max_m": 114.5,
+   "cover_histogram": {
+    "water": 8760136,
+    "mangrove": 19,
+    "beach": 8,
+    "sand": 129,
+    "rock": 72,
+    "forest": 5050,
+    "scrub": 3036,
+    "grass": 4,
+    "residential": 259,
+    "industrial": 144,
+    "military": 19
+   }
+  },
+  "chunks": {
+   "cnx": 49,
+   "cnz": 73,
+   "cminx": -29,
+   "cminz": -44,
+   "chunk_m": 1024.0,
+   "quant": 0.05,
+   "buildings": 167369,
+   "building_runs": 167369,
+   "road_runs": 106490,
+   "height_src": {
+    "osm_height": 20568,
+    "osm_levels": 7008,
+    "dem_canopy": 139793
+   },
+   "names": 4269
+  },
+  "graph": {
+   "nodes": 310246,
+   "edges": 295032,
+   "drivable_km": 11478.5
+  },
+  "places": 1217,
+  "checkpoints": [
+   {
+    "group": "vasai_creek",
+    "key": "vasai_mouth",
+    "label": "Vasai Creek mouth",
+    "lat": 19.395,
+    "lon": 72.775,
+    "expect": "water"
+   },
+   {
+    "group": "vasai_creek",
+    "key": "vasai_east",
+    "label": "Vasai Creek upper reach",
+    "lat": 19.38,
+    "lon": 72.845,
+    "expect": "water"
+   },
+   {
+    "group": "vasai_creek",
+    "key": "vasai_south_bank",
+    "label": "Vasai Creek south bank",
+    "lat": 19.36,
+    "lon": 72.85,
+    "expect": "land"
+   },
+   {
+    "group": "north_salsette",
+    "key": "mira_road",
+    "label": "Mira Road / Bhayandar side",
+    "lat": 19.29,
+    "lon": 72.87,
+    "expect": "land"
+   },
+   {
+    "group": "north_salsette",
+    "key": "gorai",
+    "label": "Gorai",
+    "lat": 19.24,
+    "lon": 72.79,
+    "expect": "land"
+   },
+   {
+    "group": "north_salsette",
+    "key": "uttan",
+    "label": "Uttan coast",
+    "lat": 19.27,
+    "lon": 72.77,
+    "expect": "land"
+   },
+   {
+    "group": "northern_belt",
+    "key": "dahisar",
+    "label": "Dahisar",
+    "lat": 19.25,
+    "lon": 72.86,
+    "expect": "land"
+   },
+   {
+    "group": "northern_belt",
+    "key": "borivali",
+    "label": "Borivali",
+    "lat": 19.23,
+    "lon": 72.857,
+    "expect": "land"
+   },
+   {
+    "group": "northern_belt",
+    "key": "kandivali",
+    "label": "Kandivali",
+    "lat": 19.205,
+    "lon": 72.85,
+    "expect": "land"
+   },
+   {
+    "group": "northern_belt",
+    "key": "malad",
+    "label": "Malad",
+    "lat": 19.186,
+    "lon": 72.848,
+    "expect": "land"
+   },
+   {
+    "group": "northern_belt",
+    "key": "goregaon",
+    "label": "Goregaon",
+    "lat": 19.164,
+    "lon": 72.849,
+    "expect": "land"
+   },
+   {
+    "group": "national_park",
+    "key": "sgnp",
+    "label": "Sanjay Gandhi National Park",
+    "lat": 19.215,
+    "lon": 72.91,
+    "expect": "land"
+   },
+   {
+    "group": "national_park",
+    "key": "kanheri",
+    "label": "Kanheri ridge",
+    "lat": 19.208,
+    "lon": 72.905,
+    "expect": "land"
+   },
+   {
+    "group": "national_park",
+    "key": "tulsi",
+    "label": "Tulsi Lake",
+    "lat": 19.157,
+    "lon": 72.907,
+    "expect": "water"
+   },
+   {
+    "group": "national_park",
+    "key": "vihar",
+    "label": "Vihar Lake",
+    "lat": 19.143,
+    "lon": 72.909,
+    "expect": "water"
+   },
+   {
+    "group": "national_park",
+    "key": "aarey",
+    "label": "Aarey",
+    "lat": 19.16,
+    "lon": 72.88,
+    "expect": "land"
+   },
+   {
+    "group": "thane_creek",
+    "key": "thane_creek_north",
+    "label": "Thane Creek north",
+    "lat": 19.19,
+    "lon": 72.985,
+    "expect": "water"
+   },
+   {
+    "group": "thane_creek",
+    "key": "thane_creek_mid",
+    "label": "Thane Creek mid",
+    "lat": 19.09,
+    "lon": 72.975,
+    "expect": "water"
+   },
+   {
+    "group": "thane_creek",
+    "key": "thane_creek_mangrove",
+    "label": "Thane Creek mangroves",
+    "lat": 19.12,
+    "lon": 72.955,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "mulund",
+    "label": "Mulund",
+    "lat": 19.172,
+    "lon": 72.956,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "bhandup",
+    "label": "Bhandup",
+    "lat": 19.143,
+    "lon": 72.937,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "powai",
+    "label": "Powai",
+    "lat": 19.118,
+    "lon": 72.905,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "vikhroli",
+    "label": "Vikhroli",
+    "lat": 19.105,
+    "lon": 72.928,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "ghatkopar",
+    "label": "Ghatkopar",
+    "lat": 19.086,
+    "lon": 72.908,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "chembur",
+    "label": "Chembur",
+    "lat": 19.052,
+    "lon": 72.899,
+    "expect": "land"
+   },
+   {
+    "group": "eastern_suburbs",
+    "key": "trombay",
+    "label": "Trombay",
+    "lat": 19.001,
+    "lon": 72.92,
+    "expect": "land"
+   },
+   {
+    "group": "airports",
+    "key": "csmia",
+    "label": "CSMIA",
+    "lat": 19.089,
+    "lon": 72.868,
+    "expect": "land"
+   },
+   {
+    "group": "airports",
+    "key": "juhu_aero",
+    "label": "Juhu Aerodrome",
+    "lat": 19.098,
+    "lon": 72.834,
+    "expect": "land"
+   },
+   {
+    "group": "western_suburbs",
+    "key": "andheri",
+    "label": "Andheri",
+    "lat": 19.119,
+    "lon": 72.847,
+    "expect": "land"
+   },
+   {
+    "group": "western_suburbs",
+    "key": "juhu",
+    "label": "Juhu",
+    "lat": 19.107,
+    "lon": 72.827,
+    "expect": "land"
+   },
+   {
+    "group": "western_suburbs",
+    "key": "versova",
+    "label": "Versova",
+    "lat": 19.135,
+    "lon": 72.813,
+    "expect": "land"
+   },
+   {
+    "group": "western_suburbs",
+    "key": "madh",
+    "label": "Madh Island",
+    "lat": 19.14,
+    "lon": 72.795,
+    "expect": "land"
+   },
+   {
+    "group": "bandra_bkc",
+    "key": "bandra",
+    "label": "Bandra",
+    "lat": 19.059,
+    "lon": 72.83,
+    "expect": "land"
+   },
+   {
+    "group": "bandra_bkc",
+    "key": "bkc",
+    "label": "Bandra Kurla Complex",
+    "lat": 19.066,
+    "lon": 72.869,
+    "expect": "land"
+   },
+   {
+    "group": "bandra_bkc",
+    "key": "kurla",
+    "label": "Kurla",
+    "lat": 19.072,
+    "lon": 72.879,
+    "expect": "land"
+   },
+   {
+    "group": "bandra_bkc",
+    "key": "dharavi",
+    "label": "Dharavi",
+    "lat": 19.043,
+    "lon": 72.852,
+    "expect": "land"
+   },
+   {
+    "group": "bandra_bkc",
+    "key": "mahim",
+    "label": "Mahim",
+    "lat": 19.04,
+    "lon": 72.84,
+    "expect": "land"
+   },
+   {
+    "group": "central_mumbai",
+    "key": "worli",
+    "label": "Worli",
+    "lat": 19.0,
+    "lon": 72.817,
+    "expect": "land"
+   },
+   {
+    "group": "central_mumbai",
+    "key": "dadar",
+    "label": "Dadar",
+    "lat": 19.018,
+    "lon": 72.843,
+    "expect": "land"
+   },
+   {
+    "group": "central_mumbai",
+    "key": "lower_parel",
+    "label": "Lower Parel",
+    "lat": 18.995,
+    "lon": 72.83,
+    "expect": "land"
+   },
+   {
+    "group": "central_mumbai",
+    "key": "sewri",
+    "label": "Sewri",
+    "lat": 18.995,
+    "lon": 72.86,
+    "expect": "land"
+   },
+   {
+    "group": "south_mumbai",
+    "key": "marine_drive",
+    "label": "Marine Drive",
+    "lat": 18.943,
+    "lon": 72.823,
+    "expect": "land"
+   },
+   {
+    "group": "south_mumbai",
+    "key": "fort",
+    "label": "Fort / CSMT",
+    "lat": 18.94,
+    "lon": 72.835,
+    "expect": "land"
+   },
+   {
+    "group": "south_mumbai",
+    "key": "docks",
+    "label": "Mumbai docks",
+    "lat": 18.95,
+    "lon": 72.845,
+    "expect": "land"
+   },
+   {
+    "group": "south_mumbai",
+    "key": "colaba",
+    "label": "Colaba",
+    "lat": 18.91,
+    "lon": 72.815,
+    "expect": "land"
+   },
+   {
+    "group": "south_mumbai",
+    "key": "navy_nagar",
+    "label": "Navy Nagar",
+    "lat": 18.898,
+    "lon": 72.812,
+    "expect": "land"
+   },
+   {
+    "group": "arabian_sea",
+    "key": "sea_off_juhu",
+    "label": "Arabian Sea off Juhu",
+    "lat": 19.107,
+    "lon": 72.76,
+    "expect": "water"
+   },
+   {
+    "group": "arabian_sea",
+    "key": "sea_off_bandra",
+    "label": "Arabian Sea off Bandra",
+    "lat": 19.04,
+    "lon": 72.77,
+    "expect": "water"
+   },
+   {
+    "group": "arabian_sea",
+    "key": "back_bay",
+    "label": "Back Bay",
+    "lat": 18.925,
+    "lon": 72.808,
+    "expect": "water"
+   },
+   {
+    "group": "harbour",
+    "key": "harbour_mid",
+    "label": "Mumbai Harbour",
+    "lat": 18.93,
+    "lon": 72.9,
+    "expect": "water"
+   },
+   {
+    "group": "harbour",
+    "key": "mahim_bay",
+    "label": "Mahim Bay",
+    "lat": 19.033,
+    "lon": 72.818,
+    "expect": "water"
+   }
+  ],
+  "sources": {
+   "osm": {
+    "dataset": "OpenStreetMap",
+    "licence": "Open Database License (ODbL) v1.0",
+    "licence_url": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "attribution": "\u00a9 OpenStreetMap contributors",
+    "copyright_url": "https://www.openstreetmap.org/copyright",
+    "source_url": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf",
+    "source_bytes": 221112187,
+    "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
+    "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
+    "osm_replication_timestamp": "unknown",
+    "retrieved_utc": "2026-10-12T14:57:08+00:00",
+    "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
+    "clip": {
+     "tool": "osmium-tool",
+     "tool_version": "osmium version 1.16.0",
+     "strategy": "complete_ways",
+     "aoi_name": "Mumbai / Salsette island",
+     "aoi_version": "2.0.0",
+     "aoi_vertices": 29,
+     "output": "data/osm/mumbai-aoi.osm.pbf",
+     "output_bytes": 16810962,
+     "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+     "counts": {
+      "changesets": 0,
+      "nodes": 1866056,
+      "ways": 284668,
+      "relations": 4207
+     }
+    }
+   },
+   "dem": {
+    "dataset": "Copernicus DEM GLO-30 (COG)",
+    "producer": "European Space Agency / Airbus Defence and Space",
+    "licence": "Free, full and open \u2014 ESA Copernicus DEM licence",
+    "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
+    "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
+    "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
+    "retrieved_utc": "2026-10-12T14:57:29+00:00",
+    "tiles": [
+     {
+      "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E072_00_DEM/Copernicus_DSM_COG_10_N18_00_E072_00_DEM.tif",
+      "bytes": 4027713,
+      "sha256": "5b5e3ac02d569235d1f74ae9f092faa01094449786aeffec2c2862c51e95f15b"
+     },
+     {
+      "tile": "Copernicus_DSM_COG_10_N18_00_E073_00_DEM",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E073_00_DEM/Copernicus_DSM_COG_10_N18_00_E073_00_DEM.tif",
+      "bytes": 45785199,
+      "sha256": "e5e127b1a1b56c0415276707bbb8c4e7bb357cf0976030a19f8d166cd9d590c9"
+     },
+     {
+      "tile": "Copernicus_DSM_COG_10_N19_00_E072_00_DEM",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E072_00_DEM/Copernicus_DSM_COG_10_N19_00_E072_00_DEM.tif",
+      "bytes": 13336459,
+      "sha256": "b90f91a2b8cd69da327d8c133417d119a44f9880c8bb080114be5d8e9cf3dcdd"
+     },
+     {
+      "tile": "Copernicus_DSM_COG_10_N19_00_E073_00_DEM",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E073_00_DEM/Copernicus_DSM_COG_10_N19_00_E073_00_DEM.tif",
+      "bytes": 45865641,
+      "sha256": "9e2f952a8d5b1a880382a4e440bd44637c6f0011edf59ca35a4e352c7f4bfceb"
+     }
+    ],
+    "processing": {
+     "mosaic": "rasterio.merge",
+     "resample": "bilinear onto the local ENU metre grid",
+     "grid_m": 20.0,
+     "nx": 2417,
+     "nz": 3628,
+     "min_x": -29160.0,
+     "min_z": -44740.0,
+     "dsm_to_dtm": "grey morphological opening, disk radius 120 m, then 3-cell mean, clamped not to exceed the DSM",
+     "canopy": "DSM minus DTM, used as a fallback built-height estimate",
+     "storage": "int16 decimetres"
+    },
+    "statistics": {
+     "dtm_min_m": -16.05584716796875,
+     "dtm_max_m": 654.3840942382812,
+     "dtm_mean_m": 20.19338035583496,
+     "canopy_p95_m": 5.699481964111328,
+     "canopy_max_m": 97.58984375
+    }
+   }
+  },
+  "attribution": [
+   "\u00a9 OpenStreetMap contributors (ODbL 1.0)",
+   "Copernicus DEM \u00a9 DLR e.V. / Airbus DS, ESA"
+  ]
+ }
+}
 ```
 ## Sizes
 ```
-24K	data/_cache
+104M	data/_cache
+7.7M	data/dem
 20K	data/geodata
-4.0K	data/osm
-4.0K	data/provenance
-8.0K	data/reports
-/dev/root       145G   42G  103G  29% /
+15M	data/layers
+17M	data/osm
+12K	data/provenance
+40K	data/reports
+9.5M	android/src/main/assets/world
+/dev/root       145G   60G   85G  42% /
 ```

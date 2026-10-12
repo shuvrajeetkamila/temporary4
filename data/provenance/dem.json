@@ -1,0 +1,54 @@
+{
+ "dataset": "Copernicus DEM GLO-30 (COG)",
+ "producer": "European Space Agency / Airbus Defence and Space",
+ "licence": "Free, full and open \u2014 ESA Copernicus DEM licence",
+ "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
+ "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
+ "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
+ "retrieved_utc": "2026-10-12T14:57:29+00:00",
+ "tiles": [
+  {
+   "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E072_00_DEM/Copernicus_DSM_COG_10_N18_00_E072_00_DEM.tif",
+   "bytes": 4027713,
+   "sha256": "5b5e3ac02d569235d1f74ae9f092faa01094449786aeffec2c2862c51e95f15b"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N18_00_E073_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_E073_00_DEM/Copernicus_DSM_COG_10_N18_00_E073_00_DEM.tif",
+   "bytes": 45785199,
+   "sha256": "e5e127b1a1b56c0415276707bbb8c4e7bb357cf0976030a19f8d166cd9d590c9"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N19_00_E072_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E072_00_DEM/Copernicus_DSM_COG_10_N19_00_E072_00_DEM.tif",
+   "bytes": 13336459,
+   "sha256": "b90f91a2b8cd69da327d8c133417d119a44f9880c8bb080114be5d8e9cf3dcdd"
+  },
+  {
+   "tile": "Copernicus_DSM_COG_10_N19_00_E073_00_DEM",
+   "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N19_00_E073_00_DEM/Copernicus_DSM_COG_10_N19_00_E073_00_DEM.tif",
+   "bytes": 45865641,
+   "sha256": "9e2f952a8d5b1a880382a4e440bd44637c6f0011edf59ca35a4e352c7f4bfceb"
+  }
+ ],
+ "processing": {
+  "mosaic": "rasterio.merge",
+  "resample": "bilinear onto the local ENU metre grid",
+  "grid_m": 20.0,
+  "nx": 2417,
+  "nz": 3628,
+  "min_x": -29160.0,
+  "min_z": -44740.0,
+  "dsm_to_dtm": "grey morphological opening, disk radius 120 m, then 3-cell mean, clamped not to exceed the DSM",
+  "canopy": "DSM minus DTM, used as a fallback built-height estimate",
+  "storage": "int16 decimetres"
+ },
+ "statistics": {
+  "dtm_min_m": -16.05584716796875,
+  "dtm_max_m": 654.3840942382812,
+  "dtm_mean_m": 20.19338035583496,
+  "canopy_p95_m": 5.699481964111328,
+  "canopy_max_m": 97.58984375
+ }
+}
