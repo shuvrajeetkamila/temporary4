@@ -316,55 +316,87 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Install the emulator image
+        run: |
+          set -x
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SDKM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          ls "$ANDROID_SDK_ROOT/cmdline-tools" || true
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platform-tools" "emulator" \
+                            "system-images;android-30;default;x86_64"
+          echo "no" | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager" \
+            create avd -n mumbai -k "system-images;android-30;default;x86_64" -d pixel_4 --force
+          "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds
+
       - name: Launch, load the world, render
         continue-on-error: true
         id: emu
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: default
-          arch: x86_64
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: |
-            set -uo pipefail
-            : > install.txt; : > start.txt; : > logcat-app.txt; : > logcat-full.txt
-            adb devices | tee install.txt
-            APK=$(ls Mumbai-The-Island-City-*.apk 2>/dev/null | head -1)
-            echo "apk=[$APK]" | tee -a install.txt
-            test -n "$APK" || { echo "no apk in workspace"; ls -la | tee -a install.txt; exit 1; }
-            adb install -r -g "$APK" 2>&1 | tee -a install.txt
+        run: |
+          set -uo pipefail
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          : > install.txt; : > start.txt; : > logcat-app.txt; : > logcat-full.txt
+          : > emulator.txt
 
-            adb logcat -c || true
-            adb shell am start -W -n \
-              ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity \
-              2>&1 | tee start.txt
+          nohup emulator -avd mumbai -no-window -no-audio -no-boot-anim \
+                -no-snapshot -gpu swiftshader_indirect -camera-back none \
+                -accel on -qemu -m 4096 > emulator.txt 2>&1 &
+          echo "emulator pid $!" | tee -a install.txt
 
-            # SwiftShader renders single digit frame rates, so the budget is
-            # generous. The markers matter, not the speed.
-            for i in $(seq 1 90); do
-              if adb logcat -d 2>/dev/null | grep -q MUMBAI_RENDER_OK; then break; fi
-              sleep 2
-            done
+          adb wait-for-device
+          echo "device appeared" | tee -a install.txt
+          BOOTED=0
+          for i in $(seq 1 120); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              BOOTED=1; break
+            fi
+            sleep 5
+          done
+          echo "booted=$BOOTED after $((i*5))s" | tee -a install.txt
+          [ "$BOOTED" = "1" ] || { tail -60 emulator.txt | tee -a install.txt; exit 1; }
 
-            adb logcat -d > logcat-full.txt 2>&1 || true
-            adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
-              > logcat-app.txt 2>&1 || true
-            tail -120 logcat-app.txt || true
+          adb shell wm size      | tee -a install.txt
+          adb shell getprop ro.build.version.sdk | tee -a install.txt
+          adb shell settings put global window_animation_scale 0 || true
+          adb shell settings put global transition_animation_scale 0 || true
+          adb shell settings put global animator_duration_scale 0 || true
 
-            STATUS=0
-            grep -q MUMBAI_WORLD_READY logcat-full.txt || {
-              echo "FAIL: the world never finished loading"; STATUS=1; }
-            grep -q MUMBAI_RENDER_OK logcat-full.txt || {
-              echo "FAIL: the renderer never reached 30 frames"; STATUS=1; }
-            if grep -q 'FATAL EXCEPTION' logcat-full.txt; then
-              echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
-            adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
-              || { echo "FAIL: the process is not running"; STATUS=1; }
-            grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK' logcat-full.txt || true
-            echo "device_test status $STATUS"
-            exit $STATUS
+          APK=$(ls Mumbai-The-Island-City-*.apk 2>/dev/null | head -1)
+          echo "apk=[$APK] $(stat -c%s "$APK" 2>/dev/null) bytes" | tee -a install.txt
+          test -n "$APK" || { ls -la | tee -a install.txt; exit 1; }
+          adb install -r -g "$APK" 2>&1 | tee -a install.txt
+
+          adb logcat -c || true
+          adb shell am start -W -n \
+            ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity \
+            2>&1 | tee start.txt
+
+          # SwiftShader renders single digit frame rates, so the budget is
+          # generous. The markers matter, not the speed.
+          for i in $(seq 1 90); do
+            if adb logcat -d 2>/dev/null | grep -q MUMBAI_RENDER_OK; then break; fi
+            sleep 2
+          done
+
+          adb logcat -d > logcat-full.txt 2>&1 || true
+          adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
+            > logcat-app.txt 2>&1 || true
+          tail -120 logcat-app.txt || true
+
+          STATUS=0
+          grep -q MUMBAI_WORLD_READY logcat-full.txt || {
+            echo "FAIL: the world never finished loading"; STATUS=1; }
+          grep -q MUMBAI_RENDER_OK logcat-full.txt || {
+            echo "FAIL: the renderer never reached 30 frames"; STATUS=1; }
+          if grep -q 'FATAL EXCEPTION' logcat-full.txt; then
+            echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
+          adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
+            || { echo "FAIL: the process is not running"; STATUS=1; }
+          grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK' logcat-full.txt || true
+          echo "device_test status $STATUS"
+          adb emu kill || true
+          exit $STATUS
 
       - name: Publish the device log
         if: always()
@@ -381,7 +413,8 @@ jobs:
             echo "files present: $(ls 2>/dev/null | tr '\n' ' ')"
             echo "--- install ---";    cat install.txt    2>/dev/null
             echo "--- am start ---";   cat start.txt      2>/dev/null
-            echo "--- app log ---";    tail -c 30000 logcat-app.txt 2>/dev/null
+            echo "--- app log ---";    tail -c 28000 logcat-app.txt 2>/dev/null
+            echo "--- emulator ---";  tail -c 4000 emulator.txt 2>/dev/null
             echo "--- crashes/GL ---"
             grep -aE 'FATAL|AndroidRuntime|MumbaiGL|Mumbai|shader|GLES|libEGL|died|Exception' \
               logcat-full.txt 2>/dev/null | tail -120
