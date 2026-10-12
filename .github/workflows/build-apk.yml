@@ -326,14 +326,15 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -uo pipefail
             APK=$(ls Mumbai-The-Island-City-*.apk | head -1)
             echo "installing $APK"
-            adb install -r -g "$APK"
+            adb install -r -g "$APK" 2>&1 | tee install.txt
 
             adb logcat -c
             adb shell am start -W -n \
-              ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity
+              ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity \
+              2>&1 | tee start.txt
 
             # SwiftShader renders at single-digit frame rates, so the budget
             # is generous. The markers are what matter, not the speed.
@@ -342,35 +343,62 @@ jobs:
               sleep 2
             done
 
-            echo '================ logcat ================'
-            adb logcat -d -s Mumbai:* MumbaiGL:* AndroidRuntime:E | tail -80
-            echo '========================================'
+            # Always keep the log. Job logs cannot be read back from the
+            # environment that drives this repository, so a failure with no
+            # retained logcat is a failure that cannot be diagnosed.
+            adb logcat -d > logcat-full.txt 2>&1 || true
+            adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
+              > logcat-app.txt 2>&1 || true
+            tail -120 logcat-app.txt
 
-            echo '--- the world must have loaded ---'
-            adb logcat -d | grep -q MUMBAI_WORLD_READY || {
-              echo "FAIL: the world never finished loading"
-              adb logcat -d | tail -150
-              exit 1
-            }
-            adb logcat -d | grep MUMBAI_WORLD_READY
-
-            echo '--- frames must have been rendered ---'
-            adb logcat -d | grep -q MUMBAI_RENDER_OK || {
-              echo "FAIL: the renderer never reached 30 frames"
-              adb logcat -d | tail -150
-              exit 1
-            }
-            adb logcat -d | grep MUMBAI_RENDER_OK
-
-            echo '--- nothing may have crashed ---'
-            if adb logcat -d | grep -q 'FATAL EXCEPTION'; then
-              echo "FAIL: a fatal exception was thrown"
-              adb logcat -d | grep -A 30 'FATAL EXCEPTION'
-              exit 1
-            fi
-
-            echo '--- and it must still be alive ---'
+            STATUS=0
+            grep -q MUMBAI_WORLD_READY logcat-full.txt || {
+              echo "FAIL: the world never finished loading"; STATUS=1; }
+            grep -q MUMBAI_RENDER_OK logcat-full.txt || {
+              echo "FAIL: the renderer never reached 30 frames"; STATUS=1; }
+            if grep -q 'FATAL EXCEPTION' logcat-full.txt; then
+              echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
             adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
-              || { echo "FAIL: the process died"; exit 1; }
+              || { echo "FAIL: the process is not running"; STATUS=1; }
 
-            echo "PASS: installed, loaded the world, rendered, still running"
+            grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK' logcat-full.txt || true
+            echo "device_test status $STATUS"
+            exit $STATUS
+
+      - name: Keep the device logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-test-logs
+          path: |
+            logcat-full.txt
+            logcat-app.txt
+            install.txt
+            start.txt
+          if-no-files-found: ignore
+
+      - name: Post the device log where it can be read
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "Run ${{ github.run_id }}, job device_test: ${{ job.status }}"
+            echo
+            echo '### install'
+            echo '```'; tail -20 install.txt 2>/dev/null || echo "(none)"; echo '```'
+            echo '### am start'
+            echo '```'; tail -20 start.txt 2>/dev/null || echo "(none)"; echo '```'
+            echo '### app logcat (tail)'
+            echo '```'
+            tail -c 12000 logcat-app.txt 2>/dev/null || echo "(none)"
+            echo '```'
+            echo '### crashes and GL errors from the full log'
+            echo '```'
+            grep -E 'FATAL|AndroidRuntime|MumbaiGL|Mumbai |shader|GLES|libEGL|died' \
+              logcat-full.txt 2>/dev/null | tail -80 || echo "(none)"
+            echo '```'
+          } > /tmp/device.md
+          gh issue create \
+            --title "device_test ${{ job.status }}: run ${{ github.run_id }}" \
+            --body-file /tmp/device.md || true
