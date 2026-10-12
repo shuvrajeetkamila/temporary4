@@ -103,6 +103,11 @@ public final class CarPhysics extends RigidBody {
     public double steerInput;
     public boolean handbrakeOn;
 
+    /** What the clutch can hold before it slips, N m at the crank. */
+    public double clutchCapacity = 320;
+    public double clutchEngagement;
+    public boolean clutchSlipping;
+
     // ---- outputs ---------------------------------------------------------
     public double speedKph;
     public double wheelSlipMax;
@@ -354,6 +359,12 @@ public final class CarPhysics extends RigidBody {
      */
     private double effectiveWheelInertia(Wheel w) {
         if (!w.driven || gear == 1 || shiftTimer > 0) { return w.inertia; }
+        // Reflecting the engine's inertia through the square of the ratio is
+        // what keeps the wheel spin stable: against roughly 700 N m the bare
+        // 1.2 kg m^2 of a wheel diverges at 60 Hz. But it only applies when
+        // the clutch is locked. While it slips the engine is not rigidly
+        // attached to the wheel and its inertia must not be counted.
+        if (clutchSlipping) { return w.inertia + engineInertia * 2.5; }
         double ratio = totalRatio();
         return w.inertia + engineInertia * ratio * ratio;
     }
@@ -373,21 +384,59 @@ public final class CarPhysics extends RigidBody {
 
         double ratio = totalRatio();
         boolean engaged = gear != 1 && shiftTimer <= 0;
+
+        // --- the clutch -------------------------------------------------------
+        // Without one, pulling away is a mess. Holding the engine at idle while
+        // feeding its full torque through a 14:1 first gear drives the wheels
+        // faster than the car is going, the tyre saturates, the slip ratio
+        // flips sign every step and the launch chatters away a second and a
+        // half. A real clutch slips instead: it transmits what it can hold and
+        // the engine revs on the difference, which is what makes a standing
+        // start smooth.
+        double crankTorque = engineTorque(engineRpm, MathUtil.clamp(throttle, 0, 1));
+        double transmitted = 0;
         if (engaged) {
-            double target = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
-            // Clutch slip near standstill, so the engine does not stall and the
-            // car can pull away smoothly.
-            double blend = MathUtil.clamp(Math.abs(drivenSpin) * 0.55, 0.12, 1.0);
-            engineRpm = MathUtil.lerp(engineRpm, Math.max(idleRpm, target), blend);
+            double inputRpm = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
+            // The driver lets the pedal up as the input speed comes up to idle.
+            // The driver lets the pedal all the way up by about 15 km/h.
+            clutchEngagement = MathUtil.clamp(Math.abs(forwardSpeed()) / 4.2, 0.26, 1.0);
+            clutchSlipping = inputRpm < idleRpm * 0.98 || engineRpm > inputRpm + 60;
+            if (clutchSlipping) {
+                double capacity = clutchCapacity * clutchEngagement;
+                transmitted = MathUtil.clamp(crankTorque, -capacity, capacity);
+                // The surplus spins the engine up, which is the launch flare.
+                double net = crankTorque - transmitted;
+                engineRpm += net / engineInertia * dt * 60.0 / (2 * Math.PI);
+                // It cannot be dragged below idle: that is the point of slipping.
+                engineRpm = MathUtil.clamp(engineRpm, Math.max(idleRpm, inputRpm * 0.6),
+                        maxRpm);
+            } else {
+                // Locked up: the engine simply follows the gearbox.
+                clutchEngagement = 1.0;
+                engineRpm = MathUtil.lerp(engineRpm, Math.max(idleRpm, inputRpm), 0.45);
+                transmitted = crankTorque;
+            }
+        } else if (shiftTimer > 0) {
+            // Mid-shift the clutch is out, but the throttle is cut with it.
+            // Letting the engine rev freely here is what produced a shift
+            // cascade: it hit the redline during the change, the gearbox saw
+            // the redline and changed up again, and the car walked from second
+            // to top in half a second while slowing down.
+            clutchSlipping = true;
+            clutchEngagement = 0;
+            double nextInput = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
+            engineRpm = MathUtil.lerp(engineRpm, Math.max(idleRpm, nextInput),
+                    MathUtil.clamp(dt / Math.max(dt, shiftTimer), 0.08, 1.0));
         } else {
+            clutchSlipping = true;
+            clutchEngagement = 0;
             double free = engineRpm + (throttle * 5200 - 900) * dt * 1.8;
             engineRpm = MathUtil.clamp(free, idleRpm, maxRpm);
         }
         engineRpm = MathUtil.clamp(engineRpm, idleRpm * 0.6, maxRpm);
 
-        double crankTorque = engineTorque(engineRpm, MathUtil.clamp(throttle, 0, 1));
         double wheelTorque = engaged
-                ? crankTorque * ratio * drivelineEfficiency / Math.max(1, n) : 0;
+                ? transmitted * ratio * drivelineEfficiency / Math.max(1, n) : 0;
 
         for (Wheel w : wheels) {
             double inertiaEff = effectiveWheelInertia(w);
@@ -424,11 +473,34 @@ public final class CarPhysics extends RigidBody {
             shiftTimer = shiftDuration;
             return;
         }
-        if (gear >= 2 && engineRpm > redlineRpm - 250 && gear < gearRatios.length - 1) {
+        // Never change up on engine speed alone. With the clutch slipping at
+        // a standing start the engine is at the redline while the car has not
+        // moved, and an rpm-only rule walks it to top gear on the spot.
+        if (shiftTimer > 0) { return; }
+        // The slipping-clutch guard must only block changes UP. Blocking
+        // changes down as well leaves the car coasting to a halt in top.
+        boolean mayGoUp = !(clutchSlipping && Math.abs(fwd) < 6.0);
+        if (mayGoUp && gear >= 2 && engineRpm > redlineRpm - 250
+                && gear < gearRatios.length - 1) {
             gear++;
             shiftTimer = shiftDuration;
-        } else if (gear > 2 && engineRpm < 1500) {
-            gear--;
+        } else if (gear > 2 && (engineRpm < 1500 || Math.abs(fwd) < 2.0)) {
+            // Drop straight to the gear that suits the road speed rather than
+            // walking down one at a time. Stepping down singly means a hard
+            // stop from the motorway ends with the car stationary in fifth,
+            // because each change costs the shift interlock and the car runs
+            // out of road first. A real automatic kicks down several at once.
+            // Walk up from first and keep the tallest gear that still turns
+            // the engine fast enough to pull. Index 2 is first, and the ratio
+            // falls as the index rises, so first is always a valid answer and
+            // at a crawl it is the only one.
+            int want = 2;
+            for (int g = 3; g < gearRatios.length; g++) {
+                double rpm = Math.abs(fwd) / wheels[0].radius
+                        * gearRatios[g] * finalDrive * 60.0 / (2 * Math.PI);
+                if (rpm > 1800) { want = g; } else { break; }
+            }
+            gear = MathUtil.clampi(Math.min(want, gear - 1), 2, gearRatios.length - 1);
             shiftTimer = shiftDuration;
         }
     }

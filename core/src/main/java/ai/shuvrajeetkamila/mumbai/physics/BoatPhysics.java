@@ -42,7 +42,15 @@ public final class BoatPhysics extends RigidBody {
 
     public double maxThrust = 14500;             // N at full throttle
     public double rudderAuthority = 0.9;
-    public double hullDragCoefficient = 0.62;
+    /**
+     * Total resistance coefficient referred to the wetted surface. Real hull
+     * resistance is skin friction plus form and wave making, which together
+     * land somewhere near one percent of dynamic pressure over the wetted
+     * area. Referring it to the plan area instead, as a first cut did here,
+     * overstates the drag by more than an order of magnitude and leaves a
+     * speedboat doing seven knots.
+     */
+    public double hullDragCoefficient = 0.011;
     public double lateralDragCoefficient = 5.4;
     public double planingThreshold = 7.5;        // m/s at which the hull lifts
 
@@ -92,7 +100,29 @@ public final class BoatPhysics extends RigidBody {
             samples[i] = new Vec3(pts[i][0], -draft * 0.5, pts[i][2]);
             sampleVolume[i] = totalVolume / 8.0;
         }
+        recomputeHeaveDamping();
     }
+
+    /**
+     * Set the heave damping as a fraction of critical for this hull.
+     *
+     * <p>A fixed coefficient cannot work across a 1.2 tonne speedboat and a
+     * 240 tonne coaster: on the heavy hull it comes to about three percent of
+     * critical and the boat bobs for a minute after it is launched. The
+     * stiffness here is the rate of change of buoyancy with immersion, which
+     * for the saturating model is the full displacement spread over
+     * {@code 1.7 * draft}.
+     */
+    public void recomputeHeaveDamping() {
+        double volume = 0;
+        for (double v : sampleVolume) { volume += v; }
+        double k = MathUtil.RHO_SEA * MathUtil.G * volume / Math.max(0.2, draft * 1.7);
+        double critical = 2.0 * Math.sqrt(k * Math.max(1, mass));
+        heaveDamping = 0.62 * critical / samples.length;
+    }
+
+    /** Per-sample heave damping, N s/m. Derived, not guessed. */
+    public double heaveDamping = 820;
 
     /** Preset: a Mumbai harbour ferry. Beamy, stiff, slow. */
     public static BoatPhysics ferry() {
@@ -101,7 +131,8 @@ public final class BoatPhysics extends RigidBody {
         b.metacentricHeight = 1.4;
         b.maxThrust = 62000;
         b.planingThreshold = 99;                 // never planes
-        b.hullDragCoefficient = 0.95;
+        b.hullDragCoefficient = 0.012;
+        b.recomputeHeaveDamping();
         return b;
     }
 
@@ -112,7 +143,8 @@ public final class BoatPhysics extends RigidBody {
         b.metacentricHeight = 0.95;
         b.maxThrust = 9800;
         b.planingThreshold = 6.2;
-        b.hullDragCoefficient = 0.48;
+        b.hullDragCoefficient = 0.009;
+        b.recomputeHeaveDamping();
         return b;
     }
 
@@ -123,7 +155,8 @@ public final class BoatPhysics extends RigidBody {
         b.metacentricHeight = 2.4;
         b.maxThrust = 310000;
         b.planingThreshold = 99;
-        b.hullDragCoefficient = 1.15;
+        b.hullDragCoefficient = 0.015;
+        b.recomputeHeaveDamping();
         return b;
     }
 
@@ -165,7 +198,7 @@ public final class BoatPhysics extends RigidBody {
             // stops the hull resonating with the swell.
             pointVelocity(tmp1, tmp3);
             double rel = tmp3.y - sea.verticalVelocityAt(tmp1.x, tmp1.z);
-            tmp2.set(0, -rel * 820.0 * fill, 0);
+            tmp2.set(0, -rel * heaveDamping * fill, 0);
             addForceAtPoint(tmp2, tmp1);
         }
         submergedFraction = submerged / (double) samples.length;
@@ -204,7 +237,8 @@ public final class BoatPhysics extends RigidBody {
         tmp3.set(velocity.x - cur[0], velocity.y, velocity.z - cur[1]);
         double vFwd = tmp3.dot(tmp1);
         double vLat = tmp3.dot(tmp2);
-        double wetted = hullLength * hullBeam * submergedFraction;
+        // Wetted surface, not plan area: the bottom plus both sides.
+        double wetted = hullLength * (hullBeam + 2 * draft) * submergedFraction;
 
         // Planing: above the threshold the hull climbs onto its own bow wave.
         planing = vFwd > planingThreshold;
@@ -226,7 +260,12 @@ public final class BoatPhysics extends RigidBody {
         }
 
         double rho = MathUtil.RHO_SEA;
-        double fwdDrag = -0.5 * rho * hullDragCoefficient * wetted * 0.12
+        // Planing lifts the hull, so there is less of it in the water to drag.
+        // That reduction is most of why planing is worth doing at all.
+        double wettedNow = wetted * (planing
+                ? 1.0 - 0.55 * MathUtil.clamp(planingLift / (mass * MathUtil.G) / 0.75, 0, 1)
+                : 1.0);
+        double fwdDrag = -0.5 * rho * hullDragCoefficient * wettedNow
                 * vFwd * Math.abs(vFwd);
         double latDrag = -0.5 * rho * lateralDragCoefficient * wetted * 0.5
                 * vLat * Math.abs(vLat);
@@ -262,9 +301,18 @@ public final class BoatPhysics extends RigidBody {
         if (aground) {
             double pen = bed - keel;
             // Soft but firm: a sandbank, not a wall. Speed bleeds off fast.
-            addForce(0, pen * mass * 42.0, 0);
-            tmp3.set(velocity).scaleSelf(-mass * 1.9 * MathUtil.clamp(pen, 0, 1.5));
-            tmp3.y = Math.max(0, tmp3.y);
+            double n = pen * mass * 42.0;
+            addForce(0, n, 0);
+            // Sand under the keel is friction against the supported weight,
+            // not a token drag term. A ferry under full power must not be
+            // able to drive itself up a beach.
+            double speed = velocity.planarLength();
+            if (speed > 1e-3) {
+                double mu = 0.75;
+                double f = Math.min(mu * n, speed * mass * 8.0);
+                addForce(-velocity.x / speed * f, 0, -velocity.z / speed * f);
+            }
+            tmp3.set(0, -velocity.y * mass * 2.4, 0);
             addForce(tmp3);
         }
 

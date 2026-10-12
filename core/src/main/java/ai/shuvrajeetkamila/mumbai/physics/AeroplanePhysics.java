@@ -31,8 +31,21 @@ public final class AeroplanePhysics extends RigidBody {
     public double clMax = 1.52;
 
     public double maxThrust = 5600;              // N, both engines, sea level
-    public double elevatorPower = 1.95;
-    public double aileronPower = 1.35;
+    /**
+     * Control authority, balanced against the stability derivatives below.
+     *
+     * <p>These are not free parameters. The angle of attack the aeroplane
+     * settles at is where the elevator moment equals the tailplane's
+     * restoring moment, so {@code elevatorPower} and the 0.62 pitch stability
+     * coefficient together decide what full aft stick actually buys you. At
+     * the first values tried here that equilibrium sat at 32 degrees: the
+     * aeroplane over-rotated on every takeoff and struck its tail before the
+     * wing was flying. These give about 18 degrees at full deflection, which
+     * is just past the stall - a real aeroplane can be stalled with the stick
+     * on the back stop, and this one can too.
+     */
+    public double elevatorPower = 0.42;
+    public double aileronPower = 0.95;
     public double rudderPower = 0.72;
 
     /** Flap detents in degrees and the lift and drag they add. */
@@ -138,7 +151,10 @@ public final class AeroplanePhysics extends RigidBody {
             tmp1.crossInto(air, tmp3);          // span-wise axis
             if (tmp3.lengthSq() < 1e-9) { orientation.right(tmp3); }
             tmp3.normalizeSelf();
-            Vec3 liftDir = tmp3.cross(air).normalizeSelf();
+            // airflow x span, in that order. The other way round puts lift
+            // on the wrong side of the wing: the aeroplane is pressed into
+            // the runway and the harder you pull the firmer it is held down.
+            Vec3 liftDir = air.cross(tmp3).normalizeSelf();
             addForce(liftDir.x * liftN, liftDir.y * liftN, liftDir.z * liftN);
             addForce(-air.x * dragN, -air.y * dragN, -air.z * dragN);
 
@@ -158,14 +174,21 @@ public final class AeroplanePhysics extends RigidBody {
             addTorque(tmp2.x * yawM, tmp2.y * yawM, tmp2.z * yawM);
 
             // --- static stability. A real aeroplane weathercocks into the
-            // airflow and tends to return to level; without these terms it
-            // flies like a brick with no tail.
-            addTorque(tmp2.x * -sideslip * auth * 0.55,
-                    tmp2.y * -sideslip * auth * 0.55,
-                    tmp2.z * -sideslip * auth * 0.55);
-            double pitchStab = -(angleOfAttack - 0.035) * auth * 0.62;
+            // airflow and tends to return to its trimmed angle of attack.
+            // Both of these terms must oppose the disturbance. Getting either
+            // sign backwards does not make the aeroplane merely twitchy, it
+            // makes it divergent: it rotates, the moment grows with the angle
+            // rather than resisting it, and it flips within a second.
+            //
+            // Fin: slipping to the right means the airflow strikes the right
+            // side, the fin pushes the tail left and the nose swings right.
+            double fin = sideslip * auth * 0.55;
+            addTorque(tmp2.x * fin, tmp2.y * fin, tmp2.z * fin);
+            // Tailplane: above the trim angle it pushes the nose back down.
+            double pitchStab = (angleOfAttack - 0.035) * auth * 0.62;
             addTorque(tmp3.x * pitchStab, tmp3.y * pitchStab, tmp3.z * pitchStab);
-            // Dihedral: sideslip produces a roll away from it.
+            // Dihedral: the windward wing meets the air at a greater angle,
+            // so the aeroplane rolls away from the slip.
             addTorque(tmp1.x * sideslip * auth * 0.20,
                     tmp1.y * sideslip * auth * 0.20,
                     tmp1.z * sideslip * auth * 0.20);
@@ -188,34 +211,78 @@ public final class AeroplanePhysics extends RigidBody {
         addTorque(-angularVelocity.x * 4200, -angularVelocity.y * 3100,
                 -angularVelocity.z * 2600);
 
-        // --- undercarriage -----------------------------------------------------
-        if (gearDown && position.y - groundY < 1.6) {
-            double pen = 1.6 - (position.y - groundY);
-            double n = Math.max(0, pen * mass * 30.0 - velocity.y * mass * 6.5);
-            addForce(0, n, 0);
-            // Rolling and braking along the runway.
-            orientation.forward(tmp1);
-            double vf = velocity.dot(tmp1);
-            double roll = -(0.02 + brakes * 0.55) * n * Math.signum(vf);
-            if (Math.abs(vf) < 0.4) { roll = -vf * mass * 2.0; }
-            addForce(tmp1.x * roll, tmp1.y * roll, tmp1.z * roll);
-            // Tyres resist sideways motion, which is what keeps it tracking.
-            orientation.right(tmp3);
-            double vr = velocity.dot(tmp3);
-            addForce(tmp3.x * -vr * mass * 2.4, 0, tmp3.z * -vr * mass * 2.4);
-            // Nosewheel steering at taxi speed.
-            if (Math.abs(vf) < 22) {
-                orientation.up(tmp2);
-                double st = rudderInput * n * 0.35 * MathUtil.clamp(Math.abs(vf) / 6, 0, 1);
-                addTorque(tmp2.x * st, tmp2.y * st, tmp2.z * st);
+        // --- undercarriage -------------------------------------------------------
+        // Three contact points, not one. A single contact with a levelling
+        // torque cannot be rotated: the levelling term scales with the normal
+        // load, which is the whole weight of the aeroplane, so it swamps the
+        // elevator and the nose never comes up. With a nosewheel ahead of the
+        // centre of gravity and mains just behind it, rotation is what it
+        // actually is - the elevator unloads the nosewheel, the aeroplane
+        // pivots about the mains, and the wing reaches its flying angle.
+        onGround = false;
+        if (gearDown) {
+            for (int g = 0; g < 3; g++) {
+                // nose, left main, right main, in body coordinates
+                double bx = g == 0 ? 0 : (g == 1 ? -1.9 : 1.9);
+                double bz = g == 0 ? 2.35 : -0.42;
+                tmp1.set(bx, -1.05, bz);
+                pointToWorld(tmp1, tmp2);
+                double gy = ground.heightAt(tmp2.x, tmp2.z);
+                double pen = gy - tmp2.y;
+                if (pen <= 0) { continue; }
+                onGround = true;
+                pointVelocity(tmp2, tmp3);
+                double share = g == 0 ? 0.22 : 0.39;
+                double n = Math.max(0, pen * mass * 46.0 * share
+                        - tmp3.y * mass * 7.0 * share);
+                tmp1.set(0, n, 0);
+                addForceAtPoint(tmp1, tmp2);
+
+                orientation.forward(tmp1);
+                double vf = tmp3.dot(tmp1);
+                double roll = -(0.019 + brakes * (g == 0 ? 0.0 : 0.62)) * n;
+                if (Math.abs(vf) < 0.35) {
+                    roll = -vf * mass * 2.2 * share;
+                } else {
+                    roll *= Math.signum(vf);
+                }
+                tmp1.scaleSelf(roll);
+                addForceAtPoint(tmp1, tmp2);
+
+                // Tyres resist sideways scrub, which is what keeps it tracking
+                // down the centreline instead of weathercocking off the side.
+                orientation.right(tmp1);
+                double vr = tmp3.dot(tmp1);
+                double side = -vr * mass * 2.6 * share;
+                // The nosewheel steers at taxi speed.
+                if (g == 0 && Math.abs(vf) < 24) {
+                    side += rudderInput * n * 0.42
+                            * MathUtil.clamp(Math.abs(vf) / 5.0, 0, 1);
+                }
+                tmp1.scaleSelf(side);
+                addForceAtPoint(tmp1, tmp2);
             }
-            // Keep it on its wheels.
-            orientation.up(tmp2);
-            addTorque(-tmp2.z * n * 0.9, 0, tmp2.x * n * 0.9);
-        } else if (!gearDown && position.y - groundY < 0.9) {
-            double pen = 0.9 - (position.y - groundY);
-            addForce(0, Math.max(0, pen * mass * 24.0 - velocity.y * mass * 5.0), 0);
-            addForce(-velocity.x * mass * 3.4, 0, -velocity.z * mass * 3.4);
+            // The tailcone. Over-rotate on the runway and it strikes, which
+            // is the real limit on how hard you can haul back at rotation.
+            tmp1.set(0, -0.35, -3.6);
+            pointToWorld(tmp1, tmp2);
+            double tailPen = ground.heightAt(tmp2.x, tmp2.z) - tmp2.y;
+            if (tailPen > 0) {
+                onGround = true;
+                pointVelocity(tmp2, tmp3);
+                double n = Math.max(0, tailPen * mass * 30.0 - tmp3.y * mass * 5.0);
+                tmp1.set(0, n, 0);
+                addForceAtPoint(tmp1, tmp2);
+                addForce(-velocity.x * mass * 1.8, 0, -velocity.z * mass * 1.8);
+            }
+        } else {
+            // Gear up on the surface is a belly landing, and it stops quickly.
+            double pen = groundY + 0.85 - position.y;
+            if (pen > 0) {
+                onGround = true;
+                addForce(0, Math.max(0, pen * mass * 24.0 - velocity.y * mass * 5.0), 0);
+                addForce(-velocity.x * mass * 3.4, 0, -velocity.z * mass * 3.4);
+            }
         }
 
         integrate(dt);
