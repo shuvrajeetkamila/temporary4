@@ -40,6 +40,7 @@ public final class GameHost implements WorldStreamer.TileSink {
 
     private static final String TAG = "MumbaiHost";
 
+    private int seaGridN = 96;
     private boolean loggedFirstFrame;
     private boolean loggedFirstDraw;
 
@@ -59,6 +60,19 @@ public final class GameHost implements WorldStreamer.TileSink {
         int ibo;
         int indexCount;
         float radius;
+    }
+
+    private static void deleteMesh(StaticMesh m) {
+        if (m == null) {
+            return;
+        }
+        GlUtil.deleteVertexArray(m.vao);
+        GlUtil.deleteBuffer(m.vbo);
+        GlUtil.deleteBuffer(m.ibo);
+        m.vao = 0;
+        m.vbo = 0;
+        m.ibo = 0;
+        m.indexCount = 0;
     }
 
     private final Context context;
@@ -279,6 +293,7 @@ public final class GameHost implements WorldStreamer.TileSink {
         }
 
         engine.applyQuality(profile);
+        rebuildSeaIfQualityChanged(profile);
         touch.setProfile(engine.mode);
         engine.update(dt);
 
@@ -358,12 +373,12 @@ public final class GameHost implements WorldStreamer.TileSink {
         // device job asserts on the *last* of these, because the first drawn frame
         // happens a fraction of a second after the world parses and legitimately
         // has nothing streamed in yet.
-        if (frameIndex - firstDrawFrame >= STATUS_PERIOD && frameIndex % STATUS_PERIOD == 0) {
+        if (frameIndex % STATUS_PERIOD == 0) {
             Log.i(TAG, "MUMBAI_STATUS " + statusLine());
         }
     }
 
-    private static final long STATUS_PERIOD = 300;
+    private static final long STATUS_PERIOD = 60;
     private long firstDrawFrame;
 
     /** One greppable line describing what the renderer actually did this frame. */
@@ -544,6 +559,36 @@ public final class GameHost implements WorldStreamer.TileSink {
             triangles += gpu.indexCount / 3;
         }
         GLES30.glBindVertexArray(0);
+    }
+
+    /**
+     * Sea tessellation, per quality tier. ECO has to do genuinely less work rather
+     * than simply draw the same scene fewer times per second, so the horizon loses
+     * resolution before the frame cap does.
+     */
+    private static int seaGridFor(QualityProfile p) {
+        if (p == QualityProfile.ECO_SEVERE) {
+            return 48;
+        }
+        if (p == QualityProfile.ECO || p == QualityProfile.LOW) {
+            return 64;
+        }
+        if (p == QualityProfile.HIGH) {
+            return 128;
+        }
+        return 96;
+    }
+
+    private void rebuildSeaIfQualityChanged(QualityProfile profile) {
+        int want = seaGridFor(profile);
+        if (want == seaGridN && waterGrid != null) {
+            return;
+        }
+        seaGridN = want;
+        if (waterGrid != null) {
+            deleteMesh(waterGrid);
+        }
+        waterGrid = uploadWaterGrid(seaGridN);
     }
 
     private void drawSea(float[] viewProj, float camX, float camY, float camZ,
@@ -743,7 +788,7 @@ public final class GameHost implements WorldStreamer.TileSink {
             attachInstanceAttributes(vehicleMeshes[k]);
         }
 
-        waterGrid = uploadWaterGrid();
+        waterGrid = uploadWaterGrid(seaGridN);
 
         GLES30.glGenVertexArrays(1, ids, 0);
         skyVao = ids[0];
@@ -795,8 +840,7 @@ public final class GameHost implements WorldStreamer.TileSink {
      * the camera so a few thousand vertices cover the horizon while still resolving
      * individual swells near the boat.
      */
-    private StaticMesh uploadWaterGrid() {
-        final int n = 128;
+    private StaticMesh uploadWaterGrid(int n) {
         final float radius = 7000f;
         float[] verts = new float[(n + 1) * (n + 1) * 2];
         int[] indices = new int[n * n * 6];
