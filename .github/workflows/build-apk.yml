@@ -291,7 +291,9 @@ jobs:
   # only prints once it has genuinely got there.
   device_test:
     needs: build
-    runs-on: ubuntu-latest
+    # 22.04 is the well-trodden runner for the emulator action; AVD creation
+    # on 24.04 is where the previous attempts died before reaching the script.
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -315,42 +317,41 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Launch, load the world, render
+        continue-on-error: true
+        id: emu
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: default
           arch: x86_64
-          profile: pixel_4
-          ram-size: 4096M
-          disk-size: 8G
-          force-avd-creation: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             set -uo pipefail
-            APK=$(ls Mumbai-The-Island-City-*.apk | head -1)
-            echo "installing $APK"
-            adb install -r -g "$APK" 2>&1 | tee install.txt
+            : > install.txt; : > start.txt; : > logcat-app.txt; : > logcat-full.txt
+            adb devices | tee install.txt
+            APK=$(ls Mumbai-The-Island-City-*.apk 2>/dev/null | head -1)
+            echo "apk=[$APK]" | tee -a install.txt
+            test -n "$APK" || { echo "no apk in workspace"; ls -la | tee -a install.txt; exit 1; }
+            adb install -r -g "$APK" 2>&1 | tee -a install.txt
 
-            adb logcat -c
+            adb logcat -c || true
             adb shell am start -W -n \
               ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity \
               2>&1 | tee start.txt
 
-            # SwiftShader renders at single-digit frame rates, so the budget
-            # is generous. The markers are what matter, not the speed.
+            # SwiftShader renders single digit frame rates, so the budget is
+            # generous. The markers matter, not the speed.
             for i in $(seq 1 90); do
-              if adb logcat -d | grep -q MUMBAI_RENDER_OK; then break; fi
+              if adb logcat -d 2>/dev/null | grep -q MUMBAI_RENDER_OK; then break; fi
               sleep 2
             done
 
-            # Always keep the log. Job logs cannot be read back from the
-            # environment that drives this repository, so a failure with no
-            # retained logcat is a failure that cannot be diagnosed.
             adb logcat -d > logcat-full.txt 2>&1 || true
             adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
               > logcat-app.txt 2>&1 || true
-            tail -120 logcat-app.txt
+            tail -120 logcat-app.txt || true
 
             STATUS=0
             grep -q MUMBAI_WORLD_READY logcat-full.txt || {
@@ -361,10 +362,41 @@ jobs:
               echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
             adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
               || { echo "FAIL: the process is not running"; STATUS=1; }
-
             grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK' logcat-full.txt || true
             echo "device_test status $STATUS"
             exit $STATUS
+
+      - name: Publish the device log
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # No set -e here on purpose. This step exists to explain a failure;
+          # it must never become one. Two previous runs lost their diagnosis,
+          # once to a token permission and once to tail on a missing file.
+          set +e
+          mkdir -p data/reports
+          {
+            echo "run ${{ github.run_id }}  emulator step: ${{ steps.emu.outcome }}"
+            echo "files present: $(ls 2>/dev/null | tr '\n' ' ')"
+            echo "--- install ---";    cat install.txt    2>/dev/null
+            echo "--- am start ---";   cat start.txt      2>/dev/null
+            echo "--- app log ---";    tail -c 30000 logcat-app.txt 2>/dev/null
+            echo "--- crashes/GL ---"
+            grep -aE 'FATAL|AndroidRuntime|MumbaiGL|Mumbai|shader|GLES|libEGL|died|Exception' \
+              logcat-full.txt 2>/dev/null | tail -120
+          } > data/reports/device_test.log 2>&1
+          wc -c data/reports/device_test.log
+          gh issue create \
+            --title "device_test ${{ steps.emu.outcome }}: run ${{ github.run_id }}" \
+            --body "$(head -c 60000 data/reports/device_test.log)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/reports/device_test.log
+          git commit -q -m "device_test log, run ${{ github.run_id }} [skip ci]"
+          git pull --rebase --quiet origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
+          exit 0
 
       - name: Keep the device logs
         if: always()
@@ -378,48 +410,8 @@ jobs:
             start.txt
           if-no-files-found: ignore
 
-      - name: Post the device log where it can be read
+      - name: Fail the job if the app did not run
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Belt and braces. The issue is the convenient channel; committing
-          # the log is the one that cannot fail on a permissions technicality,
-          # which is exactly how the first attempt at this lost its output.
-          mkdir -p data/reports
-          {
-            echo "run ${{ github.run_id }}  status ${{ job.status }}"
-            echo "--- install ---";  tail -20 install.txt 2>/dev/null
-            echo "--- am start ---"; tail -20 start.txt 2>/dev/null
-            echo "--- app log ---";  tail -c 40000 logcat-app.txt 2>/dev/null
-            echo "--- crashes / GL ---"
-            grep -E 'FATAL|AndroidRuntime|MumbaiGL|Mumbai|shader|GLES|libEGL|died|Exception' \
-              logcat-full.txt 2>/dev/null | tail -120
-          } > data/reports/device_test.log
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/reports/device_test.log
-          git diff --cached --quiet || git commit -q -m "device_test log, run ${{ github.run_id }} [skip ci]"
-          git pull --rebase --quiet origin "${{ github.ref_name }}" || true
-          git push origin HEAD:"${{ github.ref_name }}" || true
-
-          {
-            echo "Run ${{ github.run_id }}, job device_test: ${{ job.status }}"
-            echo
-            echo '### install'
-            echo '```'; tail -20 install.txt 2>/dev/null || echo "(none)"; echo '```'
-            echo '### am start'
-            echo '```'; tail -20 start.txt 2>/dev/null || echo "(none)"; echo '```'
-            echo '### app logcat (tail)'
-            echo '```'
-            tail -c 12000 logcat-app.txt 2>/dev/null || echo "(none)"
-            echo '```'
-            echo '### crashes and GL errors from the full log'
-            echo '```'
-            grep -E 'FATAL|AndroidRuntime|MumbaiGL|Mumbai |shader|GLES|libEGL|died' \
-              logcat-full.txt 2>/dev/null | tail -80 || echo "(none)"
-            echo '```'
-          } > /tmp/device.md
-          gh issue create \
-            --title "device_test ${{ job.status }}: run ${{ github.run_id }}" \
-            --body-file /tmp/device.md || true
+          test "${{ steps.emu.outcome }}" = "success" \
+            || { echo "the app did not install, load the world and render"; exit 1; }
