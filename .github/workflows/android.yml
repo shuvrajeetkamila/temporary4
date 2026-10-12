@@ -287,6 +287,39 @@ jobs:
           disable-animations: true
           script: bash ci/device_smoke.sh
 
+      - name: Attach the device verdict to the release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ needs.build.outputs.version }}"
+          gh release upload "$TAG" device/DEVICE_RUN.md device/logcat.txt \
+            --repo ${{ github.repository }} --clobber || true
+          gh release view "$TAG" --repo ${{ github.repository }} --json body \
+            --jq .body > /tmp/body.md
+          {
+            cat /tmp/body.md
+            echo
+            echo "---"
+            echo
+            echo "### Verified on a device"
+            echo
+            echo "This APK was installed and launched on an Android emulator in CI"
+            echo "(run ${{ github.run_id }}). Asserted from the device: no fatal"
+            echo "exception, no ANR, process alive, GL context created, the packaged"
+            echo "world parsed on-device, every shader linked, glGetError clean, and"
+            echo "the steady-state frame drawing real world geometry."
+            echo
+            echo '```'
+            grep -o 'MUMBAI_STATUS.*' device/logcat.txt | tail -1
+            echo '```'
+            echo
+            echo "That emulator renders in software. **No frame rate or thermal"
+            echo "measurement from real hardware is claimed anywhere in this build.**"
+          } > /tmp/newbody.md
+          gh release edit "$TAG" --repo ${{ github.repository }} \
+            --notes-file /tmp/newbody.md || true
+
       - name: Report device diagnostics
         if: always()
         env:
