@@ -25,22 +25,50 @@ as forty quiet skips; with it, it is a hard failure.
 
 ---
 
+## What the APK was observed to do
+
+Every build installs onto an Android 11 (API 30, x86_64) emulator and is
+launched, and the job fails unless the log shows all of this. From the run
+that produced this release:
+
+```
+Performing Streamed Install
+Success
+Status: ok   LaunchState: COLD   TotalTime: 3460
+MumbaiGL: GL vendor Google renderer Android Emulator OpenGL ES Translator
+          (Google SwiftShader) version OpenGL ES 3.0
+MumbaiGL: GL ready, programs linked
+Mumbai  : world loaded in 6172 ms: 3869 chunks, 1283 places
+Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+MumbaiGL: 1 decode workers started
+Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=23
+```
+
+So: it installs, it starts cold in 3.5 s, every shader compiles and links on a
+real GLES 3.0 driver, the packaged world parses to its full 52,540 × 72,540 m
+extent, the streamer brings 58 chunks resident, and thirty frames are drawn
+with no fatal exception and the process still alive. The committed log is at
+`data/reports/device_test.log`.
+
 ## What has *not* been measured
 
-This matters more than the list above.
+This matters more than anything above.
 
 - **No frame rate or thermal behaviour has been measured on real hardware.**
   No physical Android device was available at any point. The thermal tiers are
   implemented and unit-tested for the property that matters — that eco mode
   reduces resolution, streaming radii, sea tessellation, upload budget and
-  agent counts, and not merely the frame cap — but no claim is made about
-  what frame rate any particular phone will produce.
-- The only GPU this has run on is SwiftShader, the software rasteriser in the
-  Android emulator, which renders single-digit frame rates by nature. That
-  proves the shaders compile and link and that the world loads; it says
-  nothing about performance.
+  agent counts, and not merely the frame cap — but **no claim is made about
+  what frame rate any particular phone will produce.**
+- The only GPU this has ever run on is SwiftShader, a software rasteriser
+  which renders single-digit frame rates by nature. The run above proves the
+  code path works end to end. It says **nothing** about performance, and the
+  `quality=LOW` in that log is the renderer correctly recognising a slow
+  device, not a measurement of a real one.
 - Battery drain, sustained thermal throttling and memory pressure over a long
   session are all unmeasured.
+- Touch controls have not been exercised by a human. They are driven by unit
+  tests and were not play-tested, because there was nothing to play them on.
 
 ---
 

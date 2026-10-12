@@ -44,8 +44,10 @@ Nothing is published unless all of this passes first:
   read back through the game's own loader.
 - The built APK is then inspected rather than trusted: badging, signature,
   and a check that all four world files really are inside the zip.
-- An emulator job installs it, launches it, and fails unless logcat shows the
-  world loaded and frames were rendered.
+- An emulator job installs the APK on Android 11, launches it, and fails
+  unless logcat shows every shader linked, the world loaded to its full
+  52,540 × 72,540 m extent, and thirty frames were rendered with no fatal
+  exception. The log is kept at `data/reports/device_test.log`.
 
 See [`DELIVERY.md`](DELIVERY.md) for what has **not** been measured — in
 particular, no frame rate or thermal behaviour on real hardware.
