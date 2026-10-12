@@ -37,6 +37,12 @@ KIND_TABLE = 5         # length-prefixed records
 KIND_JSON = 6
 KIND_INDEX = 7
 
+# OR this into `kind` to store a layer verbatim instead of deflating it at the
+# container level. Used for the chunk payload, whose entries are individually
+# compressed so a streaming worker inflates one 30 kB tile rather than the
+# whole hundred-megabyte layer.
+KIND_STORED = 0x100
+
 _DIR_ENTRY = struct.Struct("<16sIIQQQ")
 _HEADER = struct.Struct("<4sIIIQ32s")
 
@@ -54,6 +60,10 @@ class Writer:
         self.layers.append((name, kind, data))
         return len(data)
 
+    def add_stored(self, name, kind, data):
+        """Add a layer that is written verbatim, with no container deflate."""
+        return self.add(name, kind | KIND_STORED, data)
+
     def add_grid_i16(self, name, arr, nx, nz):
         """Delta code each row, then store as little-endian int16."""
         import numpy as np
@@ -66,9 +76,8 @@ class Writer:
 
     def write(self, path, level=9):
         blobs = []
-        for (_n, _k, raw) in self.layers:
-            c = zlib.compress(raw, level)
-            blobs.append(c)
+        for (_n, k, raw) in self.layers:
+            blobs.append(raw if (k & KIND_STORED) else zlib.compress(raw, level))
         head = _HEADER.size + _DIR_ENTRY.size * len(self.layers)
         out = io.BytesIO()
         out.write(_HEADER.pack(MAGIC, VERSION, len(self.layers), 0,
@@ -89,7 +98,7 @@ class Writer:
     def summary(self):
         rows = []
         for (name, kind, raw) in self.layers:
-            c = len(zlib.compress(raw, 9))
+            c = len(raw) if (kind & KIND_STORED) else len(zlib.compress(raw, 9))
             rows.append({"layer": name, "kind": kind, "raw": len(raw), "stored": c,
                          "ratio": round(len(raw) / max(c, 1), 1)})
         return rows
@@ -122,7 +131,8 @@ class Reader:
 
     def raw(self, name):
         kind, crc, raw, stored, off = self.dir[name]
-        data = zlib.decompress(self.buf[off:off + stored])
+        chunk = self.buf[off:off + stored]
+        data = chunk if (kind & KIND_STORED) else zlib.decompress(chunk)
         if len(data) != raw:
             raise ValueError(f"{name}: expected {raw} bytes, got {len(data)}")
         if (binascii.crc32(data) & 0xFFFFFFFF) != crc:
@@ -136,6 +146,15 @@ class Reader:
 
     def kind(self, name):
         return self.dir[name][0]
+
+    def slice_stored(self, name, offset, length):
+        """Bytes straight out of a stored layer, with no inflate."""
+        kind, _crc, _raw, stored, off = self.dir[name]
+        if not (kind & KIND_STORED):
+            raise ValueError(f"{name} is not a stored layer")
+        if offset < 0 or offset + length > stored:
+            raise ValueError(f"{name}: slice {offset}+{length} past {stored}")
+        return self.buf[off + offset: off + offset + length]
 
     def stored_bytes(self, name):
         return self.dir[name][3]

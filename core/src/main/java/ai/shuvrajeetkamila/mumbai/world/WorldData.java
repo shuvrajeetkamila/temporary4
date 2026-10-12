@@ -1,0 +1,343 @@
+package ai.shuvrajeetkamila.mumbai.world;
+
+import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+/**
+ * Everything about the world that stays resident for the whole session.
+ *
+ * <p>That is the 20 m rasters — ground elevation, land cover, and the land/sea
+ * mask derived from the real OpenStreetMap coastline — plus the drivable road
+ * graph, the chunk directory, and the place-name table. Together they are a few
+ * tens of megabytes, and keeping them resident means the terrain under the
+ * player, the minimap and the "where am I" readout never have to wait for a
+ * streaming round trip. The per-chunk vector geometry is the part that streams.
+ *
+ * <p>Elevation is stored as int16 decimetres. Mumbai runs from chart datum to
+ * about 450 m on the Sanjay Gandhi ridge, so decimetres give 0.1 m of
+ * resolution with eleven times the headroom; centimetres would overflow at
+ * 327 m, which is below the top of the hills.
+ */
+public final class WorldData {
+
+    /** Raster spacing in metres. Must match {@code tools/compile_world.py}. */
+    public final double gridM;
+    /** World-frame position of raster cell (0, 0). */
+    public final double minX;
+    public final double minZ;
+    public final int nx;
+    public final int nz;
+
+    private final short[] elevDm;
+    private final byte[] cover;
+    private final long[] landMask;
+
+    /** Chunk directory: 6 uint32 per chunk. */
+    public final int chunkNx;
+    public final int chunkNz;
+    public final int chunkMinX;
+    public final int chunkMinZ;
+    public final double chunkM;
+    public final double quant;
+    private final int[] chunkIndex;
+    private final WorldFile chunkFile;
+    private final String[] roadNames;
+
+    /** Drivable road graph. */
+    public final float[] graphNodeXZ;
+    public final int[] graphEdge;
+    public final float[] graphAttr;
+
+    private final String manifestJson;
+    private final String buildId;
+    private final long builtUnix;
+    public final boolean selfTest;
+
+    private final Places places;
+
+    public static final int COVER_WATER = 0;
+
+    private WorldData(WorldFile terrain, WorldFile chunks, WorldFile network,
+                      WorldFile manifest) throws IOException {
+        this.manifestJson = manifest.readString("manifest");
+        this.buildId = manifest.buildId();
+        this.builtUnix = manifest.builtUnixSeconds();
+        this.selfTest = Json.bool(manifestJson, "selftest", false);
+
+        String rmeta = terrain.readString("rmeta");
+        nx = Json.integer(rmeta, "nx", 0);
+        nz = Json.integer(rmeta, "nz", 0);
+        gridM = Json.number(rmeta, "grid_m", 20.0);
+        minX = Json.number(rmeta, "min_x", 0);
+        minZ = Json.number(rmeta, "min_z", 0);
+        if (nx <= 1 || nz <= 1 || (long) nx * nz > 80_000_000L) {
+            throw new IOException("implausible raster " + nx + "x" + nz);
+        }
+        elevDm = terrain.readGridI16("elev_dm", nx, nz);
+        cover = terrain.read("cover");
+        if (cover.length != nx * nz) {
+            throw new IOException("cover raster is " + cover.length + ", expected "
+                    + (nx * nz));
+        }
+        landMask = terrain.readBitset("landmask", nx * nz);
+
+        String cmeta = chunks.readString("cmeta");
+        chunkNx = Json.integer(cmeta, "cnx", 0);
+        chunkNz = Json.integer(cmeta, "cnz", 0);
+        chunkMinX = Json.integer(cmeta, "cminx", 0);
+        chunkMinZ = Json.integer(cmeta, "cminz", 0);
+        chunkM = Json.number(cmeta, "chunk_m", 1024.0);
+        quant = Json.number(cmeta, "quant", 0.05);
+        ByteBuffer ci = chunks.readBuffer("cindex");
+        chunkIndex = new int[chunkNx * chunkNz * 6];
+        if (ci.remaining() < chunkIndex.length * 4) {
+            throw new IOException("chunk index is short: " + ci.remaining());
+        }
+        for (int i = 0; i < chunkIndex.length; i++) { chunkIndex[i] = ci.getInt(); }
+        roadNames = chunks.readStringTable("names");
+        chunkFile = chunks;
+
+        ByteBuffer gn = network.readBuffer("gnodes");
+        graphNodeXZ = new float[gn.remaining() / 4];
+        for (int i = 0; i < graphNodeXZ.length; i++) { graphNodeXZ[i] = gn.getFloat(); }
+        ByteBuffer ge = network.readBuffer("gedges");
+        graphEdge = new int[ge.remaining() / 4];
+        for (int i = 0; i < graphEdge.length; i++) { graphEdge[i] = ge.getInt(); }
+        ByteBuffer ga = network.readBuffer("gattr");
+        graphAttr = new float[ga.remaining() / 4];
+        for (int i = 0; i < graphAttr.length; i++) { graphAttr[i] = ga.getFloat(); }
+
+        places = Places.parse(network.readString("places"));
+    }
+
+    /** Load the four packaged files through whatever asset source the host has. */
+    public static WorldData load(Assets assets) throws IOException {
+        WorldFile terrain = WorldFile.open(assets.open("world/terrain.mwl"));
+        WorldFile chunks = WorldFile.open(assets.open("world/chunks.mwl"));
+        WorldFile network = WorldFile.open(assets.open("world/network.mwl"));
+        WorldFile manifest = WorldFile.open(assets.open("world/manifest.mwl"));
+        return new WorldData(terrain, chunks, network, manifest);
+    }
+
+    public String manifestJson() { return manifestJson; }
+
+    public String buildId() { return buildId; }
+
+    public long builtUnixSeconds() { return builtUnix; }
+
+    public Places places() { return places; }
+
+    public String roadName(int index) {
+        return index >= 0 && index < roadNames.length ? roadNames[index] : "";
+    }
+
+    public int roadNameCount() { return roadNames.length; }
+
+    // ---------------------------------------------------------------- rasters
+
+    private int cellX(double x) {
+        int i = (int) Math.floor((x - minX) / gridM);
+        return i < 0 ? 0 : (i > nx - 1 ? nx - 1 : i);
+    }
+
+    private int cellZ(double z) {
+        int j = (int) Math.floor((z - minZ) / gridM);
+        return j < 0 ? 0 : (j > nz - 1 ? nz - 1 : j);
+    }
+
+    /** Raw elevation of one raster cell, metres. */
+    public double cellElevation(int i, int j) {
+        return elevDm[j * nx + i] * 0.1;
+    }
+
+    /**
+     * Ground height, metres above chart datum, bilinearly interpolated.
+     *
+     * <p>Bilinear rather than nearest because the car suspension differentiates
+     * this surface sixty times a second; a nearest-cell lookup turns every 20 m
+     * raster boundary into a step and the whole city feels like cobblestones.
+     */
+    public double height(double x, double z) {
+        double fx = (x - minX) / gridM;
+        double fz = (z - minZ) / gridM;
+        int i = (int) Math.floor(fx);
+        int j = (int) Math.floor(fz);
+        if (i < 0) { i = 0; fx = 0; }
+        if (j < 0) { j = 0; fz = 0; }
+        if (i > nx - 2) { i = nx - 2; fx = i; }
+        if (j > nz - 2) { j = nz - 2; fz = j; }
+        double tx = fx - i;
+        double tz = fz - j;
+        int b = j * nx + i;
+        double h00 = elevDm[b];
+        double h10 = elevDm[b + 1];
+        double h01 = elevDm[b + nx];
+        double h11 = elevDm[b + nx + 1];
+        return 0.1 * ((h00 * (1 - tx) + h10 * tx) * (1 - tz)
+                + (h01 * (1 - tx) + h11 * tx) * tz);
+    }
+
+    /** Surface normal from central differences on the height field. */
+    public void normal(double x, double z, double[] out3) {
+        double d = gridM;
+        double hx = height(x + d, z) - height(x - d, z);
+        double hz = height(x, z + d) - height(x, z - d);
+        double nxv = -hx / (2 * d);
+        double nzv = -hz / (2 * d);
+        double len = Math.sqrt(nxv * nxv + 1 + nzv * nzv);
+        out3[0] = nxv / len;
+        out3[1] = 1.0 / len;
+        out3[2] = nzv / len;
+    }
+
+    /** Steepest slope at a point, radians. */
+    public double slope(double x, double z) {
+        double[] n = new double[3];
+        normal(x, z, n);
+        return Math.acos(Math.max(-1, Math.min(1, n[1])));
+    }
+
+    /** Land cover class id; see {@code LANDUSE_CLASSES} in the extractor. */
+    public int cover(double x, double z) {
+        return cover[cellZ(z) * nx + cellX(x)] & 0xFF;
+    }
+
+    /**
+     * True where the real OSM coastline says there is land.
+     *
+     * <p>This is the single authority for land versus water in the game. The
+     * boat cannot drive up a beach because this says the beach is land; the car
+     * cannot drive into Back Bay because this says Back Bay is not.
+     */
+    public boolean isLand(double x, double z) {
+        int bit = cellZ(z) * nx + cellX(x);
+        return (landMask[bit >>> 6] & (1L << (bit & 63))) != 0;
+    }
+
+    public boolean isWater(double x, double z) { return !isLand(x, z); }
+
+    /** Depth below chart datum, metres, zero on land. Shallows near the shore. */
+    public double seaDepth(double x, double z) {
+        if (isLand(x, z)) { return 0; }
+        double d = distanceToLand(x, z, 2200.0);
+        return Math.min(34.0, 1.2 + d * 0.016);
+    }
+
+    /**
+     * Approximate distance to the nearest land cell, metres, searching outward
+     * in rings and giving up at {@code limit}.
+     */
+    public double distanceToLand(double x, double z, double limit) {
+        int ci = cellX(x);
+        int cj = cellZ(z);
+        int maxR = (int) Math.ceil(limit / gridM);
+        if (isLand(x, z)) { return 0; }
+        for (int r = 1; r <= maxR; r++) {
+            int i0 = Math.max(0, ci - r), i1 = Math.min(nx - 1, ci + r);
+            int j0 = Math.max(0, cj - r), j1 = Math.min(nz - 1, cj + r);
+            for (int i = i0; i <= i1; i++) {
+                if (landAt(i, j0) || landAt(i, j1)) { return r * gridM; }
+            }
+            for (int j = j0; j <= j1; j++) {
+                if (landAt(i0, j) || landAt(i1, j)) { return r * gridM; }
+            }
+        }
+        return limit;
+    }
+
+    public boolean landAt(int i, int j) {
+        int bit = j * nx + i;
+        return (landMask[bit >>> 6] & (1L << (bit & 63))) != 0;
+    }
+
+    public int coverAt(int i, int j) { return cover[j * nx + i] & 0xFF; }
+
+    // ----------------------------------------------------------------- chunks
+
+    public int chunkCount() { return chunkNx * chunkNz; }
+
+    public int chunkIdAt(double x, double z) {
+        int i = (int) Math.floor(x / chunkM) - chunkMinX;
+        int j = (int) Math.floor(z / chunkM) - chunkMinZ;
+        if (i < 0 || j < 0 || i >= chunkNx || j >= chunkNz) { return -1; }
+        return j * chunkNx + i;
+    }
+
+    public double chunkOriginX(int id) { return ((id % chunkNx) + chunkMinX) * chunkM; }
+
+    public double chunkOriginZ(int id) { return ((id / chunkNx) + chunkMinZ) * chunkM; }
+
+    public boolean chunkHasData(int id) {
+        return id >= 0 && id < chunkCount() && chunkIndex[id * 6 + 1] > 0;
+    }
+
+    public int chunkBuildingCount(int id) { return chunkIndex[id * 6 + 3]; }
+
+    public int chunkRoadCount(int id) { return chunkIndex[id * 6 + 4]; }
+
+    public int chunkStoredBytes(int id) { return chunkIndex[id * 6 + 1]; }
+
+    /**
+     * Inflate one chunk's vector payload. Called on streaming workers, so it
+     * must not touch any mutable shared state — it does not.
+     */
+    public byte[] readChunk(int id) throws IOException {
+        int off = chunkIndex[id * 6];
+        int stored = chunkIndex[id * 6 + 1];
+        int raw = chunkIndex[id * 6 + 2];
+        if (stored == 0) { return new byte[0]; }
+        byte[] comp = chunkFile.readStored("cdata", off, stored);
+        byte[] out = new byte[raw];
+        java.util.zip.Inflater inf = new java.util.zip.Inflater();
+        try {
+            inf.setInput(comp);
+            int got = 0;
+            while (got < raw) {
+                int n = inf.inflate(out, got, raw - got);
+                if (n == 0) {
+                    if (inf.finished() || inf.needsInput()) { break; }
+                }
+                got += n;
+            }
+            if (got != raw) {
+                throw new IOException("chunk " + id + " inflated to " + got
+                        + " of " + raw + " bytes");
+            }
+        } catch (java.util.zip.DataFormatException e) {
+            throw new IOException("chunk " + id + " is corrupt", e);
+        } finally {
+            inf.end();
+        }
+        return out;
+    }
+
+    // ------------------------------------------------------------- navigation
+
+    /** Latitude of a world position, for the HUD and for checkpoint tests. */
+    public double latOf(double z) { return GeoProjection.toLat(z); }
+
+    public double lonOf(double x, double z) { return GeoProjection.toLon(x, z); }
+
+    public double minWorldX() { return minX; }
+
+    public double minWorldZ() { return minZ; }
+
+    public double maxWorldX() { return minX + (nx - 1) * gridM; }
+
+    public double maxWorldZ() { return minZ + (nz - 1) * gridM; }
+
+    public boolean inBounds(double x, double z) {
+        return x >= minWorldX() && x <= maxWorldX()
+                && z >= minWorldZ() && z <= maxWorldZ();
+    }
+
+    /** Total resident bytes, so the HUD can be honest about memory. */
+    public long residentBytes() {
+        return (long) elevDm.length * 2 + cover.length + (long) landMask.length * 8
+                + (long) chunkIndex.length * 4 + (long) graphNodeXZ.length * 4
+                + (long) graphEdge.length * 4 + (long) graphAttr.length * 4;
+    }
+}

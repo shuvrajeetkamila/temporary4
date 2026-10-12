@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+repositories { mavenCentral() }
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+test {
+    useJUnitPlatform()
+    maxHeapSize = '3g'
+    testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full' }
+    systemProperty 'mumbai.assets', System.getProperty('mumbai.assets',
+        "${rootDir}/android/src/main/assets")
+}

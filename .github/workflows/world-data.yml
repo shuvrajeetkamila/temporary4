@@ -54,11 +54,8 @@ jobs:
           pip install osmium shapely rasterio scipy numpy
           { osmium --version; python -V; } 2>&1 | tee -a build.log
 
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
-                      /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
-          df -h / | tee -a build.log
+      - name: Disk space
+        run: df -h / | tee -a build.log
 
       - name: Restore cached source data
         if: ${{ !inputs.refresh }}

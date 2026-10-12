@@ -32,6 +32,7 @@ import os
 import struct
 import sys
 import time
+import zlib
 
 import numpy as np
 
@@ -428,8 +429,11 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
     _log(f"  road ways {nr} -> {segs} chunk-local runs, {len(name_list)} distinct names")
 
     # --- serialise ----------------------------------------------------------
+    # Each chunk is deflated on its own and the payload layer is stored
+    # verbatim, so a streaming worker inflates one tile instead of the lot.
     blob = bytearray()
-    index = np.zeros((cnx * cnz, 6), dtype=np.uint32)   # off, len, nbld, nroad, _, _
+    index = np.zeros((cnx * cnz, 6), dtype=np.uint32)
+    # columns: byte offset, stored length, raw length, buildings, road runs, spare
     for k in range(cnx * cnz):
         bl, rl = buildings[k], roads[k]
         if not bl and not rl:
@@ -458,10 +462,12 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
                                min(speed, 255), int(round(width * 10)),
                                max(-6, min(6, layer)), len(q), ni)
             out += q.tobytes()
-        blob += out
-        index[k] = (start, len(out), len(bl), len(rl), 0, 0)
+        comp = zlib.compress(bytes(out), 9)
+        blob += comp
+        index[k] = (start, len(comp), len(out), len(bl), len(rl), 0)
 
-    _log(f"  chunk payload {len(blob) / 1e6:.1f} MB, "
+    _log(f"  chunk payload {len(blob) / 1e6:.1f} MB deflated "
+         f"(raw {int(index[:, 2].sum()) / 1e6:.1f} MB), "
          f"{int((index[:, 1] > 0).sum())} non-empty chunks")
     meta = {"cnx": cnx, "cnz": cnz, "cminx": cminx, "cminz": cminz,
             "chunk_m": CHUNK_M, "quant": QUANT,
@@ -577,7 +583,7 @@ def main():
     # ---- chunks ------------------------------------------------------------
     w = wf.Writer(build_id)
     w.add("cindex", wf.KIND_INDEX, index.astype("<u4").tobytes())
-    w.add("cdata", wf.KIND_VECTOR, blob)
+    w.add_stored("cdata", wf.KIND_VECTOR, blob)
     w.add("names", wf.KIND_TABLE, wf.pack_strings(name_list))
     w.add("cmeta", wf.KIND_JSON, json.dumps(cmeta).encode())
     cpath = os.path.join(args.out, "chunks.mwl")
