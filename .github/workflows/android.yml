@@ -287,6 +287,33 @@ jobs:
           disable-animations: true
           script: bash ci/device_smoke.sh
 
+      - name: Report device diagnostics
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Device run ${{ github.run_number }} (${{ github.sha }})"
+            echo
+            echo '#### assertions / script output'
+            echo '```'
+            tail -c 8000 device/DEVICE_RUN.md 2>/dev/null || echo "(no DEVICE_RUN.md)"
+            echo '```'
+            echo '#### app + crash log'
+            echo '```'
+            grep -E "Mumbai|AndroidRuntime|FATAL|ANR |islandcity|libEGL|eglCreate" \
+              device/logcat.txt 2>/dev/null | tail -120 || echo "(no logcat)"
+            echo '```'
+            echo '#### install / launch'
+            echo '```'
+            cat device/install.txt device/launch.txt 2>/dev/null | tail -40 || true
+            echo '```'
+          } > /tmp/device_report.md
+          gh issue create \
+            --title "Device run #${{ github.run_number }}: ${{ job.status }}" \
+            --body-file /tmp/device_report.md \
+            --repo ${{ github.repository }} || true
+
       - name: Upload device evidence
         if: always()
         uses: actions/upload-artifact@v4
