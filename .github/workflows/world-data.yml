@@ -129,6 +129,31 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      - name: Commit the pinned inputs so the build is reproducible offline
+        if: success()
+        run: |
+          # The clipped extract and the elevation grid are the exact inputs the
+          # shipped world was compiled from. Pinning them here makes the build
+          # reproducible without re-downloading 221 MB from Geofabrik, gives the
+          # provenance hashes something to point at, and is the only way the
+          # development sandbox - which has no route to any map host - can see
+          # real data at all. Together they are about 25 MB.
+          git config user.name  "mumbai-world-bot"
+          git config user.email "actions@github.com"
+          mkdir -p data/pinned
+          cp data/osm/mumbai-aoi.osm.pbf data/pinned/mumbai-aoi.osm.pbf
+          cp data/dem/elevation.npz      data/pinned/elevation.npz
+          sha256sum data/pinned/* > data/pinned/SHA256SUMS
+          ls -l data/pinned
+          git add -f data/pinned
+          if git diff --cached --quiet; then
+            echo "pinned inputs unchanged"
+          else
+            git commit -m "world-data: pin the clipped OSM extract and elevation grid"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push origin "HEAD:${GITHUB_REF_NAME}" || true
+          fi
+
       - name: Commit provenance and report back to the branch
         if: always()
         run: |

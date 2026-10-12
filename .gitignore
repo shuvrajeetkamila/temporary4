@@ -5,6 +5,7 @@
 data/_cache/
 data/osm/
 data/dem/
+!data/pinned/
 data/layers/
 data/geodata/
 
