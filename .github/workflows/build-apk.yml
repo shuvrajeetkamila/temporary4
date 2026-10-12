@@ -234,6 +234,33 @@ jobs:
             ${{ steps.meta.outputs.apk_name }}.sha256
           fail_on_unmatched_files: true
 
+      - name: Record the APK facts in the repository
+        run: |
+          mkdir -p data/reports
+          cat > data/reports/apk_build.json <<JSON
+          {
+            "file": "${{ steps.meta.outputs.apk_name }}",
+            "bytes": ${{ steps.meta.outputs.apk_size }},
+            "sha256": "${{ steps.meta.outputs.apk_sha256 }}",
+            "package": "ai.shuvrajeetkamila.mumbai.islandcity",
+            "version_name": "${{ steps.meta.outputs.version_name }}",
+            "version_code": ${{ steps.meta.outputs.version_code }},
+            "min_sdk": 26,
+            "target_sdk": 34,
+            "abis": "universal",
+            "signing": "debug key",
+            "ci_run_id": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}",
+            "release_tag": "v${{ steps.meta.outputs.version_name }}"
+          }
+          JSON
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/reports/apk_build.json
+          git diff --cached --quiet || git commit -m "APK facts for run ${{ github.run_id }} [skip ci]"
+          git pull --rebase --quiet origin "${{ github.ref_name }}" || true
+          git push origin HEAD:"${{ github.ref_name }}" || true
+
       - name: Report a failure as an issue
         if: failure()
         env:
@@ -255,3 +282,95 @@ jobs:
           } > /tmp/body.md
           gh issue create --title "build-apk failed: run ${{ github.run_id }}" \
             --body-file /tmp/body.md || true
+
+  # Proving the thing runs. Building an APK says the code compiles; it says
+  # nothing about whether the world loads, whether the shaders link on a real
+  # driver, or whether the first frame ever arrives. This job installs the
+  # APK on an emulator, launches it, and greps logcat for markers the app
+  # only prints once it has genuinely got there.
+  device_test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download the APK that was just built
+        uses: actions/download-artifact@v4
+        with:
+          name: mumbai-island-city-apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch, load the world, render
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          ram-size: 4096M
+          disk-size: 8G
+          force-avd-creation: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APK=$(ls Mumbai-The-Island-City-*.apk | head -1)
+            echo "installing $APK"
+            adb install -r -g "$APK"
+
+            adb logcat -c
+            adb shell am start -W -n \
+              ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity
+
+            # SwiftShader renders at single-digit frame rates, so the budget
+            # is generous. The markers are what matter, not the speed.
+            for i in $(seq 1 90); do
+              if adb logcat -d | grep -q MUMBAI_RENDER_OK; then break; fi
+              sleep 2
+            done
+
+            echo '================ logcat ================'
+            adb logcat -d -s Mumbai:* MumbaiGL:* AndroidRuntime:E | tail -80
+            echo '========================================'
+
+            echo '--- the world must have loaded ---'
+            adb logcat -d | grep -q MUMBAI_WORLD_READY || {
+              echo "FAIL: the world never finished loading"
+              adb logcat -d | tail -150
+              exit 1
+            }
+            adb logcat -d | grep MUMBAI_WORLD_READY
+
+            echo '--- frames must have been rendered ---'
+            adb logcat -d | grep -q MUMBAI_RENDER_OK || {
+              echo "FAIL: the renderer never reached 30 frames"
+              adb logcat -d | tail -150
+              exit 1
+            }
+            adb logcat -d | grep MUMBAI_RENDER_OK
+
+            echo '--- nothing may have crashed ---'
+            if adb logcat -d | grep -q 'FATAL EXCEPTION'; then
+              echo "FAIL: a fatal exception was thrown"
+              adb logcat -d | grep -A 30 'FATAL EXCEPTION'
+              exit 1
+            fi
+
+            echo '--- and it must still be alive ---'
+            adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
+              || { echo "FAIL: the process died"; exit 1; }
+
+            echo "PASS: installed, loaded the world, rendered, still running"
