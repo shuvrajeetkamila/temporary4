@@ -1,0 +1,61 @@
+{
+ "generated_utc": "2026-10-12T12:50:22Z",
+ "aoi_version": "1.0.0",
+ "format_version": 1,
+ "seed": 20261012,
+ "road_km": 272.67,
+ "rail_km": 145.39,
+ "chunks_total": 44544,
+ "chunks_populated": 44544,
+ "chunks_with_land": 9203,
+ "estimated_buildings": 140256,
+ "terrain_bytes": 252485,
+ "network_bytes": 3530,
+ "city_bytes": 4693,
+ "chunks_bytes": 8773,
+ "manifest_bytes": 1383,
+ "layer_crc": {
+  "terrain": "a540d79c",
+  "network": "913b8284",
+  "city": "7f0bb4a9",
+  "chunks": "02917bbe"
+ },
+ "bounds_world": {
+  "min_x": -20700.0,
+  "max_x": 23600.0,
+  "min_z": -45675.0,
+  "max_z": 19675.0
+ },
+ "span_km": {
+  "east_west": 44.3,
+  "north_south": 65.35
+ },
+ "landuse_grid": [
+  1772,
+  2614,
+  25.0
+ ],
+ "height_grid": [
+  887,
+  1308,
+  50.0
+ ],
+ "chunk_grid": [
+  174,
+  256,
+  256.0
+ ],
+ "districts": 71,
+ "landmarks": 42,
+ "roads": 34,
+ "railways": 7,
+ "checkpoints": 14,
+ "sha256": {
+  "manifest.mwl": "7875ddc19441cab4808ea3d80766a75ea34213de350c39bfd677a3f0dfb0b020",
+  "terrain.mwl": "5bca46ab81dc998d4eb7dc695840506fe12aaa6213bd3a1ccfd02278fe55d287",
+  "network.mwl": "f26fadc21e67e711be20e66507b42f9df4edea7f4cf671c310989229ce044b31",
+  "city.mwl": "67e46ac50f224908bbe8811d8836a3812279447f097133cb39fe2e12e390a4b7",
+  "chunks.mwl": "aab097b0f1d8048fc9e4b196dd6c1aa1ace9a1fe28618357f21021365afb01a9"
+ },
+ "packaged_bytes": 270864
+}

@@ -36,6 +36,7 @@ public final class GeoProjection {
     private final double originLat;
     private final double originLon;
     private final double meridionalRadius;
+    private final double originArc;
 
     public GeoProjection() {
         this(ORIGIN_LAT, ORIGIN_LON);
@@ -45,6 +46,25 @@ public final class GeoProjection {
         this.originLat = originLatDeg;
         this.originLon = originLonDeg;
         this.meridionalRadius = meridionalRadius(originLatDeg);
+        this.originArc = meridianArcFromEquator(originLatDeg);
+    }
+
+    /**
+     * Meridian arc length from the equator to a latitude on the WGS84 ellipsoid (metres),
+     * standard series expansion to e^6. Accurate to well under a millimetre for Mumbai
+     * latitudes, which keeps the 65 km north-south span of the AOI true to 1:1 scale.
+     */
+    public static double meridianArcFromEquator(double latDeg) {
+        double phi = Math.toRadians(latDeg);
+        double e2 = WGS84_E2;
+        double e4 = e2 * e2;
+        double e6 = e4 * e2;
+        double a0 = 1.0 - e2 / 4.0 - 3.0 * e4 / 64.0 - 5.0 * e6 / 256.0;
+        double a2 = 3.0 / 8.0 * (e2 + e4 / 4.0 + 15.0 * e6 / 128.0);
+        double a4 = 15.0 / 256.0 * (e4 + 3.0 * e6 / 4.0);
+        double a6 = 35.0 * e6 / 3072.0;
+        return WGS84_A * (a0 * phi - a2 * Math.sin(2 * phi) + a4 * Math.sin(4 * phi)
+                - a6 * Math.sin(6 * phi));
     }
 
     public double originLat() {
@@ -74,9 +94,9 @@ public final class GeoProjection {
         return Math.toRadians(lonDeg - originLon) * n * Math.cos(Math.toRadians(latDeg));
     }
 
-    /** Metres North of the origin for a WGS84 latitude. */
+    /** Metres North of the origin for a WGS84 latitude (exact meridian arc). */
     public double toNorth(double latDeg) {
-        return Math.toRadians(latDeg - originLat) * meridionalRadius;
+        return meridianArcFromEquator(latDeg) - originArc;
     }
 
     /** World X (East metres). */
@@ -89,9 +109,22 @@ public final class GeoProjection {
         return -toNorth(latDeg);
     }
 
-    /** Inverse: latitude for a world Z (South metres). */
+    /**
+     * Inverse: latitude for a world Z (South metres).
+     * Newton iteration on the meridian arc; converges to double precision in 3 steps.
+     */
     public double toLat(double worldZ) {
-        return originLat + Math.toDegrees((-worldZ) / meridionalRadius);
+        double targetArc = originArc + (-worldZ);
+        double lat = originLat + Math.toDegrees((-worldZ) / meridionalRadius);
+        for (int i = 0; i < 4; i++) {
+            double arc = meridianArcFromEquator(lat);
+            double err = targetArc - arc;
+            if (Math.abs(err) < 1e-9) {
+                break;
+            }
+            lat += Math.toDegrees(err / meridionalRadius(lat));
+        }
+        return lat;
     }
 
     /** Inverse: longitude for a world X/Z pair. */

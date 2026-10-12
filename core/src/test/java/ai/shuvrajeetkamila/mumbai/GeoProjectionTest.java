@@ -40,13 +40,15 @@ public class GeoProjectionTest {
     }
 
     @Test
-    public void projectedDistanceMatchesGroundTruthWithinOneMetrePerKilometre() {
+    public void projectedDistanceMatchesVincentyGeodesicAcrossTheWholeAoi() {
         GeoProjection p = new GeoProjection();
         double[][] pairs = {
                 {COLABA_LAT, COLABA_LON, VASAI_CREEK_LAT, VASAI_CREEK_LON},
                 {GATEWAY_LAT, GATEWAY_LON, CSMIA_LAT, CSMIA_LON},
                 {19.0176, 72.8562, 19.0176, 73.0000},
                 {19.0176, 72.8562, 19.2500, 72.8562},
+                {18.8900, 72.8200, 19.3400, 72.7950},
+                {19.1400, 72.7700, 19.1400, 73.0200},
         };
         for (double[] q : pairs) {
             double x1 = p.worldX(q[0], q[1]);
@@ -54,11 +56,55 @@ public class GeoProjectionTest {
             double x2 = p.worldX(q[2], q[3]);
             double z2 = p.worldZ(q[2]);
             double projected = GeoProjection.planarDistance(x1, z1, x2, z2);
-            double truth = GeoProjection.haversineMetres(q[0], q[1], q[2], q[3]);
+            double truth = vincenty(q[0], q[1], q[2], q[3]);
             double relErr = Math.abs(projected - truth) / Math.max(1.0, truth);
-            assertTrue("distance error " + relErr + " for " + projected + " vs " + truth,
-                    relErr < 0.002);
+            assertTrue("distance error " + relErr + " (" + projected + " vs " + truth + ")",
+                    relErr < 0.0012);
         }
+    }
+
+    /**
+     * Independent WGS84 geodesic reference (Vincenty inverse), used only by the tests so the
+     * projection is validated against a different algorithm rather than against itself.
+     */
+    private static double vincenty(double lat1, double lon1, double lat2, double lon2) {
+        double a = 6378137.0;
+        double f = 1 / 298.257223563;
+        double b = (1 - f) * a;
+        double L = Math.toRadians(lon2 - lon1);
+        double U1 = Math.atan((1 - f) * Math.tan(Math.toRadians(lat1)));
+        double U2 = Math.atan((1 - f) * Math.tan(Math.toRadians(lat2)));
+        double sinU1 = Math.sin(U1), cosU1 = Math.cos(U1);
+        double sinU2 = Math.sin(U2), cosU2 = Math.cos(U2);
+        double lambda = L, lambdaP, sinSigma = 0, cosSigma = 0, sigma = 0, cos2SigmaM = 0,
+                sinAlpha, cosSqAlpha = 0;
+        int iter = 0;
+        do {
+            double sinLambda = Math.sin(lambda), cosLambda = Math.cos(lambda);
+            sinSigma = Math.sqrt((cosU2 * sinLambda) * (cosU2 * sinLambda)
+                    + (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda)
+                    * (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda));
+            if (sinSigma == 0) {
+                return 0;
+            }
+            cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda;
+            sigma = Math.atan2(sinSigma, cosSigma);
+            sinAlpha = cosU1 * cosU2 * sinLambda / sinSigma;
+            cosSqAlpha = 1 - sinAlpha * sinAlpha;
+            cos2SigmaM = cosSqAlpha == 0 ? 0 : cosSigma - 2 * sinU1 * sinU2 / cosSqAlpha;
+            double C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
+            lambdaP = lambda;
+            lambda = L + (1 - C) * f * sinAlpha
+                    * (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma
+                    * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+        } while (Math.abs(lambda - lambdaP) > 1e-12 && ++iter < 200);
+        double uSq = cosSqAlpha * (a * a - b * b) / (b * b);
+        double A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+        double B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+        double deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma
+                * (-1 + 2 * cos2SigmaM * cos2SigmaM) - B / 6 * cos2SigmaM
+                * (-3 + 4 * sinSigma * sinSigma) * (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+        return b * A * (sigma - deltaSigma);
     }
 
     @Test
