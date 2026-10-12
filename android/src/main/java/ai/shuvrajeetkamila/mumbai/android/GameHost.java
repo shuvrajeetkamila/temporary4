@@ -352,14 +352,38 @@ public final class GameHost implements WorldStreamer.TileSink {
 
         if (!loggedFirstDraw && triangles > 0) {
             loggedFirstDraw = true;
-            Log.i(TAG, "MUMBAI_FIRST_FRAME_DRAWN draws=" + drawCalls
-                    + " triangles=" + triangles
-                    + " tiles=" + engine.streamer.activeCount()
-                    + " traffic=" + engine.agents.vehicleCount()
-                    + " pedestrians=" + engine.agents.pedestrianCount()
-                    + " glError=" + GlUtil.drainGlError()
-                    + " lastShaderError='" + GlUtil.lastError() + "'");
+            Log.i(TAG, "MUMBAI_FIRST_FRAME_DRAWN " + statusLine());
         }
+        // Steady state, once the streamer has had time to fill its rings. The CI
+        // device job asserts on the *last* of these, because the first drawn frame
+        // happens a fraction of a second after the world parses and legitimately
+        // has nothing streamed in yet.
+        if (frameIndex - firstDrawFrame >= STATUS_PERIOD && frameIndex % STATUS_PERIOD == 0) {
+            Log.i(TAG, "MUMBAI_STATUS " + statusLine());
+        }
+    }
+
+    private static final long STATUS_PERIOD = 300;
+    private long firstDrawFrame;
+
+    /** One greppable line describing what the renderer actually did this frame. */
+    private String statusLine() {
+        if (firstDrawFrame == 0) {
+            firstDrawFrame = frameIndex;
+        }
+        return "frame=" + frameIndex
+                + " draws=" + drawCalls
+                + " triangles=" + triangles
+                + " tiles=" + engine.streamer.activeCount()
+                + " pending=" + engine.streamer.pendingCount()
+                + " cpuReady=" + engine.streamer.readyCount()
+                + " gpuMb=" + (gpuBytes / (1024 * 1024))
+                + " traffic=" + engine.agents.vehicleCount()
+                + " pedestrians=" + engine.agents.pedestrianCount()
+                + " mode=" + engine.mode
+                + " at=" + telemetry.locationName
+                + " glError=" + GlUtil.drainGlError()
+                + " shaderError='" + GlUtil.lastError() + "'";
     }
 
     private void drawLoadingScreen() {

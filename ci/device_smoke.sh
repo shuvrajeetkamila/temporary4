@@ -54,8 +54,8 @@ fi
 # Let it load the world and render. The world decode plus the first streaming rings
 # take a few seconds on a software GL emulator.
 echo
-echo "=== running for 75 s ==="
-for i in $(seq 1 15); do
+echo "=== running for up to 120 s ==="
+for i in $(seq 1 24); do
     sleep 5
     if adb logcat -d | grep -q "MUMBAI_FIRST_FRAME_DRAWN"; then
         echo "  first frame drawn after ~$((i * 5)) s"
@@ -64,7 +64,8 @@ for i in $(seq 1 15); do
     echo "  ...$((i * 5)) s"
 done
 
-sleep 10
+# Let the streamer fill its rings and emit at least one steady-state line.
+sleep 25
 adb logcat -d > "$OUT/logcat.txt"
 adb exec-out screencap -p > "$OUT/screenshot.png" 2>/dev/null || true
 adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt" 2>/dev/null || true
@@ -98,7 +99,7 @@ fi
 
 # 3. The process is still alive at the end of the run.
 if adb shell pidof "$PKG" > /dev/null 2>&1; then
-    echo "PASS  process still alive after 75 s"
+    echo "PASS  process still alive at end of run"
 else
     echo "FAIL  the process died during the run"
     FAIL=1
@@ -121,25 +122,55 @@ else
 fi
 
 # 6. Geometry was actually submitted - the real "it is not a black screen" check.
+#    Assert on the *last* steady-state line: the very first drawn frame happens a
+#    fraction of a second after the world parses, when nothing has streamed in yet.
 if grep -q "MUMBAI_FIRST_FRAME_DRAWN" "$OUT/logcat.txt"; then
-    LINE=$(grep -m1 -o 'MUMBAI_FIRST_FRAME_DRAWN.*' "$OUT/logcat.txt")
-    echo "PASS  $LINE"
+    echo "PASS  $(grep -m1 -o 'MUMBAI_FIRST_FRAME_DRAWN.*' "$OUT/logcat.txt")"
+else
+    echo "FAIL  no frame with geometry was ever drawn"
+    FAIL=1
+fi
+
+LINE=$(grep -o 'MUMBAI_STATUS.*' "$OUT/logcat.txt" | tail -1)
+if [ -z "$LINE" ]; then
+    echo "FAIL  the renderer never reached a steady state"
+    FAIL=1
+else
+    echo "INFO  steady state: $LINE"
     TRIS=$(echo "$LINE" | sed -n 's/.*triangles=\([0-9]*\).*/\1/p')
-    if [ -n "$TRIS" ] && [ "$TRIS" -gt 5000 ]; then
-        echo "PASS  $TRIS triangles in the first drawn frame"
+    TILES=$(echo "$LINE" | sed -n 's/.*tiles=\([0-9]*\).*/\1/p')
+    DRAWS=$(echo "$LINE" | sed -n 's/.* draws=\([0-9]*\).*/\1/p')
+
+    if [ "${TRIS:-0}" -gt 5000 ]; then
+        echo "PASS  $TRIS triangles drawn in steady state"
     else
-        echo "FAIL  only ${TRIS:-0} triangles were drawn - the world is not rendering"
+        echo "FAIL  only ${TRIS:-0} triangles in steady state - the world is not rendering"
+        FAIL=1
+    fi
+    if [ "${TILES:-0}" -gt 0 ]; then
+        echo "PASS  $TILES world tiles resident on the GPU"
+    else
+        echo "FAIL  no world tiles were ever resident - streaming is broken on device"
+        FAIL=1
+    fi
+    if [ "${DRAWS:-0}" -gt 2 ]; then
+        echo "PASS  $DRAWS draw calls per frame"
+    else
+        echo "FAIL  only ${DRAWS:-0} draw calls - nothing but the sky is being drawn"
         FAIL=1
     fi
     if echo "$LINE" | grep -q "glError=0"; then
-        echo "PASS  no OpenGL error on the first frame"
+        echo "PASS  no OpenGL error in steady state"
     else
         echo "FAIL  OpenGL reported an error: $LINE"
         FAIL=1
     fi
-else
-    echo "FAIL  no frame with geometry was ever drawn"
-    FAIL=1
+    if echo "$LINE" | grep -q "shaderError=''"; then
+        echo "PASS  no shader error recorded"
+    else
+        echo "FAIL  a shader error was recorded: $LINE"
+        FAIL=1
+    fi
 fi
 
 # 7. No shader compile or link failure.
@@ -172,11 +203,11 @@ fi
     echo "$(adb shell getprop ro.product.cpu.abi | tr -d '\r'), software GL (SwiftShader)."
     echo
     echo '```'
-    grep -E "MUMBAI_WORLD_READY|MUMBAI_FIRST_FRAME_DRAWN|GL vendor=" "$OUT/logcat.txt" \
-        | sed 's/^.*: //' | sort -u
+    grep -E "GL vendor=|MUMBAI_WORLD_READY" "$OUT/logcat.txt" | sed 's/^.*: //' | sort -u
+    grep -o 'MUMBAI_STATUS.*' "$OUT/logcat.txt" | tail -1
     echo '```'
     echo
-    echo "No fatal exception, no ANR, process alive after 75 s."
+    echo "No fatal exception, no ANR, process alive at the end of the run."
     echo
     echo "This is a software-rendered emulator. It proves the APK installs, launches,"
     echo "parses its world and renders real geometry. It says nothing at all about"
