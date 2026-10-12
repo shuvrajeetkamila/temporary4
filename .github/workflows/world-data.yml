@@ -1,0 +1,134 @@
+name: world-data
+
+# Fetches the real OpenStreetMap and Copernicus DEM data for the AOI, extracts
+# the game layers, and reports exactly what came back.
+#
+# This has to run here rather than on a developer machine because the project's
+# build sandbox has no route to Geofabrik, Overpass or the AWS DEM bucket. The
+# small, reviewable outputs (provenance JSON and the extract report) are
+# committed back to the branch; the multi-hundred-megabyte inputs are not.
+
+on:
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: "Ignore the cached download and refetch from source"
+        type: boolean
+        default: false
+  push:
+    paths:
+      - "tools/aoi.py"
+      - "tools/fetch_osm.py"
+      - "tools/fetch_dem.py"
+      - "tools/extract_osm.py"
+      - ".github/workflows/world-data.yml"
+
+concurrency:
+  group: world-data-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the AOI we are about to cut
+        run: python3 tools/aoi.py
+
+      - name: Install osmium-tool
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          osmium --version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install osmium shapely rasterio scipy numpy
+
+      - name: Restore cached source data
+        id: cache
+        if: ${{ !inputs.refresh }}
+        uses: actions/cache@v4
+        with:
+          path: data/_cache
+          key: srcdata-${{ hashFiles('tools/aoi.py') }}-v2
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          df -h /
+
+      - name: Fetch OpenStreetMap extract and clip to the AOI
+        run: python3 tools/fetch_osm.py --out data/osm --cache data/_cache
+
+      - name: Fetch Copernicus DEM and build the elevation grid
+        run: python3 tools/fetch_dem.py --out data/dem --cache data/_cache/dem
+
+      - name: Extract game layers from the OSM data
+        run: python3 tools/extract_osm.py --pbf data/osm/mumbai-aoi.osm.pbf --out data/layers
+
+      - name: Report
+        if: always()
+        run: |
+          mkdir -p data/reports
+          {
+            echo "# World data acquisition"
+            echo
+            echo "Run \`${{ github.run_id }}\`, $(date -u +'%Y-%m-%dT%H:%M:%SZ')."
+            echo
+            echo '## OpenStreetMap'
+            echo '```json'
+            cat data/provenance/osm.json 2>/dev/null || echo '{"error":"not produced"}'
+            echo '```'
+            echo '## Copernicus DEM'
+            echo '```json'
+            cat data/provenance/dem.json 2>/dev/null || echo '{"error":"not produced"}'
+            echo '```'
+            echo '## Extracted layers'
+            echo '```json'
+            cat data/layers/extract_summary.json 2>/dev/null || echo '{"error":"not produced"}'
+            echo '```'
+            echo '## Artefact sizes'
+            echo '```'
+            ls -lh data/osm data/dem data/layers 2>/dev/null || true
+            df -h / | tail -1
+            echo '```'
+          } > data/reports/world_data.md
+          cat data/reports/world_data.md
+
+      - name: Upload intermediates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-layers
+          path: |
+            data/layers/
+            data/dem/elevation.npz
+            data/provenance/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Commit provenance and report back to the branch
+        if: always()
+        run: |
+          git config user.name  "mumbai-world-bot"
+          git config user.email "actions@github.com"
+          mkdir -p data/provenance data/reports
+          git add -f data/provenance data/reports 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "world-data: provenance and acquisition report (run ${{ github.run_id }})"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi

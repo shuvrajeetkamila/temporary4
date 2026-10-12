@@ -1,2 +1,0 @@
--keep class ai.shuvrajeetkamila.mumbai.** { *; }
--dontwarn android.**

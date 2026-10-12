@@ -1,10 +1,26 @@
-*.iml
+# Raw and intermediate map data. These are large, and every one of them is
+# reproducible from tools/fetch_osm.py + tools/fetch_dem.py + tools/extract_osm.py,
+# with exact provenance recorded in data/provenance/. They are deliberately not
+# in version control; the build regenerates them.
+data/_cache/
+data/osm/
+data/dem/
+data/layers/
+data/geodata/
+
+# The compiled world is baked into the APK by CI from the sources above.
+android/src/main/assets/world/
+
+# Build output
+build/
+*/build/
 .gradle/
 local.properties
-.idea/
-.DS_Store
-build/
-captures/
-.externalNativeBuild
-.cxx
+*.apk
+*.aab
+*.idx
+*.pyc
+__pycache__/
+.venv/
+dist/
 out/
