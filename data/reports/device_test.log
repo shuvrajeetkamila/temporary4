@@ -1,0 +1,6 @@
+run 38276040303  emulator step: failure
+files present: ASSET_LICENSES.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.6.apk Mumbai-The-Island-City-v2.0.6.apk.sha256 README.md android build.gradle core data gradle.properties settings.gradle tools 
+--- install ---
+--- am start ---
+--- app log ---
+--- crashes/GL ---
