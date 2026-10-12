@@ -1,11 +1,11 @@
 {
- "seconds": 45.6,
- "total_bytes": 9920121,
+ "seconds": 41.5,
+ "total_bytes": 12296208,
  "files": {
-  "terrain.mwl": 41421,
-  "chunks.mwl": 6823694,
+  "terrain.mwl": 2444041,
+  "chunks.mwl": 6796973,
   "network.mwl": 3051709,
-  "manifest.mwl": 3297
+  "manifest.mwl": 3485
  },
  "manifest": {
   "format": "MWL2",
@@ -33,22 +33,35 @@
    "grid_m": 20.0,
    "min_x": -29160.0,
    "min_z": -44740.0,
-   "land_fraction": 0.001,
-   "land_km2": 3.5,
+   "land_fraction": 0.33934,
+   "inland_water_km2": 34.5,
+   "land_km2": 1190.3,
    "elev_min_m": 0.0,
-   "elev_max_m": 114.5,
+   "elev_max_m": 654.4,
    "cover_histogram": {
-    "water": 8760136,
-    "mangrove": 19,
-    "beach": 8,
-    "sand": 129,
-    "rock": 72,
-    "forest": 5050,
-    "scrub": 3036,
-    "grass": 4,
-    "residential": 259,
-    "industrial": 144,
-    "military": 19
+    "water": 5793250,
+    "wetland": 42060,
+    "mangrove": 247845,
+    "beach": 2741,
+    "sand": 318,
+    "rock": 305,
+    "forest": 524004,
+    "scrub": 1370740,
+    "grass": 7387,
+    "park": 246608,
+    "farmland": 76971,
+    "cemetery": 1503,
+    "residential": 216000,
+    "commercial": 26472,
+    "industrial": 110398,
+    "retail": 2380,
+    "military": 18769,
+    "railway_land": 16650,
+    "airport_land": 14998,
+    "construction": 30091,
+    "quarry": 6442,
+    "pitch": 11155,
+    "parking": 1789
    }
   },
   "chunks": {
@@ -64,7 +77,8 @@
    "height_src": {
     "osm_height": 20568,
     "osm_levels": 7008,
-    "dem_canopy": 139793
+    "neighbour_median": 118490,
+    "class_default": 21303
    },
    "names": 4269
   },
@@ -79,24 +93,24 @@
     "group": "vasai_creek",
     "key": "vasai_mouth",
     "label": "Vasai Creek mouth",
-    "lat": 19.395,
-    "lon": 72.775,
+    "lat": 19.325,
+    "lon": 72.79,
     "expect": "water"
    },
    {
     "group": "vasai_creek",
     "key": "vasai_east",
-    "label": "Vasai Creek upper reach",
-    "lat": 19.38,
-    "lon": 72.845,
+    "label": "Vasai Creek at the rail crossing",
+    "lat": 19.33,
+    "lon": 72.848,
     "expect": "water"
    },
    {
     "group": "vasai_creek",
     "key": "vasai_south_bank",
     "label": "Vasai Creek south bank",
-    "lat": 19.36,
-    "lon": 72.85,
+    "lat": 19.318,
+    "lon": 72.852,
     "expect": "land"
    },
    {
@@ -111,16 +125,16 @@
     "group": "north_salsette",
     "key": "gorai",
     "label": "Gorai",
-    "lat": 19.24,
-    "lon": 72.79,
+    "lat": 19.241,
+    "lon": 72.7822,
     "expect": "land"
    },
    {
     "group": "north_salsette",
     "key": "uttan",
-    "label": "Uttan coast",
-    "lat": 19.27,
-    "lon": 72.77,
+    "label": "Uttan",
+    "lat": 19.2816,
+    "lon": 72.7853,
     "expect": "land"
    },
    {
@@ -181,18 +195,18 @@
    },
    {
     "group": "national_park",
-    "key": "tulsi",
-    "label": "Tulsi Lake",
-    "lat": 19.157,
-    "lon": 72.907,
+    "key": "sgnp_lake",
+    "label": "Vihar/Tulsi lake system",
+    "lat": 19.1539,
+    "lon": 72.9129,
     "expect": "water"
    },
    {
     "group": "national_park",
-    "key": "vihar",
-    "label": "Vihar Lake",
-    "lat": 19.143,
-    "lon": 72.909,
+    "key": "powai_lake",
+    "label": "Powai Lake",
+    "lat": 19.1281,
+    "lon": 72.9059,
     "expect": "water"
    },
    {
@@ -208,7 +222,7 @@
     "key": "thane_creek_north",
     "label": "Thane Creek north",
     "lat": 19.19,
-    "lon": 72.985,
+    "lon": 72.995,
     "expect": "water"
    },
    {
@@ -279,8 +293,8 @@
     "group": "eastern_suburbs",
     "key": "trombay",
     "label": "Trombay",
-    "lat": 19.001,
-    "lon": 72.92,
+    "lat": 19.0332,
+    "lon": 72.9489,
     "expect": "land"
    },
    {
@@ -327,8 +341,8 @@
     "group": "western_suburbs",
     "key": "madh",
     "label": "Madh Island",
-    "lat": 19.14,
-    "lon": 72.795,
+    "lat": 19.1375,
+    "lon": 72.7919,
     "expect": "land"
    },
    {

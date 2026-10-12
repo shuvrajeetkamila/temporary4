@@ -65,6 +65,33 @@ COVER_PRIORITY = [
 MIN_BUILDING_AREA = 9.0      # m^2; below this it is map noise, not a building
 MAX_BUILDING_PTS = 64
 
+# Cell size for the neighbourhood height prior, metres.
+HEIGHT_PRIOR_M = 300.0
+
+# Fallback heights per building class: (default, min, max) metres.
+#
+# Copernicus GLO-30 turned out to be useless for this. At 30 m posting its
+# surface over Nariman Point reads about two metres above the local ground,
+# when the towers there are over a hundred - the product is too smoothed to
+# resolve individual buildings in a dense city. Rather than dress that up, the
+# compiler uses it for terrain only, and heights for the 84% of footprints OSM
+# does not tag come from the median of tagged buildings in the same 300 m
+# neighbourhood, falling back to these class priors where no neighbour is
+# tagged either. Which method produced each building is counted and reported.
+CLASS_HEIGHT = {
+    "generic": (9.0, 3.0, 120.0), "residential": (14.0, 3.0, 150.0),
+    "apartments": (18.0, 6.0, 180.0), "house": (6.5, 3.0, 20.0),
+    "commercial": (14.0, 4.0, 160.0), "office": (20.0, 4.0, 220.0),
+    "retail": (9.0, 3.5, 60.0), "industrial": (10.0, 4.0, 60.0),
+    "warehouse": (9.0, 4.0, 45.0), "civic": (12.0, 4.0, 90.0),
+    "school": (10.0, 3.5, 40.0), "hospital": (16.0, 4.0, 90.0),
+    "religious": (9.0, 3.0, 60.0), "transport": (9.0, 3.0, 60.0),
+    "hut": (3.0, 2.4, 6.0), "shed": (3.2, 2.4, 8.0),
+    "garage": (3.2, 2.4, 9.0), "construction": (12.0, 3.0, 120.0),
+    "ruins": (5.0, 2.4, 20.0), "stadium": (20.0, 6.0, 60.0),
+    "hotel": (22.0, 5.0, 160.0), "tower": (45.0, 6.0, 250.0),
+}
+
 
 def _log(m):
     print(f"[compile] {m}", flush=True)
@@ -301,6 +328,18 @@ def build_rasters(lay, dem):
     # Open sea stays sea even if a landuse polygon overhangs the coast.
     cover = np.where(landmask == 0, np.uint8(SEA_COVER), cover)
 
+    # Inland water is water too. The OSM coastline only separates the sea from
+    # the land; it says nothing about Powai Lake, the Vihar and Tulsi
+    # reservoirs, the Mithi river or the tidal creeks mapped as areas rather
+    # than coastline. Without this a boat cannot float on any of them and the
+    # car happily drives across the reservoirs.
+    inland = (cover == np.uint8(LANDUSE_ID["water"])) & (landmask > 0)
+    n_inland = int(inland.sum())
+    landmask = np.where(inland, np.uint8(0), landmask)
+    _log(f"  inland water: {n_inland} cells "
+         f"({n_inland * GRID_M ** 2 / 1e6:.1f} km^2) removed from the land mask")
+    land_frac = float(landmask.mean())
+
     # --- elevation ----------------------------------------------------------
     dtm = np.asarray(dem["dtm_dm"], dtype=np.int16).reshape(nz, nx)
     # The sea is flat at chart datum; the DEM's noisy near-zero water returns
@@ -313,6 +352,7 @@ def build_rasters(lay, dem):
     stats = {
         "nx": nx, "nz": nz, "grid_m": GRID_M, "min_x": minx, "min_z": minz,
         "land_fraction": round(land_frac, 5),
+        "inland_water_km2": round(n_inland * GRID_M ** 2 / 1e6, 1),
         "land_km2": round(land_frac * nx * nz * GRID_M ** 2 / 1e6, 1),
         "elev_min_m": round(float(dtm.min()) / 10, 1),
         "elev_max_m": round(float(dtm.max()) / 10, 1),
@@ -351,10 +391,62 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
         j = int(math.floor(z / CHUNK_M)) - cminz
         return min(max(i, 0), cnx - 1), min(max(j, 0), cnz - 1)
 
-    # --- buildings ----------------------------------------------------------
+    # --- neighbourhood height prior -----------------------------------------
+    # Median height of every OSM-tagged building, per 300 m cell. Built first
+    # so the untagged majority can inherit the real character of their own
+    # neighbourhood: towers around Lower Parel and BKC, low-rise in Dharavi.
     b_xy, b_off, b_attr = lay["bld_xy"], lay["bld_off"], lay["bld_attr"]
     nb = len(b_attr)
-    src_counts = [0, 0, 0]
+    pminx, pminz, pmaxx, pmaxz = aoi.aoi_bounds_xz()
+    pnx = int((pmaxx - pminx) / HEIGHT_PRIOR_M) + 2
+    pnz = int((pmaxz - pminz) / HEIGHT_PRIOR_M) + 2
+    buckets = {}
+    for i in range(nb):
+        src = int(b_attr[i][2])
+        if src == 0:
+            continue
+        h = float(b_attr[i][1])
+        if not (2.0 < h < 400.0):
+            continue
+        r = b_xy[b_off[i]:b_off[i + 1]]
+        if len(r) < 3:
+            continue
+        pi = int((float(r[:, 0].mean()) - pminx) / HEIGHT_PRIOR_M)
+        pj = int((float(r[:, 1].mean()) - pminz) / HEIGHT_PRIOR_M)
+        buckets.setdefault((pi, pj), []).append(h)
+    prior = np.full((pnz, pnx), np.nan, dtype=np.float32)
+    for (pi, pj), vals in buckets.items():
+        if 0 <= pi < pnx and 0 <= pj < pnz and len(vals) >= 3:
+            prior[pj, pi] = float(np.median(vals))
+    filled = int(np.isfinite(prior).sum())
+    _log(f"  height prior: {filled} of {pnx * pnz} cells have 3+ tagged buildings")
+    # Spread the prior one ring outward so a cell with no tagged building still
+    # inherits from its neighbours rather than dropping straight to the class
+    # default.
+    if filled:
+        from scipy import ndimage as _nd
+        valid = np.isfinite(prior)
+        fillv = np.where(valid, prior, 0.0)
+        for _ in range(2):
+            sm = _nd.uniform_filter(fillv, size=5)
+            cnt = _nd.uniform_filter(valid.astype(np.float32), size=5)
+            grown = np.where(cnt > 0.02, sm / np.maximum(cnt, 1e-6), np.nan)
+            prior = np.where(valid, prior, grown)
+            valid = np.isfinite(prior)
+            fillv = np.where(valid, prior, 0.0)
+        _log(f"  height prior after spreading: {int(np.isfinite(prior).sum())} cells")
+
+    def prior_at(x, z):
+        pi = int((x - pminx) / HEIGHT_PRIOR_M)
+        pj = int((z - pminz) / HEIGHT_PRIOR_M)
+        if 0 <= pi < pnx and 0 <= pj < pnz:
+            v = prior[pj, pi]
+            if np.isfinite(v):
+                return float(v)
+        return None
+
+    # --- buildings ----------------------------------------------------------
+    src_counts = [0, 0, 0, 0]   # 0 class prior, 1 levels, 2 height, 3 neighbours
     dropped_small = 0
     kept = 0
     t0 = time.time()
@@ -378,15 +470,19 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
         cx = float(r[:, 0].mean())
         cz = float(r[:, 1].mean())
         if src == 0:
-            # OSM says nothing. Use the real measured canopy at this footprint.
-            c = float(sample_grid(canopy, minx, minz, np.array([cx]),
-                                  np.array([cz]), nx, nz)[0]) / 10.0
-            # Footprint area is a weak but real signal for how tall a shed is
-            # allowed to be; a 20 m^2 footprint is not a 60 m tower.
-            cap = 6.0 + 2.6 * math.sqrt(max(a, 1.0))
-            h = float(np.clip(c, 3.2, min(cap, 140.0)))
-            if h < 3.2:
-                h = 3.2
+            name = BUILDING_CLASSES[cls] if cls < len(BUILDING_CLASSES) else "generic"
+            dflt, lo, hi = CLASS_HEIGHT.get(name, CLASS_HEIGHT["generic"])
+            p = prior_at(cx, cz)
+            if p is not None:
+                # Weight the neighbourhood more than the class prior, but keep
+                # the class bounds: a mapped shed next to a tower is still a shed.
+                h = 0.68 * p + 0.32 * dflt
+                src = 3
+            else:
+                h = dflt
+            # A tiny footprint cannot be a tower whatever the neighbours do.
+            cap = 5.0 + 3.1 * math.sqrt(max(a, 1.0))
+            h = float(np.clip(h, lo, min(hi, cap)))
         h = float(np.clip(h, 2.4, 420.0))
         src_counts[src] += 1
         ci, cj = cidx(cx, cz)
@@ -396,8 +492,11 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
             _log(f"  {kept // 1000}k buildings ({time.time() - t0:.0f}s)")
     _log(f"  buildings kept {kept}, dropped {dropped_small} under "
          f"{MIN_BUILDING_AREA:.0f} m^2")
-    _log(f"  height source: osm_height={src_counts[2]} osm_levels={src_counts[1]} "
-         f"dem_canopy={src_counts[0]}")
+    tot = max(1, sum(src_counts))
+    _log(f"  height source: osm_height={src_counts[2]} ({100 * src_counts[2] / tot:.1f}%) "
+         f"osm_levels={src_counts[1]} ({100 * src_counts[1] / tot:.1f}%) "
+         f"neighbour_median={src_counts[3]} ({100 * src_counts[3] / tot:.1f}%) "
+         f"class_default={src_counts[0]} ({100 * src_counts[0] / tot:.1f}%)")
 
     # --- roads --------------------------------------------------------------
     r_xy, r_off, r_attr = lay["road_xy"], lay["road_off"], lay["road_attr"]
@@ -474,7 +573,8 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
             "buildings": kept, "building_runs": kept, "road_runs": segs,
             "height_src": {"osm_height": src_counts[2],
                            "osm_levels": src_counts[1],
-                           "dem_canopy": src_counts[0]},
+                           "neighbour_median": src_counts[3],
+                           "class_default": src_counts[0]},
             "names": len(name_list)}
     return bytes(blob), index, name_list, meta
 

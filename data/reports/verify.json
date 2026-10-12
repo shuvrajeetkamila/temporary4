@@ -1,0 +1,745 @@
+{
+ "passed": 121,
+ "total": 123,
+ "failed": 2,
+ "gates": [
+  {
+   "group": "files",
+   "name": "manifest.mwl exists",
+   "status": "PASS",
+   "detail": "0.00 MB"
+  },
+  {
+   "group": "files",
+   "name": "terrain.mwl exists",
+   "status": "PASS",
+   "detail": "2.44 MB"
+  },
+  {
+   "group": "files",
+   "name": "chunks.mwl exists",
+   "status": "PASS",
+   "detail": "6.80 MB"
+  },
+  {
+   "group": "files",
+   "name": "network.mwl exists",
+   "status": "PASS",
+   "detail": "3.05 MB"
+  },
+  {
+   "group": "files",
+   "name": "all four files share one build id",
+   "status": "PASS",
+   "detail": "e43c5d6b6e7b74194b55239672a68baa"
+  },
+  {
+   "group": "files",
+   "name": "world is not a self-test fixture",
+   "status": "PASS",
+   "detail": "selftest=False"
+  },
+  {
+   "group": "provenance",
+   "name": "OSM source recorded",
+   "status": "PASS",
+   "detail": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf"
+  },
+  {
+   "group": "provenance",
+   "name": "OSM retrieval date recorded",
+   "status": "PASS",
+   "detail": "2026-10-12T15:02:50+00:00"
+  },
+  {
+   "group": "provenance",
+   "name": "OSM extract sha256 recorded",
+   "status": "PASS",
+   "detail": "6567c76221a6197c..."
+  },
+  {
+   "group": "provenance",
+   "name": "OSM attribution present",
+   "status": "PASS",
+   "detail": "\u00a9 OpenStreetMap contributors (ODbL 1.0); Copernicus DEM \u00a9 DLR e.V. / A"
+  },
+  {
+   "group": "provenance",
+   "name": "ODbL named",
+   "status": "PASS",
+   "detail": "Open Database License (ODbL) v1.0"
+  },
+  {
+   "group": "provenance",
+   "name": "elevation source recorded",
+   "status": "PASS",
+   "detail": "Copernicus DEM GLO-30 (COG)"
+  },
+  {
+   "group": "extent",
+   "name": "world spans >= 40 km east-west",
+   "status": "PASS",
+   "detail": "48.3 km"
+  },
+  {
+   "group": "extent",
+   "name": "world spans >= 60 km north-south",
+   "status": "PASS",
+   "detail": "72.5 km"
+  },
+  {
+   "group": "extent",
+   "name": "land is 20-60% of the AOI",
+   "status": "PASS",
+   "detail": "33.9% = 1190 km2"
+  },
+  {
+   "group": "extent",
+   "name": "ground rises above 400 m somewhere",
+   "status": "PASS",
+   "detail": "max 654 m"
+  },
+  {
+   "group": "extent",
+   "name": "no ground above 900 m",
+   "status": "PASS",
+   "detail": "max 654 m"
+  },
+  {
+   "group": "extent",
+   "name": "sea is flat at datum",
+   "status": "PASS",
+   "detail": "mean 0.000 m"
+  },
+  {
+   "group": "extent",
+   "name": "land is at or above the waterline",
+   "status": "PASS",
+   "detail": "min land 0.30 m"
+  },
+  {
+   "group": "projection",
+   "name": "compiler and verifier agree within 1 mm",
+   "status": "PASS",
+   "detail": "worst 0.0000 mm"
+  },
+  {
+   "group": "projection",
+   "name": "Navy Nagar to Dahisar within 0.1% of Vincenty",
+   "status": "PASS",
+   "detail": "39291 m vs 39290 m, 0.0030%"
+  },
+  {
+   "group": "projection",
+   "name": "Versova to Mulund within 0.1% of Vincenty",
+   "status": "PASS",
+   "detail": "15590 m vs 15590 m, 0.0010%"
+  },
+  {
+   "group": "chunks",
+   "name": "index matches the declared grid",
+   "status": "PASS",
+   "detail": "3577 entries, 49x73"
+  },
+  {
+   "group": "chunks",
+   "name": "at least 800 chunks carry geometry",
+   "status": "PASS",
+   "detail": "1299 non-empty"
+  },
+  {
+   "group": "chunks",
+   "name": "at least 100k real buildings",
+   "status": "PASS",
+   "detail": "167,369"
+  },
+  {
+   "group": "chunks",
+   "name": "at least 50k road runs",
+   "status": "PASS",
+   "detail": "106,490"
+  },
+  {
+   "group": "cp:vasai_creek",
+   "name": "Vasai Creek mouth is water",
+   "status": "PASS",
+   "detail": "19.325,72.79 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:vasai_creek",
+   "name": "Vasai Creek at the rail crossing is water",
+   "status": "FAIL",
+   "detail": "19.33,72.848 -> land elev 0.3 m"
+  },
+  {
+   "group": "cp:vasai_creek",
+   "name": "Vasai Creek south bank is land",
+   "status": "PASS",
+   "detail": "19.318,72.852 -> land elev 4.9 m"
+  },
+  {
+   "group": "cp:north_salsette",
+   "name": "Mira Road / Bhayandar side is land",
+   "status": "PASS",
+   "detail": "19.29,72.87 -> land elev 4.9 m"
+  },
+  {
+   "group": "cp:north_salsette",
+   "name": "Gorai is land",
+   "status": "PASS",
+   "detail": "19.241,72.7822 -> land elev 6.6 m"
+  },
+  {
+   "group": "cp:north_salsette",
+   "name": "Uttan is land",
+   "status": "PASS",
+   "detail": "19.2816,72.7853 -> land elev 6.2 m"
+  },
+  {
+   "group": "cp:northern_belt",
+   "name": "Dahisar is land",
+   "status": "PASS",
+   "detail": "19.25,72.86 -> land elev 11.1 m"
+  },
+  {
+   "group": "cp:northern_belt",
+   "name": "Borivali is land",
+   "status": "PASS",
+   "detail": "19.23,72.857 -> land elev 16.1 m"
+  },
+  {
+   "group": "cp:northern_belt",
+   "name": "Kandivali is land",
+   "status": "PASS",
+   "detail": "19.205,72.85 -> land elev 14.8 m"
+  },
+  {
+   "group": "cp:northern_belt",
+   "name": "Malad is land",
+   "status": "PASS",
+   "detail": "19.186,72.848 -> land elev 16.0 m"
+  },
+  {
+   "group": "cp:northern_belt",
+   "name": "Goregaon is land",
+   "status": "PASS",
+   "detail": "19.164,72.849 -> land elev 11.3 m"
+  },
+  {
+   "group": "cp:national_park",
+   "name": "Sanjay Gandhi National Park is land",
+   "status": "PASS",
+   "detail": "19.215,72.91 -> land elev 296.5 m"
+  },
+  {
+   "group": "cp:national_park",
+   "name": "Kanheri ridge is land",
+   "status": "PASS",
+   "detail": "19.208,72.905 -> land elev 152.6 m"
+  },
+  {
+   "group": "cp:national_park",
+   "name": "Vihar/Tulsi lake system is water",
+   "status": "PASS",
+   "detail": "19.1539,72.9129 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:national_park",
+   "name": "Powai Lake is water",
+   "status": "PASS",
+   "detail": "19.1281,72.9059 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:national_park",
+   "name": "Aarey is land",
+   "status": "PASS",
+   "detail": "19.16,72.88 -> land elev 39.2 m"
+  },
+  {
+   "group": "cp:thane_creek",
+   "name": "Thane Creek north is water",
+   "status": "FAIL",
+   "detail": "19.19,72.995 -> land elev 5.9 m"
+  },
+  {
+   "group": "cp:thane_creek",
+   "name": "Thane Creek mid is water",
+   "status": "PASS",
+   "detail": "19.09,72.975 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:thane_creek",
+   "name": "Thane Creek mangroves is land",
+   "status": "PASS",
+   "detail": "19.12,72.955 -> land elev 3.3 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Mulund is land",
+   "status": "PASS",
+   "detail": "19.172,72.956 -> land elev 11.7 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Bhandup is land",
+   "status": "PASS",
+   "detail": "19.143,72.937 -> land elev 8.6 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Powai is land",
+   "status": "PASS",
+   "detail": "19.118,72.905 -> land elev 41.8 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Vikhroli is land",
+   "status": "PASS",
+   "detail": "19.105,72.928 -> land elev 9.5 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Ghatkopar is land",
+   "status": "PASS",
+   "detail": "19.086,72.908 -> land elev 10.1 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Chembur is land",
+   "status": "PASS",
+   "detail": "19.052,72.899 -> land elev 13.6 m"
+  },
+  {
+   "group": "cp:eastern_suburbs",
+   "name": "Trombay is land",
+   "status": "PASS",
+   "detail": "19.0332,72.9489 -> land elev 8.4 m"
+  },
+  {
+   "group": "cp:airports",
+   "name": "CSMIA is land",
+   "status": "PASS",
+   "detail": "19.089,72.868 -> land elev 5.5 m"
+  },
+  {
+   "group": "cp:airports",
+   "name": "Juhu Aerodrome is land",
+   "status": "PASS",
+   "detail": "19.098,72.834 -> land elev 2.6 m"
+  },
+  {
+   "group": "cp:western_suburbs",
+   "name": "Andheri is land",
+   "status": "PASS",
+   "detail": "19.119,72.847 -> land elev 13.6 m"
+  },
+  {
+   "group": "cp:western_suburbs",
+   "name": "Juhu is land",
+   "status": "PASS",
+   "detail": "19.107,72.827 -> land elev 7.1 m"
+  },
+  {
+   "group": "cp:western_suburbs",
+   "name": "Versova is land",
+   "status": "PASS",
+   "detail": "19.135,72.813 -> land elev 9.9 m"
+  },
+  {
+   "group": "cp:western_suburbs",
+   "name": "Madh Island is land",
+   "status": "PASS",
+   "detail": "19.1375,72.7919 -> land elev 24.4 m"
+  },
+  {
+   "group": "cp:bandra_bkc",
+   "name": "Bandra is land",
+   "status": "PASS",
+   "detail": "19.059,72.83 -> land elev 15.3 m"
+  },
+  {
+   "group": "cp:bandra_bkc",
+   "name": "Bandra Kurla Complex is land",
+   "status": "PASS",
+   "detail": "19.066,72.869 -> land elev 4.3 m"
+  },
+  {
+   "group": "cp:bandra_bkc",
+   "name": "Kurla is land",
+   "status": "PASS",
+   "detail": "19.072,72.879 -> land elev 10.5 m"
+  },
+  {
+   "group": "cp:bandra_bkc",
+   "name": "Dharavi is land",
+   "status": "PASS",
+   "detail": "19.043,72.852 -> land elev 7.0 m"
+  },
+  {
+   "group": "cp:bandra_bkc",
+   "name": "Mahim is land",
+   "status": "PASS",
+   "detail": "19.04,72.84 -> land elev 9.2 m"
+  },
+  {
+   "group": "cp:central_mumbai",
+   "name": "Worli is land",
+   "status": "PASS",
+   "detail": "19.0,72.817 -> land elev 5.7 m"
+  },
+  {
+   "group": "cp:central_mumbai",
+   "name": "Dadar is land",
+   "status": "PASS",
+   "detail": "19.018,72.843 -> land elev 6.3 m"
+  },
+  {
+   "group": "cp:central_mumbai",
+   "name": "Lower Parel is land",
+   "status": "PASS",
+   "detail": "18.995,72.83 -> land elev 5.6 m"
+  },
+  {
+   "group": "cp:central_mumbai",
+   "name": "Sewri is land",
+   "status": "PASS",
+   "detail": "18.995,72.86 -> land elev 1.8 m"
+  },
+  {
+   "group": "cp:south_mumbai",
+   "name": "Marine Drive is land",
+   "status": "PASS",
+   "detail": "18.943,72.823 -> land elev 1.8 m"
+  },
+  {
+   "group": "cp:south_mumbai",
+   "name": "Fort / CSMT is land",
+   "status": "PASS",
+   "detail": "18.94,72.835 -> land elev 9.1 m"
+  },
+  {
+   "group": "cp:south_mumbai",
+   "name": "Mumbai docks is land",
+   "status": "PASS",
+   "detail": "18.95,72.845 -> land elev 2.8 m"
+  },
+  {
+   "group": "cp:south_mumbai",
+   "name": "Colaba is land",
+   "status": "PASS",
+   "detail": "18.91,72.815 -> land elev 5.3 m"
+  },
+  {
+   "group": "cp:south_mumbai",
+   "name": "Navy Nagar is land",
+   "status": "PASS",
+   "detail": "18.898,72.812 -> land elev 10.4 m"
+  },
+  {
+   "group": "cp:arabian_sea",
+   "name": "Arabian Sea off Juhu is water",
+   "status": "PASS",
+   "detail": "19.107,72.76 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:arabian_sea",
+   "name": "Arabian Sea off Bandra is water",
+   "status": "PASS",
+   "detail": "19.04,72.77 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:arabian_sea",
+   "name": "Back Bay is water",
+   "status": "PASS",
+   "detail": "18.925,72.808 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:harbour",
+   "name": "Mumbai Harbour is water",
+   "status": "PASS",
+   "detail": "18.93,72.9 -> water elev 0.0 m"
+  },
+  {
+   "group": "cp:harbour",
+   "name": "Mahim Bay is water",
+   "status": "PASS",
+   "detail": "19.033,72.818 -> water elev 0.0 m"
+  },
+  {
+   "group": "coverage",
+   "name": "airports: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "4425 buildings + 3391 road runs in the 3x3 chunks around 2 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "airports: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "3391 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "airports: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "4425 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "bandra_bkc: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "17236 buildings + 12429 road runs in the 3x3 chunks around 5 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "bandra_bkc: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "12429 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "bandra_bkc: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "17236 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "central_mumbai: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "7582 buildings + 7734 road runs in the 3x3 chunks around 4 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "central_mumbai: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "7734 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "central_mumbai: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "7582 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "eastern_suburbs: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "11845 buildings + 11127 road runs in the 3x3 chunks around 7 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "eastern_suburbs: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "11127 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "eastern_suburbs: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "11845 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "national_park: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "616 buildings + 734 road runs in the 3x3 chunks around 3 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "national_park: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "734 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "north_salsette: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "6662 buildings + 1822 road runs in the 3x3 chunks around 3 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "north_salsette: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "1822 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "north_salsette: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "6662 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "northern_belt: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "12693 buildings + 10330 road runs in the 3x3 chunks around 5 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "northern_belt: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "10330 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "northern_belt: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "12693 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "south_mumbai: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "7670 buildings + 6832 road runs in the 3x3 chunks around 5 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "south_mumbai: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "6832 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "south_mumbai: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "7670 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "thane_creek: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "292 buildings + 186 road runs in the 3x3 chunks around 1 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "thane_creek: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "186 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "vasai_creek: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "2652 buildings + 474 road runs in the 3x3 chunks around 1 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "vasai_creek: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "474 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "western_suburbs: real geometry near its checkpoints",
+   "status": "PASS",
+   "detail": "8238 buildings + 6186 road runs in the 3x3 chunks around 4 checkpoints"
+  },
+  {
+   "group": "coverage",
+   "name": "western_suburbs: roads near its checkpoints",
+   "status": "PASS",
+   "detail": "6186 road runs"
+  },
+  {
+   "group": "coverage",
+   "name": "western_suburbs: buildings near its checkpoints",
+   "status": "PASS",
+   "detail": "8238 buildings"
+  },
+  {
+   "group": "coverage",
+   "name": "geometry spans >= 55 km north to south",
+   "status": "PASS",
+   "detail": "74.8 km"
+  },
+  {
+   "group": "coverage",
+   "name": "geometry spans >= 30 km west to east",
+   "status": "PASS",
+   "detail": "36.9 km"
+  },
+  {
+   "group": "coverage",
+   "name": "reaches Vasai Creek in the north",
+   "status": "PASS",
+   "detail": "northernmost geometry at 19.483 N"
+  },
+  {
+   "group": "coverage",
+   "name": "reaches Navy Nagar in the south",
+   "status": "PASS",
+   "detail": "southernmost geometry at 18.808 N"
+  },
+  {
+   "group": "network",
+   "name": "graph has >= 100k nodes",
+   "status": "PASS",
+   "detail": "310,246"
+  },
+  {
+   "group": "network",
+   "name": "graph has >= 100k edges",
+   "status": "PASS",
+   "detail": "295,032"
+  },
+  {
+   "group": "network",
+   "name": "edge endpoints are in range",
+   "status": "PASS",
+   "detail": "max index 310245"
+  },
+  {
+   "group": "network",
+   "name": ">= 3000 km of drivable road",
+   "status": "PASS",
+   "detail": "11,478 km"
+  },
+  {
+   "group": "network",
+   "name": "95% of road nodes are on land",
+   "status": "PASS",
+   "detail": "96.7% of 4030 sampled"
+  },
+  {
+   "group": "places",
+   "name": "at least 400 named places",
+   "status": "PASS",
+   "detail": "1217"
+  },
+  {
+   "group": "places",
+   "name": "Bandra is named in the data",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "group": "places",
+   "name": "Andheri is named in the data",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "group": "places",
+   "name": "Borivali is named in the data",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "group": "places",
+   "name": "Colaba is named in the data",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "group": "heights",
+   "name": "building height provenance is recorded",
+   "status": "PASS",
+   "detail": "{\"osm_height\": 20568, \"osm_levels\": 7008, \"neighbour_median\": 118490, \"class_default\": 21303}"
+  },
+  {
+   "group": "heights",
+   "name": "at least 10% of heights come from OSM tags",
+   "status": "PASS",
+   "detail": "27,576 of 167,369 = 16.5%"
+  }
+ ]
+}

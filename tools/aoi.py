@@ -24,7 +24,7 @@ import math
 import os
 
 AOI_NAME = "Mumbai / Salsette island"
-AOI_VERSION = "2.0.0"
+AOI_VERSION = "2.1.0"
 
 # Geodetic origin of the local ENU frame. Roughly the centroid of the island, so
 # float error in the render frame is smallest where the player usually is.
@@ -59,20 +59,23 @@ AOI_POLYGON = [
     (72.930, 19.448),
     (72.990, 19.440),
     # --- north-east: head of Thane Creek / Ulhas confluence ----------------
-    (73.040, 19.420),
-    (73.060, 19.380),
-    # --- east: down the middle of Thane Creek ------------------------------
-    (73.045, 19.320),
-    (73.030, 19.260),
-    (73.020, 19.200),
-    (73.010, 19.150),
-    (73.005, 19.100),
-    (73.000, 19.050),
+    (73.090, 19.420),
+    (73.100, 19.380),
+    # --- east: the far bank of Thane Creek, so the whole channel and its
+    #     western mangrove shore sit inside with a buffer beyond. The land
+    #     east of the creek is Navi Mumbai and is carried as distant
+    #     low-detail context only, never populated.
+    (73.100, 19.320),
+    (73.090, 19.260),
+    (73.080, 19.200),
+    (73.070, 19.150),
+    (73.060, 19.100),
+    (73.050, 19.050),
     # --- south-east: into Mumbai Harbour, west of Elephanta ----------------
-    (72.990, 19.000),
-    (72.985, 18.950),
-    (72.975, 18.900),
-    (72.960, 18.860),
+    (73.030, 19.000),
+    (73.010, 18.950),
+    (72.990, 18.900),
+    (72.970, 18.860),
     # --- south: open water south of Navy Nagar -----------------------------
     (72.900, 18.830),
     (72.820, 18.825),
@@ -88,7 +91,7 @@ AOI_POLYGON = [
 ]
 
 # Everything the detailed world needs, as a bounding box (minlon, minlat, maxlon, maxlat).
-AOI_BOUNDS = (72.600, 18.825, 73.060, 19.480)
+AOI_BOUNDS = (72.600, 18.825, 73.100, 19.480)
 
 # A wider box used only for distant context terrain: the mainland skyline east of
 # Thane Creek and the hills behind it. Never populated with buildings or roads.
@@ -101,13 +104,13 @@ CONTEXT_BOUNDS = (72.40, 18.65, 73.35, 19.70)
 # ---------------------------------------------------------------------------
 CHECKPOINTS = [
     # group, key, label, lat, lon, expect ("land" | "water")
-    ("vasai_creek", "vasai_mouth", "Vasai Creek mouth", 19.3950, 72.7750, "water"),
-    ("vasai_creek", "vasai_east", "Vasai Creek upper reach", 19.3800, 72.8450, "water"),
-    ("vasai_creek", "vasai_south_bank", "Vasai Creek south bank", 19.3600, 72.8500, "land"),
+    ("vasai_creek", "vasai_mouth", "Vasai Creek mouth", 19.3250, 72.7900, "water"),
+    ("vasai_creek", "vasai_channel", "Vasai Creek channel", 19.3200, 72.8200, "water"),
+    ("vasai_creek", "vasai_south_bank", "Vasai Creek south bank", 19.3180, 72.8520, "land"),
 
     ("north_salsette", "mira_road", "Mira Road / Bhayandar side", 19.2900, 72.8700, "land"),
-    ("north_salsette", "gorai", "Gorai", 19.2400, 72.7900, "land"),
-    ("north_salsette", "uttan", "Uttan coast", 19.2700, 72.7700, "land"),
+    ("north_salsette", "gorai", "Gorai", 19.2410, 72.7822, "land"),
+    ("north_salsette", "uttan", "Uttan", 19.2816, 72.7853, "land"),
 
     ("northern_belt", "dahisar", "Dahisar", 19.2500, 72.8600, "land"),
     ("northern_belt", "borivali", "Borivali", 19.2300, 72.8570, "land"),
@@ -117,12 +120,12 @@ CHECKPOINTS = [
 
     ("national_park", "sgnp", "Sanjay Gandhi National Park", 19.2150, 72.9100, "land"),
     ("national_park", "kanheri", "Kanheri ridge", 19.2080, 72.9050, "land"),
-    ("national_park", "tulsi", "Tulsi Lake", 19.1570, 72.9070, "water"),
-    ("national_park", "vihar", "Vihar Lake", 19.1430, 72.9090, "water"),
+    ("national_park", "sgnp_lake", "Vihar/Tulsi lake system", 19.1539, 72.9129, "water"),
+    ("national_park", "powai_lake", "Powai Lake", 19.1281, 72.9059, "water"),
     ("national_park", "aarey", "Aarey", 19.1600, 72.8800, "land"),
 
-    ("thane_creek", "thane_creek_north", "Thane Creek north", 19.1900, 72.9850, "water"),
-    ("thane_creek", "thane_creek_mid", "Thane Creek mid", 19.0900, 72.9750, "water"),
+    ("thane_creek", "thane_creek_north", "Thane Creek north", 19.1900, 73.0300, "water"),
+    ("thane_creek", "thane_creek_mid", "Thane Creek mid", 19.0900, 72.9900, "water"),
     ("thane_creek", "thane_creek_mangrove", "Thane Creek mangroves", 19.1200, 72.9550, "land"),
 
     ("eastern_suburbs", "mulund", "Mulund", 19.1720, 72.9560, "land"),
@@ -131,7 +134,7 @@ CHECKPOINTS = [
     ("eastern_suburbs", "vikhroli", "Vikhroli", 19.1050, 72.9280, "land"),
     ("eastern_suburbs", "ghatkopar", "Ghatkopar", 19.0860, 72.9080, "land"),
     ("eastern_suburbs", "chembur", "Chembur", 19.0520, 72.8990, "land"),
-    ("eastern_suburbs", "trombay", "Trombay", 19.0010, 72.9200, "land"),
+    ("eastern_suburbs", "trombay", "Trombay", 19.0332, 72.9489, "land"),
 
     ("airports", "csmia", "CSMIA", 19.0890, 72.8680, "land"),
     ("airports", "juhu_aero", "Juhu Aerodrome", 19.0980, 72.8340, "land"),
@@ -139,7 +142,7 @@ CHECKPOINTS = [
     ("western_suburbs", "andheri", "Andheri", 19.1190, 72.8470, "land"),
     ("western_suburbs", "juhu", "Juhu", 19.1070, 72.8270, "land"),
     ("western_suburbs", "versova", "Versova", 19.1350, 72.8130, "land"),
-    ("western_suburbs", "madh", "Madh Island", 19.1400, 72.7950, "land"),
+    ("western_suburbs", "madh", "Madh Island", 19.1375, 72.7919, "land"),
 
     ("bandra_bkc", "bandra", "Bandra", 19.0590, 72.8300, "land"),
     ("bandra_bkc", "bkc", "Bandra Kurla Complex", 19.0660, 72.8690, "land"),
@@ -167,6 +170,15 @@ CHECKPOINTS = [
 ]
 
 CHECKPOINT_GROUPS = sorted({c[0] for c in CHECKPOINTS})
+
+# Groups that are genuinely built up, and so must contain real buildings and
+# not merely roads. Vasai Creek's banks, the national park and the Thane Creek
+# mangroves are legitimately almost empty, and demanding a building count there
+# would be testing a fiction.
+URBAN_GROUPS = {
+    "northern_belt", "eastern_suburbs", "western_suburbs", "bandra_bkc",
+    "central_mumbai", "south_mumbai", "north_salsette", "airports",
+}
 
 
 # ---------------------------------------------------------------------------

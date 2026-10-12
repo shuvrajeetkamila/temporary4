@@ -458,48 +458,62 @@ def build_handler(L):
     return H()
 
 
-def classify_coastline(coast_lines, bounds_xz):
+def classify_coastline(coast_lines, aoi_polygon_xz):
     """
     Turn OSM coastline ways into land polygons.
 
-    OSM orients coastline so that land is on the left of the direction of
-    travel. Noodle the ways together, close them against the AOI rectangle,
-    polygonize, then for each face probe half a metre to the left of a
-    coastline segment that lies on its boundary.
+    OSM ships no land polygons. It ships ``natural=coastline`` ways, oriented so
+    that land is on the left of the direction of travel. To get areas out of
+    that: noodle the ways together, clip them to the AOI, close the result
+    against the AOI boundary, polygonize, and then classify each face by
+    stepping a short distance to the left of a coastline segment on its own
+    boundary and asking which face that point lands in.
+
+    Closing against the AOI boundary specifically, rather than a bounding box
+    around it, is the part that matters. Mumbai's coastline arrives as a single
+    189 km open string whose ends stop where the extract was cut. Against a box
+    drawn outside that cut, the string closes nothing, polygonize returns one
+    face covering everything, and the island silently ceases to be an island.
     """
     from shapely.geometry import LineString, Polygon, Point, MultiLineString
     from shapely.ops import linemerge, unary_union, polygonize
+    from shapely.strtree import STRtree
 
     if not coast_lines:
         raise SystemExit("FATAL: the extract contains no natural=coastline ways. "
                          "Without them there is no land/sea boundary.")
 
-    minx, minz, maxx, maxz = bounds_xz
-    pad = 400.0
-    box = Polygon([(minx - pad, minz - pad), (maxx + pad, minz - pad),
-                   (maxx + pad, maxz + pad), (minx - pad, maxz + pad)])
-
+    poly = Polygon(aoi_polygon_xz)
     lines = [LineString(c) for c in coast_lines if len(c) >= 2]
     merged = linemerge(unary_union(lines))
-    if isinstance(merged, LineString):
-        merged = MultiLineString([merged])
-    print(f"  {len(lines)} coastline ways -> {len(merged.geoms)} merged strings")
+    clipped = linemerge(unary_union(merged.intersection(poly)))
+    if isinstance(clipped, LineString):
+        clipped = MultiLineString([clipped])
+    if clipped.is_empty:
+        raise SystemExit("FATAL: no coastline survives the AOI clip")
+    print(f"  {len(lines)} coastline ways -> {len(clipped.geoms)} strings inside "
+          f"the AOI, longest "
+          f"{max(g.length for g in clipped.geoms) / 1000:.0f} km")
 
-    network = unary_union([merged, box.boundary])
+    network = unary_union([clipped, poly.exterior])
     faces = [f for f in polygonize(network) if f.area > 1.0]
-    print(f"  polygonized into {len(faces)} faces")
+    if not faces:
+        raise SystemExit("FATAL: the coastline did not partition the AOI")
+    covered = sum(f.area for f in faces) / poly.area
+    print(f"  polygonized into {len(faces)} faces covering "
+          f"{covered * 100:.1f}% of the AOI")
+    if covered < 0.98:
+        raise SystemExit(f"FATAL: faces cover only {covered * 100:.1f}% of the AOI; "
+                         "the coastline did not close")
 
-    # Index faces so the probe lookup is not quadratic.
-    from shapely.strtree import STRtree
     tree = STRtree(faces)
-
     land_votes = collections.Counter()
     probes = 0
-    for line in merged.geoms:
+    for line in clipped.geoms:
         cs = np.asarray(line.coords)
         if len(cs) < 2:
             continue
-        step = max(1, len(cs) // 40)
+        step = max(1, len(cs) // 80)
         for i in range(0, len(cs) - 1, step):
             ax, az = cs[i]
             bx, bz = cs[i + 1]
@@ -508,14 +522,14 @@ def classify_coastline(coast_lines, bounds_xz):
             if ln < 1e-6:
                 continue
             mx, mz = (ax + bx) * 0.5, (az + bz) * 0.5
-            # In this frame x=east, z=south, which is left-handed relative to a
-            # normal maths plane, so "left of travel" is (dz, -dx) normalised.
+            # This frame is x east, z south, which is a left-handed plane. Map
+            # the usual (-dy, dx) left normal through y = -z and it comes out as
+            # (dz, -dx). Verified against Marine Drive, Back Bay and Thane Creek.
             nx, nz = dz / ln, -dx / ln
             for sign, bucket in ((1.0, "L"), (-1.0, "R")):
-                p = Point(mx + sign * 0.6 * nx, mz + sign * 0.6 * nz)
+                p = Point(mx + sign * 0.8 * nx, mz + sign * 0.8 * nz)
                 for idx in tree.query(p):
-                    f = faces[int(idx)]
-                    if f.contains(p):
+                    if faces[int(idx)].contains(p):
                         land_votes[(int(idx), bucket)] += 1
                         break
             probes += 1
@@ -525,14 +539,23 @@ def classify_coastline(coast_lines, bounds_xz):
         left = land_votes.get((i, "L"), 0)
         right = land_votes.get((i, "R"), 0)
         if left == 0 and right == 0:
-            continue                       # untouched by any coastline
+            continue
         (land_idx if left > right else sea_idx).append(i)
 
     land = unary_union([faces[i] for i in land_idx]) if land_idx else None
     if land is None or land.is_empty:
         raise SystemExit("FATAL: coastline classification produced no land")
-    print(f"  {probes} probes -> {len(land_idx)} land faces, "
-          f"{len(sea_idx)} sea faces, land area {land.area / 1e6:.1f} km^2")
+    land_km2 = land.area / 1e6
+    sea_km2 = sum(faces[i].area for i in sea_idx) / 1e6
+    print(f"  {probes} probes -> {len(land_idx)} land faces ({land_km2:.1f} km2), "
+          f"{len(sea_idx)} sea faces ({sea_km2:.1f} km2)")
+    if land_km2 < 400:
+        raise SystemExit(f"FATAL: only {land_km2:.1f} km2 of land. Salsette alone is "
+                         "about 430 km2, so the classification is inverted or the "
+                         "coastline did not close.")
+    if sea_km2 < 200:
+        raise SystemExit(f"FATAL: only {sea_km2:.1f} km2 of sea; the classification "
+                         "looks inverted.")
     return land
 
 
@@ -551,9 +574,9 @@ def main():
     h.apply_file(args.pbf, locations=True, idx="flex_mem")
     print(f"[extract] pass complete in {time.time() - t0:.0f}s", flush=True)
 
-    bounds = aoi.aoi_bounds_xz()
     print("[extract] assembling land polygons from the OSM coastline")
-    land = classify_coastline(L.coast, bounds)
+    ring_xz = [aoi.to_xz(lat, lon) for (lon, lat) in aoi.AOI_POLYGON]
+    land = classify_coastline(L.coast, ring_xz)
 
     # ---- serialise ---------------------------------------------------------
     def flat(xy):
