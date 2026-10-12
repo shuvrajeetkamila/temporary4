@@ -52,7 +52,7 @@ public final class ChunkBuilder {
      */
     public Geometry build(int cx, int cz, int lod) {
         mesh.reset();
-        int span = 1 << lod;
+        int span = WorldStreamer.spanFor(lod);
         float size = world.chunkSize * span;
         double ox = world.chunkX0 + cx * (double) world.chunkSize;
         double oz = world.chunkZ0 + cz * (double) world.chunkSize;
@@ -328,7 +328,7 @@ public final class ChunkBuilder {
     // ---------------------------------------------------------------- buildings
     private void buildBuildings(int cx, int cz, double ox, double oz, float size, int lod,
                                 FloatList colliders, Geometry g) {
-        int span = 1 << lod;
+        int span = WorldStreamer.spanFor(lod);
         for (int sj = 0; sj < span; sj++) {
             for (int si = 0; si < span; si++) {
                 int ccx = cx + si;

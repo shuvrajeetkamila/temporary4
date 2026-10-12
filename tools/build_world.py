@@ -356,6 +356,23 @@ class WorldBuild:
             rasterise_polygon(lake, self.poly_to_lu_cells(poly), True)
             lu[lake] = LU_LAKE
 
+        # Railway yards: flat, fenced, industrial-grade ground.
+        for (name, lat, lon, heading, length, width) in geo.RAILYARDS:
+            self._paint_runway(lu, wx, wz, lat, lon, heading, length, width,
+                               LU_RAILYARD, only=land)
+
+        # Parks and maidans: explicit green inside the built-up fabric.
+        for (name, lat, lon, radius) in geo.PARKS:
+            cx, cz = to_xz(lat, lon)
+            d2 = (wx - cx) ** 2 + (wz - cz) ** 2
+            lu[land & (d2 < radius * radius)] = LU_PARK
+
+        # Rivers: narrow bands cut through whatever land use they cross. They are
+        # painted after the lakes so a river leaving a lake stays continuous.
+        for name, line, width in geo.RIVERS:
+            self._paint_polyline(lu, wx, wz, line, max(width, LU_RES * 1.6),
+                                 LU_RIVER, only=land)
+
         mang = np.zeros(shape, dtype=bool)
         for poly in geo.MANGROVE_BELTS:
             rasterise_polygon(mang, self.poly_to_lu_cells(poly), True)
@@ -400,7 +417,41 @@ class WorldBuild:
         print("building elevation ...")
         self.height = self._build_height()
 
-    def _paint_runway(self, lu, wx, wz, lat, lon, heading_deg, length, width, code):
+    def _paint_polyline(self, grid, wx, wz, latlon_pts, width, code, only=None):
+        """Stamps a constant width band along a polyline into a raster.
+
+        Works segment by segment inside the segment's bounding box so the cost is
+        proportional to the painted area rather than to the whole grid.
+        """
+        pts = [to_xz(la, lo) for (la, lo) in latlon_pts]
+        half = width * 0.5
+        for i in range(len(pts) - 1):
+            ax, az = pts[i]
+            bx, bz = pts[i + 1]
+            i0 = int(max(0, math.floor((min(ax, bx) - half - self.min_x) / LU_RES)))
+            i1 = int(min(self.lu_w, math.ceil((max(ax, bx) + half - self.min_x) / LU_RES) + 1))
+            j0 = int(max(0, math.floor((min(az, bz) - half - self.min_z) / LU_RES)))
+            j1 = int(min(self.lu_h, math.ceil((max(az, bz) + half - self.min_z) / LU_RES) + 1))
+            if i1 <= i0 or j1 <= j0:
+                continue
+            sx = wx[j0:j1, i0:i1]
+            sz = wz[j0:j1, i0:i1]
+            ex, ez = bx - ax, bz - az
+            len2 = ex * ex + ez * ez
+            if len2 < 1e-6:
+                continue
+            t = np.clip(((sx - ax) * ex + (sz - az) * ez) / len2, 0.0, 1.0)
+            dx = sx - (ax + t * ex)
+            dz = sz - (az + t * ez)
+            sel = (dx * dx + dz * dz) <= half * half
+            if only is not None:
+                sel &= only[j0:j1, i0:i1]
+            sub = grid[j0:j1, i0:i1]
+            sub[sel] = code
+            grid[j0:j1, i0:i1] = sub
+
+    def _paint_runway(self, lu, wx, wz, lat, lon, heading_deg, length, width, code,
+                      only=None):
         cx, cz = to_xz(lat, lon)
         hd = math.radians(heading_deg)
         # Heading 0 = north (-Z), 90 = east (+X)
@@ -411,6 +462,8 @@ class WorldBuild:
         along = dx * ux + dz * uz
         across = dx * px + dz * pz
         sel = (np.abs(along) < length * 0.5) & (np.abs(across) < width * 0.5)
+        if only is not None:
+            sel &= only
         lu[sel] = code
 
     def _build_height(self):

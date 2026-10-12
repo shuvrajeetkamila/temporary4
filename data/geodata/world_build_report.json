@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-10-12T12:50:22Z",
+ "generated_utc": "2026-10-12T13:09:06Z",
  "aoi_version": "1.0.0",
  "format_version": 1,
  "seed": 20261012,
@@ -7,18 +7,18 @@
  "rail_km": 145.39,
  "chunks_total": 44544,
  "chunks_populated": 44544,
- "chunks_with_land": 9203,
- "estimated_buildings": 140256,
- "terrain_bytes": 252485,
+ "chunks_with_land": 9202,
+ "estimated_buildings": 141597,
+ "terrain_bytes": 256591,
  "network_bytes": 3530,
  "city_bytes": 4693,
- "chunks_bytes": 8773,
+ "chunks_bytes": 9649,
  "manifest_bytes": 1383,
  "layer_crc": {
-  "terrain": "a540d79c",
+  "terrain": "97f685bc",
   "network": "913b8284",
   "city": "7f0bb4a9",
-  "chunks": "02917bbe"
+  "chunks": "63dbf0d0"
  },
  "bounds_world": {
   "min_x": -20700.0,
@@ -51,11 +51,11 @@
  "railways": 7,
  "checkpoints": 14,
  "sha256": {
-  "manifest.mwl": "7875ddc19441cab4808ea3d80766a75ea34213de350c39bfd677a3f0dfb0b020",
-  "terrain.mwl": "5bca46ab81dc998d4eb7dc695840506fe12aaa6213bd3a1ccfd02278fe55d287",
+  "manifest.mwl": "409ac964f28e4498a695e7f60b2d00cbd0da15073f16831454d090cd46675587",
+  "terrain.mwl": "1961ee0a599d736698912bf9761059665ab684154dc3abfc20729d7a44fc508d",
   "network.mwl": "f26fadc21e67e711be20e66507b42f9df4edea7f4cf671c310989229ce044b31",
   "city.mwl": "67e46ac50f224908bbe8811d8836a3812279447f097133cb39fe2e12e390a4b7",
-  "chunks.mwl": "aab097b0f1d8048fc9e4b196dd6c1aa1ace9a1fe28618357f21021365afb01a9"
+  "chunks.mwl": "e37dd2bd10634e1ac2c656f9528b9150e70ecd79c83a727fe52e4450a3baf877"
  },
- "packaged_bytes": 270864
+ "packaged_bytes": 275846
 }

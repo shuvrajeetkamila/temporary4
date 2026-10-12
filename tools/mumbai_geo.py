@@ -140,6 +140,102 @@ LAKES = [
                      (19.1650, 72.8950)], False),
 ]
 
+# Salsette's rivers.  All four of the island's rivers rise in the hills of the
+# national park or Aarey and run west or south-west into a creek, which is why the
+# city floods the way it does; the Mithi in particular defines the eastern edge of
+# BKC and runs along the western boundary of the airport before reaching Mahim Creek.
+# Entries are (name, centreline, surface width in metres).  Centrelines are authored
+# from public geographic knowledge of the courses, not traced from any map product.
+RIVERS = [
+    ("Mithi River", [
+        (19.1430, 72.9055),   # Vihar Lake overflow
+        (19.1270, 72.9040),   # Powai / IIT
+        (19.1090, 72.8930),   # Saki Naka
+        (19.0980, 72.8720),   # along the western airport boundary
+        (19.0870, 72.8700),   # Vakola
+        (19.0730, 72.8680),   # Kurla / Kalina
+        (19.0620, 72.8610),   # BKC eastern edge
+        (19.0480, 72.8520),   # Dharavi
+        (19.0330, 72.8430),   # Mahim Creek
+        (19.0285, 72.8395),
+    ], 48.0),
+    ("Dahisar River", [
+        (19.2080, 72.9140),   # Tulsi catchment
+        (19.2250, 72.8930),
+        (19.2400, 72.8760),   # Borivali
+        (19.2520, 72.8600),   # Dahisar
+        (19.2560, 72.8380),
+        (19.2580, 72.8240),   # Manori Creek
+    ], 34.0),
+    ("Poisar River", [
+        (19.2130, 72.9060),   # national park slopes
+        (19.2090, 72.8760),
+        (19.2050, 72.8540),   # Kandivali
+        (19.2030, 72.8330),   # Charkop
+        (19.1960, 72.8200),   # Marve / Malad Creek
+    ], 26.0),
+    ("Oshiwara River", [
+        (19.1760, 72.8800),   # Aarey
+        (19.1690, 72.8560),   # Goregaon
+        (19.1590, 72.8390),   # Oshiwara
+        (19.1540, 72.8255),   # Malad Creek
+    ], 28.0),
+    ("Ulhas River", [       # mainland context: it is what fills Vasai Creek
+        (19.3700, 73.0760),
+        (19.3760, 73.0200),
+        (19.3650, 72.9620),
+        (19.3480, 72.9120),
+        (19.3380, 72.8820),
+    ], 180.0),
+]
+
+# City parks, maidans and gardens.  Mumbai's maidans are a defining part of the
+# southern street grid and the big gardens are landmarks in their own right, so they
+# are carried as explicit open-green patches rather than left to the density model.
+# (name, lat, lon, approximate radius in metres)
+PARKS = [
+    ("Oval Maidan",            18.9305, 72.8300, 180.0),
+    ("Azad Maidan",            18.9385, 72.8320, 200.0),
+    ("Cross Maidan",           18.9345, 72.8295, 130.0),
+    ("Horniman Circle Garden", 18.9315, 72.8360,  70.0),
+    ("Cooperage Ground",       18.9230, 72.8250, 130.0),
+    ("Hanging Gardens",        18.9560, 72.8050, 150.0),
+    ("Kamala Nehru Park",      18.9545, 72.8065,  90.0),
+    ("Priyadarshini Park",     18.9600, 72.7960, 140.0),
+    ("Mahalaxmi Racecourse",   18.9820, 72.8200, 420.0),
+    ("Jijamata Udyan",         18.9790, 72.8340, 230.0),
+    ("Five Gardens",           19.0010, 72.8440, 170.0),
+    ("Shivaji Park",           19.0280, 72.8370, 230.0),
+    ("Mahim Nature Park",      19.0420, 72.8510, 190.0),
+    ("Joggers Park",           19.0620, 72.8180, 110.0),
+    ("Carter Road Promenade",  19.0680, 72.8190, 120.0),
+    ("Jogeshwari Park",        19.1360, 72.8480, 130.0),
+    ("Aarey Picnic Point",     19.1580, 72.8790, 260.0),
+    ("Sanjay Gandhi Gate",     19.2120, 72.8560, 170.0),
+    ("Yogi Hills Garden",      19.2360, 72.8640, 120.0),
+    ("Nerul Wetland Park",     19.0330, 73.0150, 240.0),
+]
+
+# Railway yards, car sheds and workshops.  Suburban rail is the spine of the city and
+# its yards are large, visually distinctive, flat areas that break up the street grid.
+# (name, lat, lon, heading deg, length m, width m)
+RAILYARDS = [
+    ("Wadi Bunder Yard",        18.9680, 72.8440,   5.0, 1500.0, 320.0),
+    ("Mumbai Central Car Shed", 18.9700, 72.8200,   8.0,  900.0, 240.0),
+    ("Mahalaxmi Yard",          18.9830, 72.8260,  10.0,  700.0, 180.0),
+    ("Parel Workshop",          19.0000, 72.8390, 350.0,  900.0, 300.0),
+    ("Matunga Workshop",        19.0270, 72.8540, 355.0,  800.0, 260.0),
+    ("Bandra Terminus Yard",    19.0620, 72.8400,  15.0,  900.0, 230.0),
+    ("Kurla LTT Yard",          19.0670, 72.8890,  25.0, 1200.0, 300.0),
+    ("Kurla Car Shed",          19.0730, 72.8820,  20.0,  600.0, 180.0),
+    ("Andheri Car Shed",        19.1190, 72.8470,   0.0,  700.0, 200.0),
+    ("Charkop Metro Depot",     19.2120, 72.8230,  80.0,  700.0, 220.0),
+    ("Aarey Metro Depot",       19.1550, 72.8700,  20.0,  800.0, 260.0),
+    ("Mankhurd Yard",           19.0480, 72.9300,  70.0,  700.0, 180.0),
+    ("Vasai Road Yard",         19.3860, 72.8350,  10.0, 1100.0, 260.0),
+    ("Mulund Yard",             19.1720, 72.9560,  25.0,  600.0, 160.0),
+]
+
 # Mangrove / marsh belts (tidal, distinct material + vegetation rules).
 MANGROVE_BELTS = [
     [(19.0750, 72.9330), (19.1500, 72.9520), (19.1900, 72.9650), (19.1850, 72.9720),
