@@ -16,4 +16,9 @@ test {
     testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full' }
     systemProperty 'mumbai.assets', System.getProperty('mumbai.assets',
         "${rootDir}/android/src/main/assets")
+    // CI sets this. It turns a missing world from forty quiet skips into a
+    // hard failure, so an APK can never be cut from a build with no city in
+    // it. See WorldPresenceTest.
+    systemProperty 'mumbai.requireWorld',
+        System.getProperty('mumbai.requireWorld', 'false')
 }

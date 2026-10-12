@@ -1,0 +1,252 @@
+name: build-apk
+
+# Compiles the world, runs every gate, assembles the APK and publishes it.
+# Nothing here is allowed to be skipped on the way to a release: if the world
+# is missing, if a coverage checkpoint is in the wrong place, if a physics
+# test fails or if the built APK does not actually contain the city, the job
+# fails and no release is cut.
+
+on:
+  push:
+    branches: [ 'arena/**', main ]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish a GitHub release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      apk_name: ${{ steps.meta.outputs.apk_name }}
+      apk_size: ${{ steps.meta.outputs.apk_size }}
+      apk_sha256: ${{ steps.meta.outputs.apk_sha256 }}
+      version_name: ${{ steps.meta.outputs.version_name }}
+      version_code: ${{ steps.meta.outputs.version_code }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the data toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet osmium shapely rasterio scipy numpy
+
+      - name: Check the pinned source data is intact
+        run: |
+          cd data/pinned
+          sha256sum -c SHA256SUMS
+          ls -l
+
+      - name: Report the area of interest
+        run: python tools/aoi.py
+
+      - name: Extract game layers from the pinned OSM extract
+        run: |
+          mkdir -p data/layers
+          python tools/extract_osm.py \
+            --pbf data/pinned/mumbai-aoi.osm.pbf \
+            --out data/layers
+
+      - name: Compile the world
+        run: |
+          mkdir -p data/dem
+          cp data/pinned/elevation.npz data/dem/elevation.npz
+          python tools/compile_world.py \
+            --layers data/layers \
+            --dem data/dem \
+            --out android/src/main/assets/world
+
+      # The independent gate. It re-derives the projection from first
+      # principles rather than importing it, so a bug in aoi.py cannot hide
+      # behind itself, and it fails the build if any checkpoint is missing.
+      - name: Verify world coverage (123 gates)
+        run: python tools/verify_world.py --world android/src/main/assets/world
+
+      - name: World size report
+        run: |
+          echo "### Compiled world" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh android/src/main/assets/world >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          python - <<'PY' >> $GITHUB_STEP_SUMMARY
+          import json
+          r = json.load(open('data/reports/world_build.json'))
+          for k in ('extent_km','land_area_km2','buildings_kept','road_runs',
+                    'graph_km','inland_water_km2','chunks_non_empty'):
+              if k in r: print(f"- **{k}**: {r[k]}")
+          PY
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Every core gate: physics, streaming, the fixed step, the floating
+      # origin, the eco tiers and all 51 geographic checkpoints, run against
+      # the world that was just compiled.
+      - name: Run the core test suite
+        run: gradle --no-daemon :core:test -Dmumbai.requireWorld=true
+
+      - name: Publish the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: core/build/reports/tests/test
+          if-no-files-found: ignore
+
+      - name: Assemble the APK
+        run: |
+          gradle --no-daemon :android:assembleRelease \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=2.0.${{ github.run_number }}
+
+      # Proving the APK is real, rather than trusting that it is. Each of
+      # these has caught something at least once.
+      - name: Inspect the APK
+        id: meta
+        run: |
+          set -euo pipefail
+          APK=$(find android/build/outputs/apk/release -name '*.apk' | head -1)
+          test -n "$APK"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "using $BUILD_TOOLS"
+
+          OUT="Mumbai-The-Island-City-v2.0.${{ github.run_number }}.apk"
+          cp "$APK" "$OUT"
+
+          echo "--- badging ---"
+          "$BUILD_TOOLS/aapt2" dump badging "$OUT" | head -20
+
+          echo "--- signature ---"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$OUT"
+
+          echo "--- the world must actually be inside it ---"
+          for f in terrain chunks network manifest; do
+            unzip -l "$OUT" | grep -q "assets/world/$f.mwl" \
+              || { echo "MISSING assets/world/$f.mwl in the APK"; exit 1; }
+          done
+          unzip -l "$OUT" | grep 'assets/world'
+          WORLD_BYTES=$(unzip -l "$OUT" | grep 'assets/world' \
+            | awk '{s+=$1} END {print s}')
+          echo "packaged world: $WORLD_BYTES bytes"
+          test "$WORLD_BYTES" -gt 5000000 \
+            || { echo "the packaged world is implausibly small"; exit 1; }
+
+          echo "--- the code must be in there too ---"
+          unzip -l "$OUT" | grep -q 'classes.dex' || exit 1
+
+          SIZE=$(stat -c%s "$OUT")
+          SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
+          echo "$SHA  $OUT" > "$OUT.sha256"
+
+          echo "apk_name=$OUT"            >> $GITHUB_OUTPUT
+          echo "apk_size=$SIZE"           >> $GITHUB_OUTPUT
+          echo "apk_sha256=$SHA"          >> $GITHUB_OUTPUT
+          echo "version_name=2.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          echo "version_code=${{ github.run_number }}"     >> $GITHUB_OUTPUT
+
+          {
+            echo "### APK"
+            echo "- **file**: \`$OUT\`"
+            echo "- **bytes**: $SIZE"
+            echo "- **sha256**: \`$SHA\`"
+            echo "- **packaged world**: $WORLD_BYTES bytes"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload the APK as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mumbai-island-city-apk
+          path: |
+            Mumbai-The-Island-City-*.apk
+            Mumbai-The-Island-City-*.apk.sha256
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload the verification reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-reports
+          path: |
+            data/reports/verify.json
+            data/reports/world_build.json
+            data/reports/world_data.md
+          if-no-files-found: ignore
+
+      - name: Publish the release
+        if: success() && (github.event_name == 'push' || inputs.release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          name: Mumbai The Island City v2.0.${{ github.run_number }}
+          body: |
+            Built entirely from real open map data: OpenStreetMap geometry and
+            Copernicus GLO-30 elevation, compiled to a streaming world and
+            packaged inside the APK. No network access at runtime.
+
+            - **APK**: `${{ steps.meta.outputs.apk_name }}`
+            - **Bytes**: ${{ steps.meta.outputs.apk_size }}
+            - **SHA-256**: `${{ steps.meta.outputs.apk_sha256 }}`
+            - **Package**: `ai.shuvrajeetkamila.mumbai.islandcity`
+            - **Version**: ${{ steps.meta.outputs.version_name }} (code ${{ steps.meta.outputs.version_code }})
+            - **minSdk** 26, **targetSdk** 34, universal ABI
+            - **CI run**: ${{ github.run_id }}
+
+            Gates that passed before this was published: 123 Python world
+            checks and the full core suite, including all 51 geographic
+            checkpoints from Vasai Creek to Navy Nagar.
+
+            Map data © OpenStreetMap contributors, ODbL 1.0.
+            Elevation: Copernicus DEM © DLR e.V. / Airbus DS, ESA.
+
+            Debug-signed, so Android will ask you to allow installation from
+            an unknown source. See DELIVERY.md for the honest limits.
+          files: |
+            ${{ steps.meta.outputs.apk_name }}
+            ${{ steps.meta.outputs.apk_name }}.sha256
+          fail_on_unmatched_files: true
+
+      - name: Report a failure as an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Job logs cannot be read back from the sandbox that drives this
+          # repository, so the failure is posted where it can be.
+          {
+            echo "Run ${{ github.run_id }} failed on ${{ github.ref_name }}."
+            echo
+            echo '### verify.json'
+            echo '```json'
+            head -c 3000 data/reports/verify.json 2>/dev/null || echo "(absent)"
+            echo '```'
+            echo '### test failures'
+            echo '```'
+            find core/build/reports -name '*.txt' -exec tail -40 {} \; 2>/dev/null | head -120 || true
+            echo '```'
+          } > /tmp/body.md
+          gh issue create --title "build-apk failed: run ${{ github.run_id }}" \
+            --body-file /tmp/body.md || true
