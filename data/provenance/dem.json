@@ -5,7 +5,7 @@
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T14:57:29+00:00",
+ "retrieved_utc": "2026-10-12T15:02:59+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",

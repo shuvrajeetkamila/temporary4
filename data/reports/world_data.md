@@ -1,6 +1,6 @@
 # World data acquisition
 
-Run `38266521439`, 2026-10-12T14:58:35Z.
+Run `38267063313`, 2026-10-12T15:04:04Z.
 
 ## `data/provenance/osm.json`
 ```json
@@ -15,7 +15,7 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
  "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
  "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T14:57:08+00:00",
+ "retrieved_utc": "2026-10-12T15:02:50+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
  "clip": {
   "tool": "osmium-tool",
@@ -45,7 +45,7 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T14:57:29+00:00",
+ "retrieved_utc": "2026-10-12T15:02:59+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -107,7 +107,7 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
  "land_rings": 22,
  "land_area_km2": 3.51,
  "poi": 1217,
- "seconds": 20.0,
+ "seconds": 19.6,
  "detail": {
   "bheight_src_0": 138517,
   "bheight_src_1": 6864,
@@ -186,13 +186,13 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
 ## `data/reports/world_build.json`
 ```json
 {
- "seconds": 45.2,
- "total_bytes": 9920122,
+ "seconds": 45.6,
+ "total_bytes": 9920121,
  "files": {
   "terrain.mwl": 41421,
   "chunks.mwl": 6823694,
   "network.mwl": 3051709,
-  "manifest.mwl": 3298
+  "manifest.mwl": 3297
  },
  "manifest": {
   "format": "MWL2",
@@ -683,7 +683,7 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
     "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
     "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-12T14:57:08+00:00",
+    "retrieved_utc": "2026-10-12T15:02:50+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
     "clip": {
      "tool": "osmium-tool",
@@ -710,7 +710,7 @@ Run `38266521439`, 2026-10-12T14:58:35Z.
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-12T14:57:29+00:00",
+    "retrieved_utc": "2026-10-12T15:02:59+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
