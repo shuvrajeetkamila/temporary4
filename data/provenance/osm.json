@@ -9,23 +9,23 @@
  "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
  "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T15:02:50+00:00",
+ "retrieved_utc": "2026-10-12T15:15:59+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
  "clip": {
   "tool": "osmium-tool",
   "tool_version": "osmium version 1.16.0",
   "strategy": "complete_ways",
   "aoi_name": "Mumbai / Salsette island",
-  "aoi_version": "2.0.0",
+  "aoi_version": "2.1.0",
   "aoi_vertices": 29,
   "output": "data/osm/mumbai-aoi.osm.pbf",
-  "output_bytes": 16810962,
-  "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+  "output_bytes": 19132182,
+  "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
   "counts": {
    "changesets": 0,
-   "nodes": 1866056,
-   "ways": 284668,
-   "relations": 4207
+   "nodes": 2144390,
+   "ways": 330942,
+   "relations": 4379
   }
  }
 }

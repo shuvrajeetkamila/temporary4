@@ -1,6 +1,6 @@
 # World data acquisition
 
-Run `38267063313`, 2026-10-12T15:04:04Z.
+Run `38268868992`, 2026-10-12T15:16:53Z.
 
 ## `data/provenance/osm.json`
 ```json
@@ -15,23 +15,23 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
  "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
  "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T15:02:50+00:00",
+ "retrieved_utc": "2026-10-12T15:15:59+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
  "clip": {
   "tool": "osmium-tool",
   "tool_version": "osmium version 1.16.0",
   "strategy": "complete_ways",
   "aoi_name": "Mumbai / Salsette island",
-  "aoi_version": "2.0.0",
+  "aoi_version": "2.1.0",
   "aoi_vertices": 29,
   "output": "data/osm/mumbai-aoi.osm.pbf",
-  "output_bytes": 16810962,
-  "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+  "output_bytes": 19132182,
+  "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
   "counts": {
    "changesets": 0,
-   "nodes": 1866056,
-   "ways": 284668,
-   "relations": 4207
+   "nodes": 2144390,
+   "ways": 330942,
+   "relations": 4379
   }
  }
 }
@@ -45,7 +45,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T15:02:59+00:00",
+ "retrieved_utc": "2026-10-12T15:16:15+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -76,7 +76,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
   "mosaic": "rasterio.merge",
   "resample": "bilinear onto the local ENU metre grid",
   "grid_m": 20.0,
-  "nx": 2417,
+  "nx": 2628,
   "nz": 3628,
   "min_x": -29160.0,
   "min_z": -44740.0,
@@ -87,8 +87,8 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
  "statistics": {
   "dtm_min_m": -16.05584716796875,
   "dtm_max_m": 654.3840942382812,
-  "dtm_mean_m": 20.19338035583496,
-  "canopy_p95_m": 5.699481964111328,
+  "dtm_mean_m": 20.90135383605957,
+  "canopy_p95_m": 5.870635986328125,
   "canopy_max_m": 97.58984375
  }
 }
@@ -97,88 +97,88 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
 ```json
 {
  "source_pbf": "data/osm/mumbai-aoi.osm.pbf",
- "roads": 90435,
- "road_points": 615195,
- "buildings": 168514,
- "building_points": 1277583,
- "landuse": 12603,
- "water_areas": 1413,
- "coastline_ways": 101,
- "land_rings": 22,
- "land_area_km2": 3.51,
- "poi": 1217,
- "seconds": 19.6,
+ "roads": 105095,
+ "road_points": 732666,
+ "buildings": 196899,
+ "building_points": 1459514,
+ "landuse": 14168,
+ "water_areas": 1626,
+ "coastline_ways": 105,
+ "land_rings": 23,
+ "land_area_km2": 1571.76,
+ "poi": 1283,
+ "seconds": 12.2,
  "detail": {
-  "bheight_src_0": 138517,
-  "bheight_src_1": 6864,
-  "bheight_src_2": 20636,
-  "buildings": 166017,
-  "buildings_rel": 2497,
-  "coastline_ways": 101,
-  "land_airport_land": 23,
+  "bheight_src_0": 166425,
+  "bheight_src_1": 7214,
+  "bheight_src_2": 20650,
+  "buildings": 194289,
+  "buildings_rel": 2610,
+  "coastline_ways": 105,
+  "land_airport_land": 24,
   "land_airport_land_rel": 1,
   "land_beach": 18,
   "land_beach_rel": 1,
-  "land_cemetery": 66,
+  "land_cemetery": 69,
   "land_cemetery_rel": 2,
-  "land_commercial": 679,
+  "land_commercial": 725,
   "land_commercial_rel": 4,
-  "land_construction": 945,
-  "land_construction_rel": 1,
-  "land_farmland": 404,
+  "land_construction": 1351,
+  "land_construction_rel": 2,
+  "land_farmland": 428,
   "land_farmland_rel": 2,
-  "land_forest": 537,
-  "land_forest_rel": 6,
-  "land_grass": 939,
-  "land_grass_rel": 2,
-  "land_industrial": 605,
+  "land_forest": 545,
+  "land_forest_rel": 7,
+  "land_grass": 1101,
+  "land_grass_rel": 3,
+  "land_industrial": 692,
   "land_military": 44,
-  "land_park": 1822,
+  "land_park": 2096,
   "land_park_rel": 15,
-  "land_parking": 350,
-  "land_parking_rel": 1,
-  "land_pitch": 715,
-  "land_pitch_rel": 12,
-  "land_quarry": 16,
-  "land_railway_land": 105,
-  "land_residential": 4638,
+  "land_parking": 452,
+  "land_parking_rel": 2,
+  "land_pitch": 784,
+  "land_pitch_rel": 13,
+  "land_quarry": 35,
+  "land_railway_land": 120,
+  "land_residential": 4937,
   "land_residential_rel": 28,
-  "land_retail": 115,
-  "land_rock": 30,
+  "land_retail": 117,
+  "land_rock": 32,
   "land_rock_rel": 2,
-  "land_sand": 131,
+  "land_sand": 154,
   "land_sand_rel": 1,
-  "land_scrub": 341,
-  "land_scrub_rel": 2,
-  "poi": 1206,
-  "road_cycleway": 49,
+  "land_scrub": 358,
+  "land_scrub_rel": 3,
+  "poi": 1271,
+  "road_cycleway": 245,
   "road_ferry": 19,
-  "road_footway": 3955,
-  "road_helipad": 61,
-  "road_living_street": 1880,
+  "road_footway": 4420,
+  "road_helipad": 66,
+  "road_living_street": 2037,
   "road_monorail": 37,
-  "road_motorway": 384,
-  "road_path": 1286,
-  "road_pedestrian": 259,
-  "road_pier": 108,
-  "road_primary": 2579,
-  "road_rail": 1757,
-  "road_residential": 46238,
-  "road_runway": 11,
-  "road_secondary": 3835,
-  "road_service": 17049,
-  "road_steps": 1448,
+  "road_motorway": 490,
+  "road_path": 1403,
+  "road_pedestrian": 272,
+  "road_pier": 111,
+  "road_primary": 2806,
+  "road_rail": 2196,
+  "road_residential": 53471,
+  "road_runway": 12,
+  "road_secondary": 4280,
+  "road_service": 20404,
+  "road_steps": 1736,
   "road_subway": 355,
   "road_taxiway": 333,
-  "road_tertiary": 5945,
-  "road_track": 1261,
-  "road_trunk": 1206,
-  "road_unclassified": 380,
-  "water_mangrove": 262,
-  "water_mangrove_rel": 23,
-  "water_water": 950,
-  "water_water_rel": 20,
-  "water_wetland": 156,
+  "road_tertiary": 6612,
+  "road_track": 1703,
+  "road_trunk": 1454,
+  "road_unclassified": 633,
+  "water_mangrove": 299,
+  "water_mangrove_rel": 24,
+  "water_water": 1098,
+  "water_water_rel": 24,
+  "water_wetland": 179,
   "water_wetland_rel": 2
  }
 }
@@ -186,104 +186,118 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
 ## `data/reports/world_build.json`
 ```json
 {
- "seconds": 45.6,
- "total_bytes": 9920121,
+ "seconds": 25.0,
+ "total_bytes": 14556950,
  "files": {
-  "terrain.mwl": 41421,
-  "chunks.mwl": 6823694,
-  "network.mwl": 3051709,
-  "manifest.mwl": 3297
+  "terrain.mwl": 3058655,
+  "chunks.mwl": 7865588,
+  "network.mwl": 3629232,
+  "manifest.mwl": 3475
  },
  "manifest": {
   "format": "MWL2",
   "aoi_name": "Mumbai / Salsette island",
-  "aoi_version": "2.0.0",
-  "build_id": "e43c5d6b6e7b74194b55239672a68baa",
+  "aoi_version": "2.1.0",
+  "build_id": "ab19ba23e408ce9a817c663cee013a67",
   "selftest": false,
   "origin_lat": 19.076,
   "origin_lon": 72.8777,
   "bounds_lonlat": [
    72.6,
    18.825,
-   73.06,
+   73.1,
    19.48
   ],
   "bounds_xz": [
    -29156.5,
    -44720.9,
-   19150.7,
+   23361.3,
    27783.6
   ],
   "raster": {
-   "nx": 2417,
+   "nx": 2628,
    "nz": 3628,
    "grid_m": 20.0,
    "min_x": -29160.0,
    "min_z": -44740.0,
-   "land_fraction": 0.001,
-   "land_km2": 3.5,
+   "land_fraction": 0.39247,
+   "inland_water_km2": 75.0,
+   "land_km2": 1496.8,
    "elev_min_m": 0.0,
-   "elev_max_m": 114.5,
+   "elev_max_m": 654.4,
    "cover_histogram": {
-    "water": 8760136,
-    "mangrove": 19,
-    "beach": 8,
-    "sand": 129,
-    "rock": 72,
-    "forest": 5050,
-    "scrub": 3036,
-    "grass": 4,
-    "residential": 259,
-    "industrial": 144,
-    "military": 19
+    "water": 5792458,
+    "wetland": 54217,
+    "mangrove": 334258,
+    "beach": 2741,
+    "sand": 318,
+    "rock": 305,
+    "forest": 631571,
+    "scrub": 1760661,
+    "grass": 11984,
+    "park": 251013,
+    "farmland": 81886,
+    "cemetery": 1586,
+    "residential": 234803,
+    "commercial": 35776,
+    "industrial": 197187,
+    "retail": 2399,
+    "military": 29203,
+    "railway_land": 21009,
+    "airport_land": 15001,
+    "construction": 42309,
+    "quarry": 18287,
+    "pitch": 12535,
+    "parking": 2877
    }
   },
   "chunks": {
-   "cnx": 49,
+   "cnx": 53,
    "cnz": 73,
    "cminx": -29,
    "cminz": -44,
    "chunk_m": 1024.0,
    "quant": 0.05,
-   "buildings": 167369,
-   "building_runs": 167369,
-   "road_runs": 106490,
+   "buildings": 195743,
+   "building_runs": 195743,
+   "road_runs": 124592,
    "height_src": {
-    "osm_height": 20568,
-    "osm_levels": 7008,
-    "dem_canopy": 139793
+    "osm_height": 20582,
+    "osm_levels": 7363,
+    "neighbour_median": 134171,
+    "class_default": 33627
    },
-   "names": 4269
+   "names": 4674
   },
   "graph": {
-   "nodes": 310246,
-   "edges": 295032,
-   "drivable_km": 11478.5
+   "nodes": 370415,
+   "edges": 352267,
+   "drivable_km": 13983.4
   },
-  "places": 1217,
+  "places": 1283,
   "checkpoints": [
    {
     "group": "vasai_creek",
     "key": "vasai_mouth",
     "label": "Vasai Creek mouth",
-    "lat": 19.395,
-    "lon": 72.775,
+    "lat": 19.325,
+    "lon": 72.79,
     "expect": "water"
    },
    {
     "group": "vasai_creek",
-    "key": "vasai_east",
-    "label": "Vasai Creek upper reach",
-    "lat": 19.38,
-    "lon": 72.845,
+    "key": "vasai_channel",
+    "label": "Vasai Creek channel",
+    "lat": 19.32,
+    "lon": 72.82,
     "expect": "water"
    },
    {
     "group": "vasai_creek",
     "key": "vasai_south_bank",
     "label": "Vasai Creek south bank",
-    "lat": 19.36,
-    "lon": 72.85,
+    "lat": 19.318,
+    "lon": 72.852,
     "expect": "land"
    },
    {
@@ -298,16 +312,16 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "group": "north_salsette",
     "key": "gorai",
     "label": "Gorai",
-    "lat": 19.24,
-    "lon": 72.79,
+    "lat": 19.241,
+    "lon": 72.7822,
     "expect": "land"
    },
    {
     "group": "north_salsette",
     "key": "uttan",
-    "label": "Uttan coast",
-    "lat": 19.27,
-    "lon": 72.77,
+    "label": "Uttan",
+    "lat": 19.2816,
+    "lon": 72.7853,
     "expect": "land"
    },
    {
@@ -368,18 +382,18 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
    },
    {
     "group": "national_park",
-    "key": "tulsi",
-    "label": "Tulsi Lake",
-    "lat": 19.157,
-    "lon": 72.907,
+    "key": "sgnp_lake",
+    "label": "Vihar/Tulsi lake system",
+    "lat": 19.1539,
+    "lon": 72.9129,
     "expect": "water"
    },
    {
     "group": "national_park",
-    "key": "vihar",
-    "label": "Vihar Lake",
-    "lat": 19.143,
-    "lon": 72.909,
+    "key": "powai_lake",
+    "label": "Powai Lake",
+    "lat": 19.1281,
+    "lon": 72.9059,
     "expect": "water"
    },
    {
@@ -395,7 +409,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "key": "thane_creek_north",
     "label": "Thane Creek north",
     "lat": 19.19,
-    "lon": 72.985,
+    "lon": 73.03,
     "expect": "water"
    },
    {
@@ -403,7 +417,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "key": "thane_creek_mid",
     "label": "Thane Creek mid",
     "lat": 19.09,
-    "lon": 72.975,
+    "lon": 72.99,
     "expect": "water"
    },
    {
@@ -466,8 +480,8 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "group": "eastern_suburbs",
     "key": "trombay",
     "label": "Trombay",
-    "lat": 19.001,
-    "lon": 72.92,
+    "lat": 19.0332,
+    "lon": 72.9489,
     "expect": "land"
    },
    {
@@ -514,8 +528,8 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "group": "western_suburbs",
     "key": "madh",
     "label": "Madh Island",
-    "lat": 19.14,
-    "lon": 72.795,
+    "lat": 19.1375,
+    "lon": 72.7919,
     "expect": "land"
    },
    {
@@ -683,23 +697,23 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
     "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-12T15:02:50+00:00",
+    "retrieved_utc": "2026-10-12T15:15:59+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
     "clip": {
      "tool": "osmium-tool",
      "tool_version": "osmium version 1.16.0",
      "strategy": "complete_ways",
      "aoi_name": "Mumbai / Salsette island",
-     "aoi_version": "2.0.0",
+     "aoi_version": "2.1.0",
      "aoi_vertices": 29,
      "output": "data/osm/mumbai-aoi.osm.pbf",
-     "output_bytes": 16810962,
-     "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+     "output_bytes": 19132182,
+     "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
      "counts": {
       "changesets": 0,
-      "nodes": 1866056,
-      "ways": 284668,
-      "relations": 4207
+      "nodes": 2144390,
+      "ways": 330942,
+      "relations": 4379
      }
     }
    },
@@ -710,7 +724,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-12T15:02:59+00:00",
+    "retrieved_utc": "2026-10-12T15:16:15+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -741,7 +755,7 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
      "mosaic": "rasterio.merge",
      "resample": "bilinear onto the local ENU metre grid",
      "grid_m": 20.0,
-     "nx": 2417,
+     "nx": 2628,
      "nz": 3628,
      "min_x": -29160.0,
      "min_z": -44740.0,
@@ -752,8 +766,8 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
     "statistics": {
      "dtm_min_m": -16.05584716796875,
      "dtm_max_m": 654.3840942382812,
-     "dtm_mean_m": 20.19338035583496,
-     "canopy_p95_m": 5.699481964111328,
+     "dtm_mean_m": 20.90135383605957,
+     "canopy_p95_m": 5.870635986328125,
      "canopy_max_m": 97.58984375
     }
    }
@@ -768,12 +782,13 @@ Run `38267063313`, 2026-10-12T15:04:04Z.
 ## Sizes
 ```
 104M	data/_cache
-7.7M	data/dem
+8.9M	data/dem
 20K	data/geodata
-15M	data/layers
-17M	data/osm
+17M	data/layers
+19M	data/osm
+24M	data/pinned
 12K	data/provenance
-40K	data/reports
-9.5M	android/src/main/assets/world
+60K	data/reports
+14M	android/src/main/assets/world
 /dev/root       145G   60G   85G  42% /
 ```

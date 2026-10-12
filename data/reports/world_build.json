@@ -1,93 +1,93 @@
 {
- "seconds": 41.5,
- "total_bytes": 12296208,
+ "seconds": 25.0,
+ "total_bytes": 14556950,
  "files": {
-  "terrain.mwl": 2444041,
-  "chunks.mwl": 6796973,
-  "network.mwl": 3051709,
-  "manifest.mwl": 3485
+  "terrain.mwl": 3058655,
+  "chunks.mwl": 7865588,
+  "network.mwl": 3629232,
+  "manifest.mwl": 3475
  },
  "manifest": {
   "format": "MWL2",
   "aoi_name": "Mumbai / Salsette island",
-  "aoi_version": "2.0.0",
-  "build_id": "e43c5d6b6e7b74194b55239672a68baa",
+  "aoi_version": "2.1.0",
+  "build_id": "ab19ba23e408ce9a817c663cee013a67",
   "selftest": false,
   "origin_lat": 19.076,
   "origin_lon": 72.8777,
   "bounds_lonlat": [
    72.6,
    18.825,
-   73.06,
+   73.1,
    19.48
   ],
   "bounds_xz": [
    -29156.5,
    -44720.9,
-   19150.7,
+   23361.3,
    27783.6
   ],
   "raster": {
-   "nx": 2417,
+   "nx": 2628,
    "nz": 3628,
    "grid_m": 20.0,
    "min_x": -29160.0,
    "min_z": -44740.0,
-   "land_fraction": 0.33934,
-   "inland_water_km2": 34.5,
-   "land_km2": 1190.3,
+   "land_fraction": 0.39247,
+   "inland_water_km2": 75.0,
+   "land_km2": 1496.8,
    "elev_min_m": 0.0,
    "elev_max_m": 654.4,
    "cover_histogram": {
-    "water": 5793250,
-    "wetland": 42060,
-    "mangrove": 247845,
+    "water": 5792458,
+    "wetland": 54217,
+    "mangrove": 334258,
     "beach": 2741,
     "sand": 318,
     "rock": 305,
-    "forest": 524004,
-    "scrub": 1370740,
-    "grass": 7387,
-    "park": 246608,
-    "farmland": 76971,
-    "cemetery": 1503,
-    "residential": 216000,
-    "commercial": 26472,
-    "industrial": 110398,
-    "retail": 2380,
-    "military": 18769,
-    "railway_land": 16650,
-    "airport_land": 14998,
-    "construction": 30091,
-    "quarry": 6442,
-    "pitch": 11155,
-    "parking": 1789
+    "forest": 631571,
+    "scrub": 1760661,
+    "grass": 11984,
+    "park": 251013,
+    "farmland": 81886,
+    "cemetery": 1586,
+    "residential": 234803,
+    "commercial": 35776,
+    "industrial": 197187,
+    "retail": 2399,
+    "military": 29203,
+    "railway_land": 21009,
+    "airport_land": 15001,
+    "construction": 42309,
+    "quarry": 18287,
+    "pitch": 12535,
+    "parking": 2877
    }
   },
   "chunks": {
-   "cnx": 49,
+   "cnx": 53,
    "cnz": 73,
    "cminx": -29,
    "cminz": -44,
    "chunk_m": 1024.0,
    "quant": 0.05,
-   "buildings": 167369,
-   "building_runs": 167369,
-   "road_runs": 106490,
+   "buildings": 195743,
+   "building_runs": 195743,
+   "road_runs": 124592,
    "height_src": {
-    "osm_height": 20568,
-    "osm_levels": 7008,
-    "neighbour_median": 118490,
-    "class_default": 21303
+    "osm_height": 20582,
+    "osm_levels": 7363,
+    "neighbour_median": 134171,
+    "class_default": 33627
    },
-   "names": 4269
+   "names": 4674
   },
   "graph": {
-   "nodes": 310246,
-   "edges": 295032,
-   "drivable_km": 11478.5
+   "nodes": 370415,
+   "edges": 352267,
+   "drivable_km": 13983.4
   },
-  "places": 1217,
+  "places": 1283,
   "checkpoints": [
    {
     "group": "vasai_creek",
@@ -99,10 +99,10 @@
    },
    {
     "group": "vasai_creek",
-    "key": "vasai_east",
-    "label": "Vasai Creek at the rail crossing",
-    "lat": 19.33,
-    "lon": 72.848,
+    "key": "vasai_channel",
+    "label": "Vasai Creek channel",
+    "lat": 19.32,
+    "lon": 72.82,
     "expect": "water"
    },
    {
@@ -222,7 +222,7 @@
     "key": "thane_creek_north",
     "label": "Thane Creek north",
     "lat": 19.19,
-    "lon": 72.995,
+    "lon": 73.03,
     "expect": "water"
    },
    {
@@ -230,7 +230,7 @@
     "key": "thane_creek_mid",
     "label": "Thane Creek mid",
     "lat": 19.09,
-    "lon": 72.975,
+    "lon": 72.99,
     "expect": "water"
    },
    {
@@ -510,23 +510,23 @@
     "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
     "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-12T15:02:50+00:00",
+    "retrieved_utc": "2026-10-12T15:15:59+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
     "clip": {
      "tool": "osmium-tool",
      "tool_version": "osmium version 1.16.0",
      "strategy": "complete_ways",
      "aoi_name": "Mumbai / Salsette island",
-     "aoi_version": "2.0.0",
+     "aoi_version": "2.1.0",
      "aoi_vertices": 29,
      "output": "data/osm/mumbai-aoi.osm.pbf",
-     "output_bytes": 16810962,
-     "output_sha256": "6567c76221a6197c7fc73537f6100e34a8e47f42f6d158991743de464566dfc9",
+     "output_bytes": 19132182,
+     "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
      "counts": {
       "changesets": 0,
-      "nodes": 1866056,
-      "ways": 284668,
-      "relations": 4207
+      "nodes": 2144390,
+      "ways": 330942,
+      "relations": 4379
      }
     }
    },
@@ -537,7 +537,7 @@
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-12T15:02:59+00:00",
+    "retrieved_utc": "2026-10-12T15:16:15+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -568,7 +568,7 @@
      "mosaic": "rasterio.merge",
      "resample": "bilinear onto the local ENU metre grid",
      "grid_m": 20.0,
-     "nx": 2417,
+     "nx": 2628,
      "nz": 3628,
      "min_x": -29160.0,
      "min_z": -44740.0,
@@ -579,8 +579,8 @@
     "statistics": {
      "dtm_min_m": -16.05584716796875,
      "dtm_max_m": 654.3840942382812,
-     "dtm_mean_m": 20.19338035583496,
-     "canopy_p95_m": 5.699481964111328,
+     "dtm_mean_m": 20.90135383605957,
+     "canopy_p95_m": 5.870635986328125,
      "canopy_max_m": 97.58984375
     }
    }

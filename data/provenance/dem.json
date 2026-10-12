@@ -5,7 +5,7 @@
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T15:02:59+00:00",
+ "retrieved_utc": "2026-10-12T15:16:15+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -36,7 +36,7 @@
   "mosaic": "rasterio.merge",
   "resample": "bilinear onto the local ENU metre grid",
   "grid_m": 20.0,
-  "nx": 2417,
+  "nx": 2628,
   "nz": 3628,
   "min_x": -29160.0,
   "min_z": -44740.0,
@@ -47,8 +47,8 @@
  "statistics": {
   "dtm_min_m": -16.05584716796875,
   "dtm_max_m": 654.3840942382812,
-  "dtm_mean_m": 20.19338035583496,
-  "canopy_p95_m": 5.699481964111328,
+  "dtm_mean_m": 20.90135383605957,
+  "canopy_p95_m": 5.870635986328125,
   "canopy_max_m": 97.58984375
  }
 }
