@@ -64,6 +64,8 @@ public final class WorldFile {
     public static final int KIND_TABLE = 5;
     public static final int KIND_JSON = 6;
     public static final int KIND_INDEX = 7;
+    /** OR'd into {@code kind} when the payload is stored rather than deflated. */
+    public static final int KIND_STORED = 0x100;
 
     private final byte[] data;
     private final Map<String, Layer> layers = new LinkedHashMap<>();
@@ -151,6 +153,11 @@ public final class WorldFile {
     /** Inflate a layer and verify its CRC32. */
     public byte[] read(String name) throws IOException {
         Layer l = layer(name);
+        if ((l.kind & KIND_STORED) != 0) {
+            byte[] verbatim = new byte[(int) l.storedBytes];
+            System.arraycopy(data, (int) l.offset, verbatim, 0, verbatim.length);
+            return verbatim;
+        }
         byte[] out = new byte[(int) l.rawBytes];
         try (InflaterInputStream z = new InflaterInputStream(
                 new java.io.ByteArrayInputStream(data, (int) l.offset,
@@ -171,6 +178,28 @@ public final class WorldFile {
             throw new IOException("layer " + name + " failed its CRC check; the "
                     + "packaged world is corrupt");
         }
+        return out;
+    }
+
+    /**
+     * Bytes straight out of a stored (undeflated) layer, with no inflate.
+     *
+     * <p>The chunk payload is written this way: each chunk is deflated on its
+     * own and the layer holds the concatenation. Without this a streaming
+     * worker would have to inflate the entire hundred-megabyte layer to read
+     * one thirty-kilobyte tile.
+     */
+    public byte[] readStored(String name, int offset, int length) throws IOException {
+        Layer l = layer(name);
+        if ((l.kind & KIND_STORED) == 0) {
+            throw new IOException("layer " + name + " is deflated, not stored");
+        }
+        if (offset < 0 || length < 0 || offset + (long) length > l.storedBytes) {
+            throw new IOException("layer " + name + ": slice " + offset + "+" + length
+                    + " runs past " + l.storedBytes);
+        }
+        byte[] out = new byte[length];
+        System.arraycopy(data, (int) l.offset + offset, out, 0, length);
         return out;
     }
 
