@@ -1,15 +1,15 @@
 {
-  "file": "Mumbai-The-Island-City-v2.0.24.apk",
-  "bytes": 14773772,
-  "sha256": "db3da785c400caea9e6b80e707cd3349adb084cc827bf5af4c0100295ee81b7c",
+  "file": "Mumbai-The-Island-City-v2.0.25.apk",
+  "bytes": 14774908,
+  "sha256": "156e779ef685c6728388bbe7b4668fb2e9a0ee2476f1b76b7eab12995ecc3a01",
   "package": "ai.shuvrajeetkamila.mumbai.islandcity",
-  "version_name": "2.0.24",
-  "version_code": 24,
+  "version_name": "2.0.25",
+  "version_code": 25,
   "min_sdk": 26,
   "target_sdk": 34,
   "abis": "universal",
   "signing": "debug key",
-  "ci_run_id": "38395171403",
-  "commit": "9ca08e429893b0333cfcc6dc9cf72cd054746d8c",
-  "release_tag": "v2.0.24"
+  "ci_run_id": "38399665536",
+  "commit": "8d147bc4f611ae1254da2b2f3f8f6acb67b98cbc",
+  "release_tag": "v2.0.25"
 }
