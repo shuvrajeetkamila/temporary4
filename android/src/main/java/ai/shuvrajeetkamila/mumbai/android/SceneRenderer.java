@@ -69,6 +69,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
+    private VehicleGpu markerGpu;
+    private FloatBuffer markerScratch;
     /** Instance counts per kind, refilled every frame. */
     private final int[] vehCount = new int[VehicleKind.values().length];
     private FloatBuffer[] vehScratch;
@@ -401,6 +403,57 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             }
         }
 
+        // --- the job checkpoint ------------------------------------------------
+        double[] mk = e.missions.markerAt();
+        if (mk != null) {
+            double mdx = mk[0] - ox, mdz = mk[2] - oz;
+            if (mdx * mdx + mdz * mdz < q.farRadius * q.farRadius) {
+                if (instances <= 0) {
+                    // The instanced program is only set up above when there
+                    // was traffic to draw. A marker in an empty stretch of
+                    // the city still has to be visible.
+                    GLES30.glUseProgram(instProg);
+                    GLES30.glUniformMatrix4fv(uInstViewProj, 1, false, viewProj, 0);
+                    GLES30.glUniform3f(uInstCam, ox, oy, oz);
+                    GLES30.glUniform3fv(uInstSunDir, 1, sunDir, 0);
+                    GLES30.glUniform3fv(uInstSunCol, 1, sun, 0);
+                    GLES30.glUniform3fv(uInstSky, 1, sky, 0);
+                    GLES30.glUniform3fv(uInstFogCol, 1, fog, 0);
+                    GLES30.glUniform1f(uInstFogDen, fogDensity);
+                    GLES30.glUniform1f(uInstWet, (float) e.wetness);
+                    GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+                    GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, atlas);
+                    GLES30.glUniform1i(uInstAtlas, 0);
+                    GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
+                            TextureLibrary.SCALE_M, 0);
+                    GLES30.glUniform1f(uInstNight, nightFactor);
+                }
+                markerScratch.position(0);
+                markerScratch.put((float) (mk[0] - ox));
+                markerScratch.put((float) (mk[1] - oy + 0.05));
+                markerScratch.put((float) (mk[2] - oz));
+                markerScratch.put(0f);
+                markerScratch.position(0);
+                GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, markerGpu.instVbo);
+                GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, 16, markerScratch);
+                // Additive, and with depth writes off, so the cylinder glows
+                // over whatever is behind it instead of z-fighting the road
+                // it is standing on.
+                GLES30.glEnable(GLES30.GL_BLEND);
+                GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE);
+                GLES30.glDepthMask(false);
+                GLES30.glDisable(GLES30.GL_CULL_FACE);
+                GLES30.glBindVertexArray(markerGpu.vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES,
+                        markerGpu.indexCount, GLES30.GL_UNSIGNED_INT, 0, 1);
+                GLES30.glEnable(GLES30.GL_CULL_FACE);
+                GLES30.glDepthMask(true);
+                GLES30.glDisable(GLES30.GL_BLEND);
+                drawn++;
+                tris += markerGpu.indexCount / 3;
+            }
+        }
+
         GLES30.glBindVertexArray(0);
         e.telemetry.drawCalls = drawn;
         e.telemetry.trianglesK = (int) (tris / 1000);
@@ -595,13 +648,20 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             vehGpu[k.ordinal()] = buildVehicleGpu(k);
             vehScratch[k.ordinal()] = GLUtil.floats(MAX_PER_KIND * 4);
         }
+        markerGpu = buildInstancedGpu(Meshes.markerVertices(),
+                Meshes.markerIndices());
+        markerScratch = GLUtil.floats(4);
         buildLegacyProp();
     }
 
     private VehicleGpu buildVehicleGpu(VehicleKind kind) {
+        return buildInstancedGpu(Meshes.vehicleVertices(kind),
+                Meshes.vehicleIndices(kind));
+    }
+
+    /** One VAO with a per-instance vec4(x, y, z, yaw) stream at attribute 4. */
+    private VehicleGpu buildInstancedGpu(float[] v, int[] i) {
         VehicleGpu g = new VehicleGpu();
-        float[] v = Meshes.vehicleVertices(kind);
-        int[] i = Meshes.vehicleIndices(kind);
         g.indexCount = i.length;
 
         int[] ids = new int[1];

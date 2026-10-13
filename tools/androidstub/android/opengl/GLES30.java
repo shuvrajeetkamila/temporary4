@@ -54,4 +54,9 @@ public class GLES30 {
     public static void glTexParameteri(int target, int pname, int param) { }
     public static void glUniform1fv(int loc, int count, float[] v, int o) { }
     public static void glUniform1i(int loc, int v) { }
+ public static void glBlendFunc(int a,int b){}
+ public static void glDisable(int c){}
+ public static final int GL_BLEND=0x0BE2;
+ public static final int GL_SRC_ALPHA=0x0302;
+ public static final int GL_ONE=1;
 }

@@ -4,6 +4,7 @@ import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
+import ai.shuvrajeetkamila.mumbai.game.Missions;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
@@ -41,6 +42,9 @@ public final class Engine {
     public final Agents agents;
     /** Radar geometry. Refreshed with the telemetry, not every frame. */
     public final Minimap minimap;
+
+    /** Jobs, money and progression. */
+    public final Missions missions;
 
     public final HumanPhysics human = new HumanPhysics();
     public final CarPhysics car = new CarPhysics();
@@ -140,6 +144,7 @@ public final class Engine {
         this.streamer = new WorldStreamer(world);
         this.agents = new Agents(world);
         this.minimap = new Minimap(world);
+        this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
         this.heliGround = (x, z) -> {
             if (!world.inBounds(x, z)) { return 0; }
@@ -240,7 +245,9 @@ public final class Engine {
             // The radar is rebuilt here rather than per frame. It cannot
             // change meaningfully in 16 ms, and the spatial query is the
             // most expensive thing the HUD asks for.
-            minimap.update(b.position.x, b.position.z, b.orientation.heading());
+            double hdg = b.orientation.heading();
+            minimap.update(b.position.x, b.position.z, hdg);
+            missions.blip(b.position.x, b.position.z, hdg);
             telemetryTimer = 0;
         }
         in.clearEdges();
@@ -271,6 +278,8 @@ public final class Engine {
         RigidBody b = activeBody();
         agents.update(dt, b.position.x, b.position.z, b.velocity.x, b.velocity.z,
                 quality.medRadius * 0.55, quality.medRadius);
+        missions.update(dt, b.position.x, b.position.z,
+                Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
     }
 
     /**
@@ -548,6 +557,15 @@ public final class Engine {
                 t.aux2 = human.waterDepth;
                 break;
         }
+        telemetry.money = missions.money;
+        telemetry.objective = missions.objective();
+        telemetry.banner = missions.banner;
+        telemetry.jobsDone = missions.jobsDone;
+        telemetry.jobTimeLeft = missions.active != null && missions.active.timed()
+                ? Math.max(0, missions.active.timeLeft) : 0;
+        telemetry.jobDistance = missions.distanceToTarget(
+                activeBody().position.x, activeBody().position.z);
+
     }
 
     public Vec3 renderPosition() { return renderPos; }

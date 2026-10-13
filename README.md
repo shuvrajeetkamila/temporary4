@@ -63,6 +63,34 @@ Offline. No login, no ads, no network permission, no backend.
 
 ---
 
+### Making a living
+
+Work is offered by the vehicle you are in, so picking one is a decision
+about what you are going to do rather than a change of paint:
+
+| Vehicle | Work | Pay | Clock |
+|---|---|---|---|
+| Kaali-peeli taxi | Fares | Rs 28 + Rs 18/km, up to a third more for a quick run | none |
+| Tempo, auto | Deliveries | Rs 60 + Rs 24/km | yes, and it pays nothing late |
+| Hatchback, sedan, SUV | Street races | Rs 240 + distance | yes, that is the race |
+
+Buses, scooters and police cars are not for work.
+
+Pickups and destinations are real named places out of OpenStreetMap, and
+every stop is snapped onto the road graph before it is used - a
+destination taken straight from the place table lands inside a building
+about as often as not, and a checkpoint you cannot drive into is a
+mission that can only be failed. Races are laid out as a ring of gates
+around wherever you are, each one snapped to tarmac, finishing back at
+the start.
+
+The current stop shows as a glowing cylinder you drive into, plus a blip
+on the radar that clamps to the rim when the target is off the map. Fares
+are untimed on purpose: being sacked because of Mumbai traffic is not
+fun, so the clock only ever adds to the fare. Deliveries and races are
+timed, and the clock turns red in the last fifteen seconds. Getting out
+of the vehicle cancels the job.
+
 ## Verification
 
 Nothing is published unless all of this passes first:

@@ -57,5 +57,23 @@ public final class WorldFixture {
 
     public static String failure() { return why; }
 
+    private static double[] spawn;
+
+    /**
+     * Where the game actually starts, in world metres.
+     *
+     * <p>Taken from a real {@link ai.shuvrajeetkamila.mumbai.sim.Engine}
+     * rather than hard-coded, so a change to the spawn point cannot leave
+     * the tests probing an empty stretch of sea while still passing.
+     */
+    public static synchronized double[] spawnXZ(WorldData w) {
+        if (spawn == null) {
+            ai.shuvrajeetkamila.mumbai.sim.Engine e =
+                    new ai.shuvrajeetkamila.mumbai.sim.Engine(w);
+            spawn = new double[]{e.human.position.x, e.human.position.z};
+        }
+        return new double[]{spawn[0], spawn[1]};
+    }
+
     private WorldFixture() { }
 }

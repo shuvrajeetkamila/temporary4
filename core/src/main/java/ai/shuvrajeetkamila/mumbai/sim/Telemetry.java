@@ -63,4 +63,17 @@ public final class Telemetry {
 
     /** Hours since midnight, for the clock readout. */
     public volatile double timeOfDay;
+
+    // --- jobs and progression ---------------------------------------------
+    /** Rupees in hand. */
+    public volatile int money;
+    /** What to do next, or a hint when idle. */
+    public volatile String objective = "";
+    /** Transient congratulation or failure message. */
+    public volatile String banner = "";
+    /** Seconds left on a timed job, or 0 when untimed or idle. */
+    public volatile double jobTimeLeft;
+    /** Metres to the current stop, or -1 when there is no job. */
+    public volatile double jobDistance = -1;
+    public volatile int jobsDone;
 }

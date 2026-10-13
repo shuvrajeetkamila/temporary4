@@ -95,6 +95,62 @@ final class Meshes {
         return out;
     }
 
+    private static float[] markerV;
+    private static int[] markerI;
+
+    /** Radius of the checkpoint cylinder, metres. Matches the arrival test. */
+    static final float MARKER_R = 7.0f;
+    static final float MARKER_H = 6.0f;
+
+    /**
+     * The checkpoint marker: an open-ended cylinder you drive into.
+     *
+     * <p>Fully emissive, so it reads at night and in rain, and open at both
+     * ends so it never hides the road surface or the car inside it. The
+     * aux value is a whole material index plus a fractional emission, the
+     * same packing the world geometry uses; material 0 is flat white, so
+     * the vertex colour decides the tint.
+     */
+    static float[] markerVertices() { buildMarker(); return markerV; }
+
+    static int[] markerIndices() { buildMarker(); return markerI; }
+
+    private static void buildMarker() {
+        if (markerV != null) { return; }
+        reset();
+        final int sides = 20;
+        // Drawn from both sides: a single ring of quads would vanish as you
+        // drove through it, since the inside faces away.
+        for (int pass = 0; pass < 2; pass++) {
+            float sign = pass == 0 ? 1f : -1f;
+            for (int i = 0; i < sides; i++) {
+                double a0 = (Math.PI * 2 * i) / sides;
+                double a1 = (Math.PI * 2 * (i + 1)) / sides;
+                float x0 = (float) (Math.cos(a0) * MARKER_R);
+                float z0 = (float) (Math.sin(a0) * MARKER_R);
+                float x1 = (float) (Math.cos(a1) * MARKER_R);
+                float z1 = (float) (Math.sin(a1) * MARKER_R);
+                float nx = (float) (Math.cos((a0 + a1) * 0.5) * sign);
+                float nz = (float) (Math.sin((a0 + a1) * 0.5) * sign);
+                // Fades out towards the top so it looks like light rather
+                // than a solid wall of plastic.
+                int a = vert(x0, 0, z0, nx, 0, nz, 1f, 0.80f, 0.16f, 0.95f);
+                int b = vert(x1, 0, z1, nx, 0, nz, 1f, 0.80f, 0.16f, 0.95f);
+                int c = vert(x1, MARKER_H, z1, nx, 0, nz, 1f, 0.62f, 0.10f, 0.35f);
+                int dd = vert(x0, MARKER_H, z0, nx, 0, nz, 1f, 0.62f, 0.10f, 0.35f);
+                if (pass == 0) {
+                    I.add(a); I.add(b); I.add(c);
+                    I.add(a); I.add(c); I.add(dd);
+                } else {
+                    I.add(a); I.add(c); I.add(b);
+                    I.add(a); I.add(dd); I.add(c);
+                }
+            }
+        }
+        markerV = packVertices();
+        markerI = packIndices();
+    }
+
     /** Per-kind cache. Built on first use, on the GL thread, once. */
     private static final float[][] VEH_V = new float[VehicleKind.values().length][];
     private static final int[][] VEH_I = new int[VehicleKind.values().length][];

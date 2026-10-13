@@ -59,8 +59,105 @@ public final class Minimap {
      * @param pz      player world Z
      * @param heading bearing to place at the top of the map, radians
      */
+    /** Blips to draw, three doubles each: x, y in map space, then kind. */
+    public double[] blips = new double[24];
+    public int blipCount;
+
+    /** Blip kinds, matching the colours the HUD gives them. */
+    public static final int BLIP_STOP = 0;
+    public static final int BLIP_NEXT = 1;
+
+    /**
+     * World offset to radar space, X component. Metres in, metres out.
+     *
+     * <p>Roads and blips both go through this. They were separate pieces of
+     * arithmetic once and silently disagreed by up to 200 m on a 320 m
+     * radar, which put every mission marker somewhere the road under it was
+     * not. Sharing the function makes that class of bug impossible rather
+     * than merely tested for. Takes the sine and cosine rather than the
+     * angle because the road loop runs it thousands of times per rebuild.
+     */
+    public static double mapX(double dx, double dz, double cosH, double sinH) {
+        return dx * cosH - dz * sinH;
+    }
+
+    /** World offset to radar space, Y component, positive up the screen. */
+    public static double mapY(double dx, double dz, double cosH, double sinH) {
+        return -(dx * sinH + dz * cosH);
+    }
+
+    /** Builds the edge index if it has not been built yet. */
+    public void ensureIndex() {
+        if (cellStart == null) { buildIndex(); }
+    }
+
+    /**
+     * Nearest point on any road to a world position.
+     *
+     * <p>Mission stops have to sit on tarmac. A destination picked straight
+     * from the place table lands wherever the OSM node happens to be, which
+     * is routinely inside a building or in the middle of a block, and a
+     * checkpoint you cannot drive into is a broken mission.
+     *
+     * @return {@code {x, z}} on the nearest road, or null if nothing is in
+     *         range
+     */
+    public double[] nearestRoad(double x, double z, double maxR) {
+        ensureIndex();
+        int reach = (int) Math.ceil(maxR / CELL_M);
+        int cx = (int) Math.floor((x - gridMinX) / CELL_M);
+        int cz = (int) Math.floor((z - gridMinZ) / CELL_M);
+        double best = maxR * maxR;
+        double bx = 0, bz = 0;
+        boolean found = false;
+        for (int gz = cz - reach; gz <= cz + reach; gz++) {
+            if (gz < 0 || gz >= gridH) { continue; }
+            for (int gx = cx - reach; gx <= cx + reach; gx++) {
+                if (gx < 0 || gx >= gridW) { continue; }
+                int cell = gz * gridW + gx;
+                for (int i = cellStart[cell]; i < cellStart[cell + 1]; i++) {
+                    int e = cellEdge[i];
+                    int a = world.graphEdge[e * 2], b = world.graphEdge[e * 2 + 1];
+                    double ax = world.graphNodeXZ[a * 2], az = world.graphNodeXZ[a * 2 + 1];
+                    double bx2 = world.graphNodeXZ[b * 2], bz2 = world.graphNodeXZ[b * 2 + 1];
+                    double ex = bx2 - ax, ez = bz2 - az;
+                    double len2 = ex * ex + ez * ez;
+                    double t = len2 < 1e-9 ? 0
+                            : ((x - ax) * ex + (z - az) * ez) / len2;
+                    if (t < 0) { t = 0; } else if (t > 1) { t = 1; }
+                    double px2 = ax + ex * t, pz2 = az + ez * t;
+                    double dx = px2 - x, dz = pz2 - z;
+                    double d2 = dx * dx + dz * dz;
+                    if (d2 < best) { best = d2; bx = px2; bz = pz2; found = true; }
+                }
+            }
+        }
+        return found ? new double[]{bx, bz} : null;
+    }
+
+    /** Places a blip, converting world metres into heading-up map space. */
+    public void addBlip(double wx, double wz, double px, double pz,
+                        double heading, int kind) {
+        if (blipCount * 3 + 3 > blips.length) { return; }
+        double cosH = Math.cos(-heading), sinH = Math.sin(-heading);
+        double dx = wx - px, dz = wz - pz;
+        double mx = mapX(dx, dz, cosH, sinH);
+        double my = mapY(dx, dz, cosH, sinH);
+        // Clamp to the rim so an off-map target still points the way.
+        double d = Math.hypot(mx, my);
+        if (d > RANGE_M) {
+            mx = mx / d * RANGE_M;
+            my = my / d * RANGE_M;
+        }
+        blips[blipCount * 3] = mx;
+        blips[blipCount * 3 + 1] = my;
+        blips[blipCount * 3 + 2] = kind;
+        blipCount++;
+    }
+
     public void update(double px, double pz, double heading) {
         if (cellStart == null) { buildIndex(); }
+        blipCount = 0;
         segmentCount = 0;
 
         double cosH = Math.cos(-heading), sinH = Math.sin(-heading);
@@ -101,10 +198,10 @@ public final class Minimap {
         if (segmentCount * 4 + 4 > segments.length) { grow(); }
 
         // World is X east, Z south. Screen is X right, Y up, so Z negates.
-        double x0 = ax * cosH - az * sinH;
-        double y0 = -(ax * sinH + az * cosH);
-        double x1 = bx * cosH - bz * sinH;
-        double y1 = -(bx * sinH + bz * cosH);
+        double x0 = mapX(ax, az, cosH, sinH);
+        double y0 = mapY(ax, az, cosH, sinH);
+        double x1 = mapX(bx, bz, cosH, sinH);
+        double y1 = mapY(bx, bz, cosH, sinH);
 
         int o = segmentCount * 4;
         segments[o] = x0;

@@ -32,6 +32,11 @@ final class Hud extends View {
     private final Paint radarBg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint radarRing = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint arrow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint blipNext = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint blipLater = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint money = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint objective = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint banner = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path arrowPath = new android.graphics.Path();
 
     private volatile Telemetry t;
@@ -82,6 +87,20 @@ final class Hud extends View {
 
         arrow.setColor(Color.rgb(255, 232, 110));
 
+        blipNext.setColor(0xFFFFC421);
+        blipNext.setStyle(Paint.Style.FILL);
+        blipLater.setColor(0x99FFC421);
+        blipLater.setStyle(Paint.Style.FILL);
+
+        money.setColor(0xFF7CE08A);
+        money.setTextSize(22 * d);
+        money.setFakeBoldText(true);
+        objective.setColor(0xFFF2F2F2);
+        objective.setTextSize(14 * d);
+        banner.setColor(0xFFFFD452);
+        banner.setTextSize(20 * d);
+        banner.setFakeBoldText(true);
+
         attribution = c.getString(R.string.attribution);
     }
 
@@ -124,6 +143,16 @@ final class Hud extends View {
             // Classes 0-3 are motorway through secondary: the roads worth
             // picking out when you are deciding where to turn.
             canvas.drawLine(x0, y0, x1, y1, cls[i] <= 3 ? roadMajor : roadMinor);
+        }
+        // Job markers. Drawn inside the clip so one beyond the rim is
+        // clamped to the edge and still points the way.
+        for (int i = 0; i < m.blipCount; i++) {
+            int o = i * 3;
+            float bx = cx + (float) m.blips[o] * scale;
+            float by = cy - (float) m.blips[o + 1] * scale;
+            boolean next = (int) m.blips[o + 2] == Minimap.BLIP_NEXT;
+            canvas.drawCircle(bx, by, (next ? 5f : 3.5f) * d,
+                    next ? blipNext : blipLater);
         }
         canvas.restoreToCount(saved);
 
@@ -210,6 +239,45 @@ final class Hud extends View {
         int hh = (int) s.timeOfDay;
         int mm = (int) ((s.timeOfDay - hh) * 60.0);
         canvas.drawText(String.format("%02d:%02d", hh, mm), x, 168 * d, text);
+
+        // --- money and the current job, top right ----------------------------
+        String cash = "Rs " + s.money;
+        float cw = money.measureText(cash);
+        canvas.drawText(cash, getWidth() - cw - 12 * d, 30 * d, money);
+
+        if (!s.objective.isEmpty()) {
+            String line = s.objective;
+            if (s.jobDistance >= 0) {
+                line = (s.jobDistance >= 1000
+                        ? String.format("%.1f km", s.jobDistance / 1000.0)
+                        : String.format("%d m", (int) s.jobDistance))
+                        + "   " + line;
+            }
+            float ow = objective.measureText(line);
+            float ox = getWidth() - ow - 12 * d;
+            rect.set(ox - 8 * d, 38 * d, getWidth() - 6 * d, 60 * d);
+            canvas.drawRoundRect(rect, 4 * d, 4 * d, panel);
+            canvas.drawText(line, ox, 53 * d, objective);
+        }
+        if (s.jobTimeLeft > 0) {
+            int sec = (int) Math.ceil(s.jobTimeLeft);
+            String clk = String.format("%d:%02d", sec / 60, sec % 60);
+            // Red once it is tight, because that is the whole tension.
+            objective.setColor(sec <= 15 ? 0xFFFF6A5A : 0xFFF2F2F2);
+            float tw = objective.measureText(clk);
+            canvas.drawText(clk, getWidth() - tw - 12 * d, 78 * d, objective);
+            objective.setColor(0xFFF2F2F2);
+        }
+
+        // --- job banner, upper centre ----------------------------------------
+        if (!s.banner.isEmpty()) {
+            float bw = banner.measureText(s.banner);
+            float bx = (getWidth() - bw) * 0.5f;
+            float by = getHeight() * 0.18f;
+            rect.set(bx - 14 * d, by - 20 * d, bx + bw + 14 * d, by + 9 * d);
+            canvas.drawRoundRect(rect, 6 * d, 6 * d, panel);
+            canvas.drawText(s.banner, bx, by, banner);
+        }
 
         // --- action prompt, above the controls -------------------------------
         if (!s.prompt.isEmpty()) {
