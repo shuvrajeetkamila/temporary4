@@ -10,6 +10,8 @@ import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.math.Vec3;
 import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
+import ai.shuvrajeetkamila.mumbai.world.WorldData;
+import ai.shuvrajeetkamila.mumbai.sim.Transit;
 import ai.shuvrajeetkamila.mumbai.world.ChunkMesher;
 import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
 import ai.shuvrajeetkamila.mumbai.world.WorldStreamer;
@@ -73,6 +75,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
     private VehicleGpu markerGpu;
+    /** One VAO per transit body: suburban, metro, monorail, vessel. */
+    private final VehicleGpu[] transitGpu = new VehicleGpu[4];
+    private final FloatBuffer[] transitScratch = new FloatBuffer[4];
+    private final int[] transitCount = new int[4];
+    /** Carriages of one kind that can be on screen at once. */
+    private static final int MAX_CARRIAGES = 160;
     private FloatBuffer markerScratch;
     /** Instance counts per kind, refilled every frame. */
     private final int[] vehCount = new int[VehicleKind.values().length];
@@ -422,30 +430,31 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             }
         }
 
+        // --- trains, metros and vessels ----------------------------------------
+        int carriages = uploadTransit(e, ox, oy, oz);
+        if (carriages > 0) {
+            if (instances <= 0) { setupInstanced(e, viewProj, ox, oy, oz,
+                    sunDir, sun, sky, fog, fogDensity, nightFactor); }
+            for (int k = 0; k < transitGpu.length; k++) {
+                int n = transitCount[k];
+                if (n <= 0) { continue; }
+                VehicleGpu g = transitGpu[k];
+                GLES30.glBindVertexArray(g.vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
+                        GLES30.GL_UNSIGNED_INT, 0, n);
+                drawn++;
+                tris += (long) (g.indexCount / 3) * n;
+            }
+        }
+
         // --- the job checkpoint ------------------------------------------------
         double[] mk = e.missions.markerAt();
         if (mk != null) {
             double mdx = mk[0] - ox, mdz = mk[2] - oz;
             if (mdx * mdx + mdz * mdz < q.farRadius * q.farRadius) {
-                if (instances <= 0) {
-                    // The instanced program is only set up above when there
-                    // was traffic to draw. A marker in an empty stretch of
-                    // the city still has to be visible.
-                    GLES30.glUseProgram(instProg);
-                    GLES30.glUniformMatrix4fv(uInstViewProj, 1, false, viewProj, 0);
-                    GLES30.glUniform3f(uInstCam, ox, oy, oz);
-                    GLES30.glUniform3fv(uInstSunDir, 1, sunDir, 0);
-                    GLES30.glUniform3fv(uInstSunCol, 1, sun, 0);
-                    GLES30.glUniform3fv(uInstSky, 1, sky, 0);
-                    GLES30.glUniform3fv(uInstFogCol, 1, fog, 0);
-                    GLES30.glUniform1f(uInstFogDen, fogDensity);
-                    GLES30.glUniform1f(uInstWet, (float) e.wetness);
-                    GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
-                    GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, atlas);
-                    GLES30.glUniform1i(uInstAtlas, 0);
-                    GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
-                            TextureLibrary.SCALE_M, 0);
-                    GLES30.glUniform1f(uInstNight, nightFactor);
+                if (instances <= 0 && carriages <= 0) {
+                    setupInstanced(e, viewProj, ox, oy, oz, sunDir, sun, sky,
+                            fog, fogDensity, nightFactor);
                 }
                 markerScratch.position(0);
                 markerScratch.put((float) (mk[0] - ox));
@@ -696,6 +705,11 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
         markerGpu = buildInstancedGpu(Meshes.markerVertices(),
                 Meshes.markerIndices());
+        for (int i = 0; i < transitGpu.length; i++) {
+            transitGpu[i] = buildInstancedGpu(Meshes.transitVertices(i),
+                    Meshes.transitIndices(i), MAX_CARRIAGES);
+            transitScratch[i] = GLUtil.floats(MAX_CARRIAGES * 4);
+        }
         markerScratch = GLUtil.floats(4);
         buildLegacyProp();
     }
@@ -707,6 +721,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
     /** One VAO with a per-instance vec4(x, y, z, yaw) stream at attribute 4. */
     private VehicleGpu buildInstancedGpu(float[] v, int[] i) {
+        return buildInstancedGpu(v, i, MAX_PER_KIND);
+    }
+
+    private VehicleGpu buildInstancedGpu(float[] v, int[] i, int maxInstances) {
         VehicleGpu g = new VehicleGpu();
         g.indexCount = i.length;
 
@@ -743,7 +761,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 GLES30.GL_STATIC_DRAW);
 
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, g.instVbo);
-        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, MAX_PER_KIND * 16, null,
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, maxInstances * 16, null,
                 GLES30.GL_DYNAMIC_DRAW);
         GLES30.glVertexAttribPointer(4, 4, GLES30.GL_FLOAT, false, 16, 0);
         GLES30.glEnableVertexAttribArray(4);
@@ -809,6 +827,74 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      *
      * @return total instances across all kinds
      */
+    /**
+     * Binds the instanced program and its per-frame uniforms.
+     *
+     * <p>Shared by traffic, transit and the job marker. It used to be
+     * inlined three times with the later copies guarded on whether the
+     * earlier one had run, which is how a marker in an empty street ended
+     * up drawn with whatever uniforms were last left bound.
+     */
+    private void setupInstanced(Engine e, float[] viewProj,
+                                float ox, float oy, float oz,
+                                float[] sunDir, float[] sun, float[] sky,
+                                float[] fog, float fogDensity, float night) {
+        GLES30.glUseProgram(instProg);
+        GLES30.glUniformMatrix4fv(uInstViewProj, 1, false, viewProj, 0);
+        GLES30.glUniform3f(uInstCam, ox, oy, oz);
+        GLES30.glUniform3fv(uInstSunDir, 1, sunDir, 0);
+        GLES30.glUniform3fv(uInstSunCol, 1, sun, 0);
+        GLES30.glUniform3fv(uInstSky, 1, sky, 0);
+        GLES30.glUniform3fv(uInstFogCol, 1, fog, 0);
+        GLES30.glUniform1f(uInstFogDen, fogDensity);
+        GLES30.glUniform1f(uInstWet, (float) e.wetness);
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, atlas);
+        GLES30.glUniform1i(uInstAtlas, 0);
+        GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
+                TextureLibrary.SCALE_M, 0);
+        GLES30.glUniform1f(uInstNight, night);
+    }
+
+    /** Packs every carriage and hull into its per-kind instance buffer. */
+    private int uploadTransit(Engine e, double ox, double oy, double oz) {
+        for (int i = 0; i < transitCount.length; i++) { transitCount[i] = 0; }
+        int total = 0;
+        for (Transit.Service sv : e.transit.services()) {
+            if (!sv.active) { continue; }
+            int slot = meshSlot(sv.cls);
+            FloatBuffer buf = transitScratch[slot];
+            int at = transitCount[slot];
+            if (at + sv.carriages > MAX_CARRIAGES) { continue; }
+            float[] tmp = new float[sv.carriages * 4];
+            int wrote = e.transit.carriagePoses(sv, tmp, 0, ox, oy, oz);
+            buf.position(at * 4);
+            buf.put(tmp, 0, wrote * 4);
+            transitCount[slot] = at + wrote;
+            total += wrote;
+        }
+        for (int k = 0; k < transitGpu.length; k++) {
+            int n = transitCount[k];
+            if (n <= 0) { continue; }
+            FloatBuffer buf = transitScratch[k];
+            buf.position(0);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, transitGpu[k].instVbo);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16, buf);
+        }
+        return total;
+    }
+
+    /** Which transit body a route class is drawn with. */
+    private static int meshSlot(int cls) {
+        switch (cls) {
+            case WorldData.CLS_LIGHT_RAIL:
+            case WorldData.CLS_SUBWAY: return Meshes.TR_METRO;
+            case WorldData.CLS_MONORAIL: return Meshes.TR_MONO;
+            case WorldData.CLS_FERRY: return Meshes.TR_SHIP;
+            default: return Meshes.TR_RAIL;
+        }
+    }
+
     private int uploadInstances(Engine e) {
         for (int i = 0; i < vehCount.length; i++) {
             vehCount[i] = 0;

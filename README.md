@@ -134,6 +134,37 @@ different fall speeds, not particles - rain that fills the frame needs
 tens of thousands of quads and none of them survive a tile-based mobile
 GPU.
 
+### Trains, the metro and the harbour
+
+Suburban rail, the metro, the monorail and the harbour ferries run on
+real OpenStreetMap alignments. They are deliberately **not** in the road
+graph - that is filtered to driveable classes, which is what stops
+traffic spawning in a subway tunnel and a taxi fare being sent to a point
+in the middle of the harbour. Transit gets its own network.
+
+OSM splits railway ways at every junction, signal and bridge: the Mumbai
+extract has 2,607 fragments averaging 733 m. A train that terminates
+every 733 m is not a train, so the compiler chains fragments of the same
+class end to end wherever they share an endpoint. That gives 459 routes
+over 1,733 km, the longest 63 km.
+
+| Mode | Routes | Length | Consist | Cruise |
+|---|---|---|---|---|
+| Suburban rail | 430 | 1,407 km | 9 cars | 80 km/h |
+| Metro | 21 | 196 km | 6 cars | 61 km/h |
+| Monorail | 3 | 40 km | 4 cars | 49 km/h |
+| Harbour vessels | 5 | 91 km | 1 hull | 12 kt |
+
+Carriages are placed by walking back along the route from the nose, so a
+train bends through curves instead of being a rigid box - that one detail
+is most of what makes rail read as rail at a distance. Services run to
+and fro and wait at a terminus rather than looping, because a train that
+vanishes off one end and reappears at the other is more jarring than one
+that turns round.
+
+The metro is drawn 12 m below the street, the monorail 8.5 m above it,
+and vessels sit at sea level whatever the terrain underneath says.
+
 ## Verification
 
 Nothing is published unless all of this passes first:

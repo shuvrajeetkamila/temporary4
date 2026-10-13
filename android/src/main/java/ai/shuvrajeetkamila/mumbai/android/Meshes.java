@@ -95,6 +95,71 @@ final class Meshes {
         return out;
     }
 
+    /** Transit bodies, indexed by the kinds in TRANSIT_KINDS. */
+    private static final float[][] TR_V = new float[4][];
+    private static final int[][] TR_I = new int[4][];
+
+    /** Mesh slots: 0 suburban carriage, 1 metro, 2 monorail, 3 vessel. */
+    static final int TR_RAIL = 0, TR_METRO = 1, TR_MONO = 2, TR_SHIP = 3;
+
+    static float[] transitVertices(int slot) { buildTransit(slot); return TR_V[slot]; }
+
+    static int[] transitIndices(int slot) { buildTransit(slot); return TR_I[slot]; }
+
+    private static void buildTransit(int slot) {
+        if (TR_V[slot] != null) { return; }
+        reset();
+        switch (slot) {
+            case TR_METRO: carriage(1.55f, 1.85f, 0.26f, 0.30f, 0.36f, true); break;
+            case TR_MONO: carriage(1.30f, 1.70f, 0.78f, 0.80f, 0.84f, true); break;
+            case TR_SHIP: vessel(); break;
+            default: carriage(1.62f, 2.00f, 0.52f, 0.30f, 0.26f, false); break;
+        }
+        TR_V[slot] = packVertices();
+        TR_I[slot] = packIndices();
+    }
+
+    /**
+     * One carriage. Half-width and half-height in metres; the length comes
+     * from Transit.CAR_LEN so the drawn train matches the simulated one.
+     *
+     * <p>Windows are a band of emissive strip rather than modelled glass:
+     * at the distance a train is usually seen it is the lit line along the
+     * side that identifies it, and a row of quads costs nothing.
+     */
+    private static void carriage(float hw, float hh, float r, float g, float b,
+                                 boolean flatRoof) {
+        float hl = 20.5f * 0.5f;
+        box(0, hh, 0, hw, hh, hl, r, g, b, 0);
+        if (!flatRoof) {
+            box(0, hh * 2 + 0.16f, 0, hw * 0.72f, 0.16f, hl * 0.96f,
+                    r * 0.7f, g * 0.7f, b * 0.7f, 0);
+        }
+        // Lit window strip down both sides, emissive so it reads at night.
+        float wy = hh * 1.22f;
+        for (int side = -1; side <= 1; side += 2) {
+            box(side * (hw + 0.012f), wy, 0, 0.012f, hh * 0.30f, hl * 0.88f,
+                    0.98f, 0.95f, 0.80f, 0.90f);
+        }
+        // Bogies, so it does not float.
+        box(0, 0.34f, hl * 0.60f, hw * 0.78f, 0.34f, 1.5f, 0.09f, 0.09f, 0.10f, 0);
+        box(0, 0.34f, -hl * 0.60f, hw * 0.78f, 0.34f, 1.5f, 0.09f, 0.09f, 0.10f, 0);
+    }
+
+    /** A harbour vessel: hull, deckhouse, a couple of containers. */
+    private static void vessel() {
+        float hl = 20.5f * 0.5f;
+        box(0, 1.5f, 0, 4.2f, 1.5f, hl, 0.22f, 0.26f, 0.32f, 0);
+        box(0, 3.4f, 0, 4.0f, 0.4f, hl * 0.94f, 0.52f, 0.50f, 0.46f, 0);
+        box(0, 5.0f, -hl * 0.58f, 2.6f, 1.9f, 3.0f, 0.86f, 0.86f, 0.84f, 0);
+        // Bridge windows, emissive.
+        box(0, 6.1f, -hl * 0.58f - 3.02f, 2.2f, 0.5f, 0.02f,
+                0.95f, 0.93f, 0.78f, 0.85f);
+        box(-1.9f, 4.6f, hl * 0.25f, 1.7f, 1.3f, 3.4f, 0.70f, 0.32f, 0.22f, 0);
+        box(1.9f, 4.6f, hl * 0.25f, 1.7f, 1.3f, 3.4f, 0.24f, 0.44f, 0.62f, 0);
+        box(0, 7.6f, -hl * 0.58f, 0.12f, 1.4f, 0.12f, 0.80f, 0.80f, 0.80f, 0);
+    }
+
     private static float[] markerV;
     private static int[] markerI;
 

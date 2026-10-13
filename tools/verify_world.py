@@ -315,6 +315,63 @@ def main():
         g.check("network", "95% of road nodes are on land", frac >= 0.95,
                 f"{frac * 100:.1f}% of {len(sampled)} sampled")
 
+    # ------------------------------------------------------------- transit
+    # The rail network is deliberately NOT in the road graph: traffic must
+    # not spawn in a subway tunnel and a taxi fare must never be sent to a
+    # point in the middle of the harbour. These gates check both that the
+    # transit network is real and that it stayed out of the graph.
+    tm = M.get("transit", {})
+    by = tm.get("by_class", {})
+    tpts = np.frombuffer(net.raw("tpts"), dtype="<f4").reshape(-1, 2)
+    toff = np.frombuffer(net.raw("toff"), dtype="<u4")
+    tcls = np.frombuffer(net.raw("tcls"), dtype="<u4")
+
+    g.check("transit", "transit routes exist", len(tcls) >= 20, f"{len(tcls)} routes")
+    g.check("transit", "offsets are consistent with the points",
+            len(toff) == len(tcls) + 1 and (len(tcls) == 0 or int(toff[-1]) == len(tpts)),
+            f"{len(toff)} offsets, {len(tpts):,} points")
+    g.check("transit", "offsets increase",
+            len(toff) < 2 or bool(np.all(np.diff(toff.astype("i8")) > 0)), "")
+    for key, label in (("rail", "suburban rail"), ("monorail", "the monorail")):
+        g.check("transit", f"{label} is present",
+                by.get(key, {}).get("routes", 0) >= 1,
+                f"{by.get(key, {}).get('routes', 0)} routes, "
+                f"{by.get(key, {}).get('km', 0)} km")
+    metro = sum(by.get(k, {}).get("routes", 0) for k in ("subway", "light_rail"))
+    g.check("transit", "the metro is present", metro >= 1, f"{metro} routes")
+    ferry = by.get("ferry", {}).get("routes", 0)
+    g.check("transit", "harbour ferry routes are present", ferry >= 1,
+            f"{ferry} routes")
+    g.check("transit", ">= 150 km of transit alignment", tm.get("km", 0) >= 150,
+            f"{tm.get('km', 0):,} km")
+    if len(tpts):
+        # Raster extent, derived here rather than trusted from elsewhere.
+        tmaxx = minx + nx * grid
+        tmaxz = minz + nz * grid
+        inx = bool(np.all((tpts[:, 0] >= minx - 50) & (tpts[:, 0] <= tmaxx + 50)
+                          & (tpts[:, 1] >= minz - 50) & (tpts[:, 1] <= tmaxz + 50)))
+        g.check("transit", "transit points are inside the AOI", inx,
+                f"x {tpts[:, 0].min():.0f}..{tpts[:, 0].max():.0f}")
+        lens = []
+        for i in range(len(tcls)):
+            seg = tpts[toff[i]:toff[i + 1]]
+            lens.append(float(np.sum(np.hypot(np.diff(seg[:, 0]), np.diff(seg[:, 1])))))
+        longest = max(lens) if lens else 0
+        # Stitching is the whole point: OSM splits rail at every junction,
+        # and unstitched fragments average under 200 m.
+        g.check("transit", "stitching produced a route over 8 km",
+                longest >= 8000, f"longest {longest / 1000:.1f} km")
+        g.check("transit", "no route is a stub", min(lens) >= 500 if lens else False,
+                f"shortest {min(lens) if lens else 0:.0f} m")
+
+    # The graph must contain only driveable classes.
+    ga = np.frombuffer(net.raw("gattr"), dtype="<f4").reshape(-1, 5)
+    if len(ga):
+        classes = set(int(c) for c in np.unique(ga[:, 0]))
+        rail_or_water = classes & {15, 16, 17, 18, 19, 20, 21, 22, 23}
+        g.check("network", "no rail, runway or ferry class in the road graph",
+                not rail_or_water, f"stray classes {sorted(rail_or_water)}")
+
     # --------------------------------------------------------------- places
     places = json.loads(net.raw("places").decode())
     g.check("places", "at least 400 named places", len(places) >= 400, f"{len(places)}")

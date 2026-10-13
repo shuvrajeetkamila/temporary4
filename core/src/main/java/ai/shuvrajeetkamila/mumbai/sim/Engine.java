@@ -42,6 +42,9 @@ public final class Engine {
     public final FixedStep clock = new FixedStep();
     public final FloatingOrigin origin = new FloatingOrigin();
     public final Agents agents;
+
+    /** Trains, metros, the monorail and harbour vessels. */
+    public final Transit transit;
     /** Radar geometry. Refreshed with the telemetry, not every frame. */
     public final Minimap minimap;
 
@@ -164,6 +167,7 @@ public final class Engine {
         this.world = world;
         this.streamer = new WorldStreamer(world);
         this.agents = new Agents(world);
+        this.transit = new Transit(world);
         this.minimap = new Minimap(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
@@ -306,6 +310,7 @@ public final class Engine {
                 quality.medRadius * 0.55, quality.medRadius);
         missions.update(dt, b.position.x, b.position.z,
                 Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
+        transit.update(dt, b.position.x, b.position.z, quality.medRadius);
         updateWanted(dt, b);
     }
 
@@ -665,6 +670,7 @@ public final class Engine {
         telemetry.jobsDone = missions.jobsDone;
         telemetry.wantedStars = wanted.stars();
         telemetry.policeUnits = agents.policeCount();
+        telemetry.services = transit.activeCount();
         telemetry.rain = weather.rain;
         telemetry.wetness = weather.wetness;
         telemetry.jobTimeLeft = missions.active != null && missions.active.timed()

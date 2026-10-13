@@ -583,6 +583,119 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
 # Road graph for traffic and navigation
 # --------------------------------------------------------------------------
 
+def build_transit(lay):
+    """Stitched rail, metro, monorail and ferry routes.
+
+    These are deliberately NOT in the road graph: the graph is filtered to
+    kind == "road" so that traffic cannot spawn in a subway tunnel or a
+    taxi be sent to a destination in the middle of the harbour. But the
+    alignments are real and the city needs trains running on them, so they
+    get their own network.
+
+    OSM splits railway ways at every junction, signal and bridge, which
+    leaves a few thousand fragments averaging under 200 m. A train that
+    terminates every 200 m is not a train, so ways of the same class are
+    chained end to end wherever they share an endpoint, giving runs long
+    enough to be worth riding alongside.
+    """
+    r_xy, r_off, r_attr = lay["road_xy"], lay["road_off"], lay["road_attr"]
+    want = {i: c[5] for i, c in enumerate(ROAD_CLASSES) if c[5] in ("rail", "water")}
+
+    # Collect fragments per class.
+    frags = {}
+    for i in range(len(r_off) - 1):
+        cls = int(r_attr[i][0])
+        if cls not in want:
+            continue
+        pts = r_xy[r_off[i]:r_off[i + 1]]
+        if len(pts) < 2:
+            continue
+        frags.setdefault(cls, []).append([(float(a), float(b)) for a, b in pts])
+
+    def key(pt):
+        return (int(round(pt[0])), int(round(pt[1])))
+
+    lines, classes = [], []
+    for cls in sorted(frags):
+        pool = frags[cls]
+        # Endpoint index: which fragments start or end at each node.
+        ends = {}
+        for idx, f in enumerate(pool):
+            ends.setdefault(key(f[0]), []).append(idx)
+            ends.setdefault(key(f[-1]), []).append(idx)
+        used = [False] * len(pool)
+
+        for seed in range(len(pool)):
+            if used[seed]:
+                continue
+            used[seed] = True
+            chain = list(pool[seed])
+            # Extend from both ends until nothing else connects.
+            for _ in range(2):
+                while True:
+                    tail = key(chain[-1])
+                    nxt = None
+                    for cand in ends.get(tail, ()):
+                        if used[cand]:
+                            continue
+                        nxt = cand
+                        break
+                    if nxt is None:
+                        break
+                    used[nxt] = True
+                    seg = pool[nxt]
+                    # Join on whichever end matches, dropping the shared point.
+                    if key(seg[0]) == tail:
+                        chain.extend(seg[1:])
+                    else:
+                        chain.extend(reversed(seg[:-1]))
+                chain.reverse()
+
+            length = sum(math.hypot(chain[j + 1][0] - chain[j][0],
+                                    chain[j + 1][1] - chain[j][1])
+                         for j in range(len(chain) - 1))
+            # Short stubs are sidings and crossovers; nothing runs on them.
+            if length < 600.0:
+                continue
+            # 0.8 m rather than the 2 m used for roads: a train visibly cuts
+            # the corner on a chunky polyline, and at 1733 km the whole
+            # network still costs well under a megabyte.
+            simple = simplify(np.asarray(chain, dtype="f8"), 0.8)
+            if len(simple) < 2:
+                continue
+            lines.append(np.asarray(simple, dtype="<f4"))
+            classes.append(cls)
+
+    if lines:
+        pts = np.concatenate(lines, axis=0)
+        off = np.zeros(len(lines) + 1, dtype="<u4")
+        run = 0
+        for i, ln in enumerate(lines):
+            off[i] = run
+            run += len(ln)
+        off[-1] = run
+    else:
+        pts = np.zeros((0, 2), dtype="<f4")
+        off = np.zeros(1, dtype="<u4")
+
+    by_class = {}
+    total = 0.0
+    for ln, cls in zip(lines, classes):
+        d = float(np.sum(np.hypot(np.diff(ln[:, 0]), np.diff(ln[:, 1]))))
+        total += d
+        name = ROAD_CLASSES[cls][0]
+        e = by_class.setdefault(name, {"routes": 0, "km": 0.0})
+        e["routes"] += 1
+        e["km"] = round(e["km"] + d / 1000.0, 1)
+
+    meta = {"routes": len(lines), "km": round(total / 1000.0, 1),
+            "by_class": by_class}
+    _log(f"transit: {len(lines)} routes, {total / 1000:.0f} km "
+         + ", ".join(f"{k} {v['routes']}" for k, v in sorted(by_class.items())))
+    return (pts.astype("<f4"), off,
+            np.asarray(classes, dtype="<u4"), meta)
+
+
 def build_road_graph(lay, names):
     """Node-and-edge graph over drivable roads, snapped at 1 m."""
     r_xy, r_off, r_attr = lay["road_xy"], lay["road_off"], lay["road_attr"]
@@ -663,6 +776,7 @@ def main():
     blob, index, name_list, cmeta = build_chunks(lay, canopy, dtm, landmask,
                                                  rstats, names)
     nxy, ea, eattr, gmeta = build_road_graph(lay, names)
+    tpts, toff, tcls, tmeta = build_transit(lay)
 
     nx, nz = rstats["nx"], rstats["nz"]
     build_id = hashlib.sha256(
@@ -698,6 +812,10 @@ def main():
     places = [p for p in poi]
     w.add("places", wf.KIND_JSON, json.dumps(places).encode())
     w.add("gmeta", wf.KIND_JSON, json.dumps(gmeta).encode())
+    w.add("tpts", wf.KIND_VECTOR, tpts.tobytes())
+    w.add("toff", wf.KIND_VECTOR, toff.tobytes())
+    w.add("tcls", wf.KIND_VECTOR, tcls.tobytes())
+    w.add("tmeta", wf.KIND_JSON, json.dumps(tmeta).encode())
     npath = os.path.join(args.out, "network.mwl")
     nbytes = w.write(npath)
     _log(f"wrote {npath} {nbytes / 1e6:.1f} MB")
@@ -719,6 +837,7 @@ def main():
         "bounds_lonlat": list(aoi.AOI_BOUNDS),
         "bounds_xz": [round(v, 1) for v in aoi.aoi_bounds_xz()],
         "raster": rstats, "chunks": cmeta, "graph": gmeta,
+        "transit": tmeta,
         "places": len(places),
         "checkpoints": [{"group": g, "key": k, "label": l, "lat": la, "lon": lo,
                          "expect": e} for (g, k, l, la, lo, e) in aoi.CHECKPOINTS],

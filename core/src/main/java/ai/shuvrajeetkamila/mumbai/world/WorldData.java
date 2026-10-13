@@ -58,6 +58,21 @@ public final class WorldData {
      */
     public final float[] graphAttr;
 
+    /**
+     * Rail, metro, monorail and ferry alignments, as stitched polylines.
+     *
+     * <p>Kept out of {@link #graphEdge} on purpose: the road graph is
+     * filtered to driveable classes so that traffic cannot spawn in a
+     * subway tunnel and a taxi fare cannot be sent to a point in the
+     * middle of the harbour. Transit runs on its own network.
+     *
+     * <p>{@code transitPts} is x,z pairs; {@code transitOff} indexes it in
+     * points, with one extra entry on the end.
+     */
+    public final float[] transitPts;
+    public final int[] transitOff;
+    public final int[] transitClassId;
+
     public static final int ATTR_STRIDE = 5;
     public static final int ATTR_CLASS = 0;
     public static final int ATTR_LANES = 1;
@@ -84,6 +99,46 @@ public final class WorldData {
     }
 
     public int edgeCount() { return graphEdge.length / 2; }
+
+    // --- transit ----------------------------------------------------------
+
+    /** Road class ids for the transit network, matching tools/extract_osm.py. */
+    public static final int CLS_RAIL = 15;
+    public static final int CLS_LIGHT_RAIL = 16;
+    public static final int CLS_SUBWAY = 17;
+    public static final int CLS_MONORAIL = 18;
+    public static final int CLS_FERRY = 23;
+
+    public int transitCount() { return transitClassId.length; }
+
+    public int transitClass(int route) { return transitClassId[route]; }
+
+    /** Points in a route. */
+    public int transitPointCount(int route) {
+        return transitOff[route + 1] - transitOff[route];
+    }
+
+    public double transitX(int route, int i) {
+        return transitPts[(transitOff[route] + i) * 2];
+    }
+
+    public double transitZ(int route, int i) {
+        return transitPts[(transitOff[route] + i) * 2 + 1];
+    }
+
+    /** Length of a route in metres. */
+    public double transitLength(int route) {
+        double d = 0;
+        int n = transitPointCount(route);
+        for (int i = 1; i < n; i++) {
+            d += Math.hypot(transitX(route, i) - transitX(route, i - 1),
+                    transitZ(route, i) - transitZ(route, i - 1));
+        }
+        return d;
+    }
+
+    /** True for a route carried by a vessel rather than a train. */
+    public static boolean isWaterRoute(int cls) { return cls == CLS_FERRY; }
 
     private final String manifestJson;
     private final String buildId;
@@ -143,6 +198,26 @@ public final class WorldData {
         ByteBuffer ga = network.readBuffer("gattr");
         graphAttr = new float[ga.remaining() / 4];
         for (int i = 0; i < graphAttr.length; i++) { graphAttr[i] = ga.getFloat(); }
+
+        // Tolerate a world built before transit existed rather than
+        // refusing to load it: an older package is still a playable city.
+        if (network.has("tpts") && network.has("toff") && network.has("tcls")) {
+            ByteBuffer tp = network.readBuffer("tpts");
+            transitPts = new float[tp.remaining() / 4];
+            for (int i = 0; i < transitPts.length; i++) { transitPts[i] = tp.getFloat(); }
+            ByteBuffer to = network.readBuffer("toff");
+            transitOff = new int[to.remaining() / 4];
+            for (int i = 0; i < transitOff.length; i++) { transitOff[i] = to.getInt(); }
+            ByteBuffer tc = network.readBuffer("tcls");
+            transitClassId = new int[tc.remaining() / 4];
+            for (int i = 0; i < transitClassId.length; i++) {
+                transitClassId[i] = tc.getInt();
+            }
+        } else {
+            transitPts = new float[0];
+            transitOff = new int[]{0};
+            transitClassId = new int[0];
+        }
 
         places = Places.parse(network.readString("places"));
     }

@@ -83,6 +83,9 @@ public final class Telemetry {
     /** Police units currently hunting you. */
     public volatile int policeUnits;
 
+    /** Trains, metros and vessels currently running. */
+    public volatile int services;
+
     /** Rain falling now, 0 to 1, and how wet the ground is. */
     public volatile double rain;
     public volatile double wetness;
