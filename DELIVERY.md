@@ -41,7 +41,9 @@ MumbaiGL: GL ready, programs linked
 Mumbai  : world loaded in 6172 ms: 3869 chunks, 1283 places
 Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
 MumbaiGL: 1 decode workers started
-Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=23
+MumbaiGL: atlas: 15 layers of 128x128 in 306 ms
+Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=29
 ```
 
 So: it installs, it starts cold in 3.5 s, every shader compiles and links on a
@@ -86,6 +88,10 @@ This matters more than anything above.
 - Navi Mumbai, east of Thane Creek, is distant low-detail context, as the
   brief allows.
 - There is **no audio**. None at all.
+- **There are no missions, no money, no wanted level and no police pursuit
+  yet.** The police vehicle exists and is excluded from ambient traffic, but
+  nothing spawns it. Pedestrians and traffic do not yet react to the player.
+  A radar/minimap is not built.
 - There is **no shadow pass**. Lighting is a sun term plus hemispheric
   ambient with no occlusion.
 - Interiors do not exist; buildings are solid extrusions.

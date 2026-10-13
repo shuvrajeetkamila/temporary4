@@ -29,6 +29,36 @@ per-wheel suspension and a slipping clutch, a boat with eight buoyancy points
 on the same waves the shader draws, a helicopter with an induced-inflow solve,
 and an aeroplane that needs real runway length to get airborne.
 
+## The game layer
+
+Walk up to any vehicle, press **ENTER**, drive off. Stop, press **EXIT**, and
+it is still standing there when you turn round. Taking a car that is already
+moving inherits its speed rather than stopping it dead.
+
+Ten unbranded vehicles, weighted by the real mix of the city's traffic, so
+scooters and autorickshaws dominate and buses are a steady minority:
+
+| | |
+|---|---|
+| Kaali-peeli | 1,180 kg, upright, black under yellow |
+| Autorickshaw | 340 kg on three wheels — tips into corners, and not licensed south of Mahim |
+| Double-decker | 12.4 t, 10.2 m, understeers because it weighs 12.4 tonnes |
+| Single-deck bus, tempo, scooter | |
+| Hatchback, saloon, SUV | private traffic |
+| Police interceptor | not ambient; spawned by the wanted system |
+
+Each is described to the solver by mass, wheelbase, inertia tensor and
+centre-of-mass height — not by a handling fudge applied afterwards.
+
+A full day runs in 24 minutes, keyed to Mumbai's own light: washed-out hazy
+noon, the gold at half past five, the sunset the city goes outside to watch,
+and a 25-minute tropical dusk rather than a European hour and a half. After
+dark the windows come on — only the windows, because the emissive mask lives
+in the texture's alpha rather than being a per-face constant.
+
+Every surface is textured, and there is not one image file in the repository:
+the atlas is 15 procedurally generated tiles built at startup in about 300 ms.
+
 Offline. No login, no ads, no network permission, no backend.
 
 ---
