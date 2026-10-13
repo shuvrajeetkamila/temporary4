@@ -113,6 +113,27 @@ job dropped. Keep moving and the arrest timer resets.
 baton, with a 2.6 m reach and a forward arc, which knocks people down and
 draws attention.
 
+### The monsoon
+
+Rain and ground wetness are deliberately two different numbers. Rain is
+what is falling now and drives the overlay and the sky; wetness is how
+wet the tarmac is, and it drives grip and the specular sheen. Tarmac
+soaks in about 36 seconds and takes five minutes to dry, so the road
+stays slick and shining long after a squall has gone through - which is
+most of what a Mumbai monsoon looks like, and means the handling change
+outlasts the downpour that caused it.
+
+Squalls come from value noise over the clock rather than a random walk,
+so the weather is a pure function of time: the same moment always gives
+the same sky and nothing drifts if frames are dropped. The season knob
+raises a threshold rather than scaling the intensity, so a dry month is
+genuinely dry instead of a drizzle that never stops.
+
+The rain itself is a full-screen procedural pass, three slanted layers at
+different fall speeds, not particles - rain that fills the frame needs
+tens of thousands of quads and none of them survive a tile-based mobile
+GPU.
+
 ## Verification
 
 Nothing is published unless all of this passes first:

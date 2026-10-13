@@ -19,6 +19,7 @@ import ai.shuvrajeetkamila.mumbai.physics.HumanPhysics;
 import ai.shuvrajeetkamila.mumbai.physics.Ocean;
 import ai.shuvrajeetkamila.mumbai.physics.RigidBody;
 import ai.shuvrajeetkamila.mumbai.render.Sky;
+import ai.shuvrajeetkamila.mumbai.render.Weather;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.world.WorldStreamer;
@@ -76,6 +77,14 @@ public final class Engine {
 
     /** Sun position and air colour for the current {@link #timeOfDay}. */
     public final Sky sky = new Sky();
+
+    /**
+     * The monsoon. Driven on real seconds rather than game time: a squall
+     * cell is 3.5 minutes of wall clock, which is a human timescale for
+     * weather changing. Game time runs sixty times faster, and weather
+     * keyed to it would strobe.
+     */
+    public final Weather weather = new Weather();
 
     /**
      * Hours since midnight. Advances at one game-minute per real second, so
@@ -233,6 +242,10 @@ public final class Engine {
             fixedStep(FixedStep.STEP, in);
         }
         timeOfDay += frameSeconds / SECONDS_PER_GAME_HOUR;
+        // Weather runs on the wall clock, and wetness is its output rather
+        // than a field anyone else sets.
+        weather.update(frameSeconds);
+        wetness = weather.wetness;
         if (timeOfDay >= 24.0) { timeOfDay -= 24.0; }
         sky.evaluate(timeOfDay, wetness);
 
@@ -652,6 +665,8 @@ public final class Engine {
         telemetry.jobsDone = missions.jobsDone;
         telemetry.wantedStars = wanted.stars();
         telemetry.policeUnits = agents.policeCount();
+        telemetry.rain = weather.rain;
+        telemetry.wetness = weather.wetness;
         telemetry.jobTimeLeft = missions.active != null && missions.active.timed()
                 ? Math.max(0, missions.active.timeLeft) : 0;
         telemetry.jobDistance = missions.distanceToTarget(

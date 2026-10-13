@@ -82,4 +82,8 @@ public final class Telemetry {
     public volatile int wantedStars;
     /** Police units currently hunting you. */
     public volatile int policeUnits;
+
+    /** Rain falling now, 0 to 1, and how wet the ground is. */
+    public volatile double rain;
+    public volatile double wetness;
 }

@@ -265,6 +265,56 @@ final class Shaders {
             + "  fragColour = vec4(mix(uFogColour, uSkyColour, t), 1.0);\n"
             + "}\n";
 
+    /**
+     * Monsoon rain, drawn as a full-screen pass over the finished scene
+     * using the same quad as the sky.
+     *
+     * <p>Three layers of procedural streaks at different scales and fall
+     * speeds, slanted, with only a fraction of the columns carrying a drop
+     * so it does not read as a comb. Screen space rather than particles:
+     * rain that fills the frame needs tens of thousands of quads to look
+     * like anything, and none of them survive contact with a tile-based
+     * mobile GPU.
+     *
+     * <p>{@code uTime} is wrapped to ten seconds on the CPU, because this
+     * is mediump and a monotonically growing clock loses its fractional
+     * bits within minutes. Ten is chosen so that every layer's speed times
+     * ten is a whole number, which puts the wrap exactly on each layer's
+     * period and makes it invisible. Changing the speeds without changing
+     * the wrap puts a visible jump in the rain every ten seconds.
+     */
+    static final String RAIN_FS = FS_HEAD
+            + "in mediump vec2 vNdc;\n"
+            + "uniform mediump float uTime;\n"
+            + "uniform mediump float uRain;\n"
+            + "uniform mediump float uAspect;\n"
+            + "uniform mediump vec3 uTint;\n"
+            + "out mediump vec4 fragColour;\n"
+            + "mediump float h11(mediump float x) {\n"
+            + "  return fract(sin(x * 127.1) * 43758.5453);\n"
+            + "}\n"
+            + "void main() {\n"
+            + "  mediump vec2 uv = vec2(vNdc.x * uAspect, vNdc.y);\n"
+            + "  mediump float acc = 0.0;\n"
+            + "  for (int i = 0; i < 3; i++) {\n"
+            + "    mediump float fi = float(i);\n"
+            + "    mediump float scale = 34.0 + fi * 24.0;\n"
+            + "    mediump float speed = 1.5 + fi * 0.9;\n"
+            + "    mediump vec2 p = uv;\n"
+            + "    p.x += p.y * 0.13;\n"
+            + "    p *= scale;\n"
+            + "    mediump float col = floor(p.x);\n"
+            + "    mediump float off = h11(col + fi * 31.7);\n"
+            + "    mediump float y = fract(p.y * 0.25 - uTime * speed - off);\n"
+            + "    mediump float streak = smoothstep(0.0, 0.05, y)\n"
+            + "        * (1.0 - smoothstep(0.05, 0.28, y));\n"
+            + "    mediump float present = step(0.38, h11(col * 1.7 + fi * 5.3));\n"
+            + "    acc += streak * present * (0.45 + 0.28 * fi);\n"
+            + "  }\n"
+            + "  mediump float a = clamp(acc * uRain * 0.62, 0.0, 1.0);\n"
+            + "  fragColour = vec4(uTint, a);\n"
+            + "}\n";
+
     /** Flat colour, for the HUD, the minimap and debug lines. */
     static final String UI_VS = VS_HEAD
             + "layout(location = 0) in vec2 aPos;\n"

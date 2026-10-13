@@ -41,6 +41,9 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private int instProg;
     private int seaProg;
     private int skyProg;
+    private int rainProg;
+    private int uRainTime, uRainAmount, uRainAspect, uRainTint;
+    private float aspect = 1.78f;
 
     private int uSceneViewProj, uSceneOrigin, uSceneCam, uSceneSunDir;
     private int uSceneSunCol, uSceneSky, uSceneFogCol, uSceneFogDen, uSceneWet;
@@ -114,6 +117,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         instProg = GLUtil.link(Shaders.INSTANCED_VS, Shaders.SCENE_FS);
         seaProg = GLUtil.link(Shaders.SEA_VS, Shaders.SEA_FS);
         skyProg = GLUtil.link(Shaders.SKY_VS, Shaders.SKY_FS);
+        rainProg = GLUtil.link(Shaders.SKY_VS, Shaders.RAIN_FS);
 
         uSceneViewProj = GLES30.glGetUniformLocation(sceneProg, "uViewProj");
         uSceneOrigin = GLES30.glGetUniformLocation(sceneProg, "uChunkOrigin");
@@ -157,6 +161,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uSkySky = GLES30.glGetUniformLocation(skyProg, "uSkyColour");
         uSkyFog = GLES30.glGetUniformLocation(skyProg, "uFogColour");
         uSkyHorizon = GLES30.glGetUniformLocation(skyProg, "uHorizon");
+        uRainTime = GLES30.glGetUniformLocation(rainProg, "uTime");
+        uRainAmount = GLES30.glGetUniformLocation(rainProg, "uRain");
+        uRainAspect = GLES30.glGetUniformLocation(rainProg, "uAspect");
+        uRainTint = GLES30.glGetUniformLocation(rainProg, "uTint");
 
         GLES30.glEnable(GLES30.GL_DEPTH_TEST);
         GLES30.glDepthFunc(GLES30.GL_LEQUAL);
@@ -211,6 +219,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     public void onSurfaceChanged(GL10 unused, int w, int h) {
         width = Math.max(1, w);
         height = Math.max(1, h);
+        aspect = (float) width / (float) height;
         GLES30.glViewport(0, 0, width, height);
     }
 
@@ -452,6 +461,33 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 drawn++;
                 tris += markerGpu.indexCount / 3;
             }
+        }
+
+        // --- monsoon, over the finished frame ---------------------------------
+        if (e.weather.rain > 0.02) {
+            GLES30.glUseProgram(rainProg);
+            // Wrapped to ten seconds: the shader is mediump and each
+            // layer's speed times ten is whole, so the wrap lands on every
+            // layer's period and cannot be seen.
+            GLES30.glUniform1f(uRainTime, (float) (e.ocean.time() % 10.0));
+            GLES30.glUniform1f(uRainAmount, (float) e.weather.rain);
+            GLES30.glUniform1f(uRainAspect, aspect);
+            // Tinted towards the fog so rain reads as part of the weather
+            // rather than white scratches laid over it.
+            GLES30.glUniform3f(uRainTint,
+                    fog[0] * 0.45f + 0.52f,
+                    fog[1] * 0.45f + 0.55f,
+                    fog[2] * 0.45f + 0.60f);
+            GLES30.glEnable(GLES30.GL_BLEND);
+            GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA);
+            GLES30.glDepthMask(false);
+            GLES30.glDisable(GLES30.GL_DEPTH_TEST);
+            GLES30.glBindVertexArray(skyVao);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
+            GLES30.glEnable(GLES30.GL_DEPTH_TEST);
+            GLES30.glDepthMask(true);
+            GLES30.glDisable(GLES30.GL_BLEND);
+            drawn++;
         }
 
         GLES30.glBindVertexArray(0);
