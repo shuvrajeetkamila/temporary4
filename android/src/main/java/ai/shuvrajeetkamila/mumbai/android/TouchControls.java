@@ -8,6 +8,7 @@ import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 
+import ai.shuvrajeetkamila.mumbai.app.ControlMapping;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 
@@ -42,11 +43,18 @@ final class TouchControls extends View {
     private float rightCx, rightCy, rightX, rightY;
     private float stickRadius = 110;
 
-    // Button state, sampled by pump().
-    private boolean bA, bB, bC, bD;
-    private boolean edgeA, edgeB;
+    /** Held state and edge state, indexed by action. */
+    private final boolean[] held = new boolean[ControlMapping.ACT_COUNT];
+    private final boolean[] edge = new boolean[ControlMapping.ACT_COUNT];
 
-    private final float[] pending = new float[4];
+    /** Scratch for the current profile's layout. */
+    private final float[] slotX = new float[ControlMapping.MAX_SLOTS];
+    private final float[] slotY = new float[ControlMapping.MAX_SLOTS];
+    private float slotR;
+    private int slotCount;
+
+    /** Which pointer is holding which slot, so two can be held at once. */
+    private final int[] slotPointer = new int[ControlMapping.MAX_SLOTS];
 
     TouchControls(Context c, InputState out, Runnable onProfile,
                   Runnable onCamera, Runnable onQuality) {
@@ -74,16 +82,60 @@ final class TouchControls extends View {
     }
 
     void setProfile(ControlProfile p) {
+        if (p != profile) {
+            // Carrying a throttle or a collective across a profile change
+            // leaves a control applied that the new vehicle never set.
+            out.reset();
+            for (int i = 0; i < held.length; i++) { held[i] = false; edge[i] = false; }
+            for (int i = 0; i < ControlMapping.MAX_SLOTS; i++) { slotPointer[i] = -1; }
+        }
         profile = p;
         invalidate();
+    }
+
+    /**
+     * Lays the buttons out from the real view size.
+     *
+     * <p>They used to sit at fixed offsets of 90 to 390 dp down from the
+     * top, which assumed a view taller than 416 dp. A phone in landscape
+     * is 320 to 412 dp tall, so the sixth button was off the bottom of
+     * the screen on every handset and only fitted on a tablet.
+     */
+    private void layoutButtons() {
+        int[] acts = ControlMapping.actionsFor(profile);
+        slotCount = Math.min(acts.length, ControlMapping.MAX_SLOTS);
+        float d = getResources().getDisplayMetrics().density;
+        float h = getHeight(), w = getWidth();
+        slotR = Math.min(27 * d, h * 0.085f);
+        float gap = slotR * 2.30f;
+        float cx0 = w - (slotR + 14 * d);
+        float cx1 = cx0 - gap;
+        float cy = h * 0.47f;
+        for (int i = 0; i < slotCount; i++) {
+            slotX[i] = (i % 2 == 0) ? cx0 : cx1;
+            slotY[i] = cy + (1.5f - (i / 2)) * gap;
+        }
+    }
+
+    /** Left edge of the button cluster, so the stick can keep clear of it. */
+    private float clusterLeft() {
+        float d = getResources().getDisplayMetrics().density;
+        float r = Math.min(27 * d, getHeight() * 0.085f);
+        return getWidth() - (r + 14 * d) - r * 2.30f - r;
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
+        stickRadius = Math.min(62 * getResources().getDisplayMetrics().density,
+                h * 0.17f);
         leftCx = stickRadius * 1.5f;
         leftCy = h - stickRadius * 1.5f;
-        rightCx = w - stickRadius * 1.5f;
+        // Clear of the button cluster, which owns the right edge. The old
+        // default put the stick directly underneath it.
+        layoutButtons();
+        rightCx = Math.min(clusterLeft() - stickRadius * 1.15f,
+                w - stickRadius * 1.5f);
         rightCy = h - stickRadius * 1.5f;
         leftX = leftCx;
         leftY = leftCy;
@@ -99,7 +151,7 @@ final class TouchControls extends View {
             case MotionEvent.ACTION_POINTER_DOWN: {
                 int i = ev.getActionIndex();
                 float x = ev.getX(i), y = ev.getY(i);
-                if (hitButton(x, y)) { return true; }
+                if (hitButton(x, y, ev.getPointerId(i))) { return true; }
                 if (x < getWidth() * 0.5f && leftPointer < 0) {
                     leftPointer = ev.getPointerId(i);
                     leftCx = x;
@@ -142,9 +194,12 @@ final class TouchControls extends View {
                     rightX = rightCx;
                     rightY = rightCy;
                 }
-                if (action == MotionEvent.ACTION_UP
-                        || action == MotionEvent.ACTION_CANCEL) {
-                    bA = bB = bC = bD = false;
+                releaseButton(id);
+                if (action == MotionEvent.ACTION_CANCEL) {
+                    // Everything off: a cancel means the gesture was taken
+                    // away from us and no UP is coming for the rest.
+                    for (int k = 0; k < held.length; k++) { held[k] = false; }
+                    for (int k = 0; k < ControlMapping.MAX_SLOTS; k++) { slotPointer[k] = -1; }
                 }
                 break;
             }
@@ -155,94 +210,51 @@ final class TouchControls extends View {
         return true;
     }
 
-    private boolean hitButton(float x, float y) {
-        float d = getResources().getDisplayMetrics().density;
-        float bx = getWidth() - 46 * d;
-        float r = 26 * d;
-        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d, 390 * d};
-        for (int i = 0; i < 6; i++) {
-            if (Math.hypot(x - bx, y - ys[i]) < r) {
-                switch (i) {
-                    case 0: bA = true; edgeA = true; break;
-                    case 1: bB = true; edgeB = true; break;
-                    case 2: edgeEnter = true; break;
-                    case 3: edgeAttack = true; break;
-                    case 4: onProfile.run(); break;
-                    default: onCamera.run(); break;
-                }
-                return true;
+    private boolean hitButton(float x, float y, int pointerId) {
+        layoutButtons();
+        int[] acts = ControlMapping.actionsFor(profile);
+        for (int i = 0; i < slotCount; i++) {
+            if (Math.hypot(x - slotX[i], y - slotY[i]) >= slotR * 1.18f) {
+                continue;
             }
+            int a = acts[i];
+            held[a] = true;
+            edge[a] = true;
+            slotPointer[i] = pointerId;
+            // These two act immediately rather than through InputState,
+            // because they change the host's state, not the vehicle's.
+            if (a == ControlMapping.ACT_SWAP) { onProfile.run(); }
+            if (a == ControlMapping.ACT_CAM) { onCamera.run(); }
+            return true;
         }
         // Quality toggle, bottom centre.
-        if (Math.hypot(x - getWidth() * 0.5f, y - (getHeight() - 32 * d)) < 24 * d) {
+        float d = getResources().getDisplayMetrics().density;
+        if (Math.hypot(x - getWidth() * 0.5f, y - (getHeight() - 32 * d))
+                < 24 * d) {
             onQuality.run();
             return true;
         }
         return false;
     }
 
-    /** Copy the current touch state into the engine's input block. */
-    /** Set on the frame the enter/exit button goes down. */
-    private boolean edgeEnter;
-
-    /** Set on the frame the baton button goes down. */
-    private boolean edgeAttack;
+    /** Releases whatever slot this pointer was holding. */
+    private void releaseButton(int pointerId) {
+        int[] acts = ControlMapping.actionsFor(profile);
+        for (int i = 0; i < slotCount; i++) {
+            if (slotPointer[i] == pointerId) {
+                slotPointer[i] = -1;
+                if (i < acts.length) { held[acts[i]] = false; }
+            }
+        }
+    }
 
     void pump() {
         float lx = clampStick(leftX - leftCx);
         float ly = clampStick(leftY - leftCy);
         float rx = clampStick(rightX - rightCx);
         float ry = clampStick(rightY - rightCy);
-
-        out.moveX = lx;
-        out.moveY = ly;
-        out.lookX = rx;
-        out.lookY = ry;
-
-        switch (profile) {
-            case CAR:
-                // Left stick: up is throttle, down is brake. Right is steering.
-                out.throttle = Math.max(0, -ly);
-                out.brake = Math.max(0, ly);
-                out.steer = rx;
-                out.handbrake = bB;
-                out.reverse = bA && Math.abs(ly) < 0.2;
-                break;
-            case BOAT:
-                out.throttle = Math.max(0, -ly);
-                out.brake = Math.max(0, ly);
-                out.steer = rx;
-                break;
-            case HELICOPTER:
-                // Left stick vertical is collective, horizontal is the pedals.
-                // That is the real layout and it is worth the learning curve.
-                out.collective = (-ly + 1) * 0.5;
-                out.pedal = lx;
-                break;
-            case AEROPLANE:
-                out.throttle = (-ly + 1) * 0.5;
-                out.pedal = lx;
-                out.brake = bB ? 1 : 0;
-                out.flapsDown = edgeA;
-                out.gearToggle = edgeB;
-                break;
-            default:
-                out.run = bA;
-                out.sprint = bB;
-                out.jump = edgeA;
-                break;
-        }
-        if (profile == ControlProfile.HELICOPTER) {
-            out.engineToggle = edgeB;
-        }
-        // One button, both directions, whatever is being driven: on foot it
-        // gets you in, in a vehicle it gets you out.
-        out.enterExit = edgeEnter;
-        out.attack = edgeAttack;
-        edgeA = false;
-        edgeB = false;
-        edgeEnter = false;
-        edgeAttack = false;
+        ControlMapping.apply(profile, out, lx, ly, rx, ry, held, edge);
+        for (int i = 0; i < edge.length; i++) { edge[i] = false; }
     }
 
     private float clampStick(float v) {
@@ -261,15 +273,13 @@ final class TouchControls extends View {
         drawStick(canvas, leftCx, leftCy, leftX, leftY);
         drawStick(canvas, rightCx, rightCy, rightX, rightY);
 
-        float bx = getWidth() - 46 * d;
-        float r = 26 * d;
-        String[] names = buttonNames();
-        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d, 390 * d};
-        boolean[] on = {bA, bB, false, false, false, false};
-        for (int i = 0; i < 6; i++) {
-            canvas.drawCircle(bx, ys[i], r, on[i] ? knob : fill);
-            canvas.drawCircle(bx, ys[i], r, ring);
-            canvas.drawText(names[i], bx, ys[i] + 5 * d, label);
+        layoutButtons();
+        int[] acts = ControlMapping.actionsFor(profile);
+        for (int i = 0; i < slotCount; i++) {
+            boolean on = held[acts[i]];
+            canvas.drawCircle(slotX[i], slotY[i], slotR, on ? knob : fill);
+            canvas.drawCircle(slotX[i], slotY[i], slotR, ring);
+            canvas.drawText(ControlMapping.labelFor(acts[i]), slotX[i], slotY[i] + 5 * d, label);
         }
 
         float qx = getWidth() * 0.5f;
@@ -279,7 +289,7 @@ final class TouchControls extends View {
         canvas.drawText("GFX", qx, qy + 5 * d, label);
 
         // Left stick legend, so the collective is not a mystery.
-        canvas.drawText(stickLegend(), leftCx, leftCy - stickRadius - 10 * d, label);
+        canvas.drawText(ControlMapping.stickLegend(profile), leftCx, leftCy - stickRadius - 10 * d, label);
     }
 
     private void drawStick(Canvas canvas, float cx, float cy, float x, float y) {
@@ -294,28 +304,4 @@ final class TouchControls extends View {
         canvas.drawCircle(cx + dx, cy + dy, stickRadius * 0.38f, knob);
     }
 
-    private String[] buttonNames() {
-        switch (profile) {
-            case CAR:
-                return new String[]{"REV", "HBRK", "EXIT", "\u2013", "SWAP", "CAM"};
-            case BOAT:
-                return new String[]{"\u2013", "\u2013", "\u2013", "\u2013", "SWAP", "CAM"};
-            case HELICOPTER:
-                return new String[]{"\u2013", "ENG", "\u2013", "\u2013", "SWAP", "CAM"};
-            case AEROPLANE:
-                return new String[]{"FLAP", "GEAR", "\u2013", "\u2013", "SWAP", "CAM"};
-            // BATON is the only weapon button there is, and only on foot.
-            default:
-                return new String[]{"RUN", "SPRT", "ENTER", "BATON", "SWAP", "CAM"};
-        }
-    }
-
-    private String stickLegend() {
-        switch (profile) {
-            case CAR: case BOAT: return "throttle / brake";
-            case HELICOPTER: return "collective + pedals";
-            case AEROPLANE: return "throttle + rudder";
-            default: return "move";
-        }
-    }
 }

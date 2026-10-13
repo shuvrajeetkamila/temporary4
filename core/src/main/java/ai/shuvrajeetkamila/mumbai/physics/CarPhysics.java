@@ -299,7 +299,10 @@ public final class CarPhysics extends RigidBody {
         double speedFactor = MathUtil.remap(groundSpeed(), 6, 42, 1.0, 0.36);
         steerState = MathUtil.approach(steerState, target * speedFactor, 9.0, dt);
         for (Wheel w : wheels) {
-            if (w.steered) { w.steerAngle = steerState * maxSteerAngle; }
+            // Negated because body +X is the car's left in this frame, so
+            // a positive angle about it points the wheels to the driver's
+            // left. Pushing the stick right used to turn the car left.
+            if (w.steered) { w.steerAngle = -steerState * maxSteerAngle; }
         }
 
         // --- suspension and tyres -------------------------------------------

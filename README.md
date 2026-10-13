@@ -165,6 +165,54 @@ that turns round.
 The metro is drawn 12 m below the street, the monorail 8.5 m above it,
 and vessels sit at sea level whatever the terrain underneath says.
 
+### Controls, and an audit of them
+
+Every control is mapped in one place, `app/ControlMapping`, which lives
+in core rather than in the Android view so it can be tested without a
+device. Buttons are addressed by what they do, never by where they sit
+on screen, because keying off the slot index is how two of them ended up
+sharing a source.
+
+| | left stick | right stick | buttons |
+|---|---|---|---|
+| On foot | move (push further to run) | look | SPRT, JUMP, ENTER, BATON, CAM, SWAP |
+| Car | throttle / brake | steer | HBRK, REV, EXIT, CAM, SWAP |
+| Boat | ahead / astern | rudder | EXIT, CAM, SWAP |
+| Helicopter | collective + pedals | cyclic | ENG, EXIT, CAM, SWAP |
+| Aeroplane | throttle + rudder | elevator + aileron | BRAKE, FLAP+, FLAP-, GEAR, EXIT, CAM, SWAP |
+
+Auditing all five turned up nine faults, none of which any existing test
+could have caught, because the physics tests all checked magnitudes and
+the input layer had never been tested at all:
+
+- **The car steered the wrong way.** Push the stick right, the car went
+  left. Body +X is the vehicle's *port* side in this frame - world X is
+  east, Z is south, forward is +Z, and the right of something facing
+  south is west. The boat's rudder and the aeroplane's ailerons and
+  rudder were inverted for the same reason.
+- **The helicopter could not take off.** Hovering 2450 kg on a 5.35 m
+  rotor needs about 335 kW, or 8100 N m at 394 rpm. The engine was
+  specified at 3400 N m. The governor saturated instantly, the rotor
+  drooped below 200 rpm and the machine sank at 3 m/s with the
+  collective against the stop.
+- **Neutral pedal gave 45% of the anti-torque**, so hands off the pedals
+  spun it up. That only looked survivable while the engine was too weak
+  to produce torque worth cancelling.
+- **`Quat.roll()` returned the opposite of its own documentation**, for
+  the same body-axis reason.
+- **The sixth on-screen button was off the bottom of the screen** on
+  every handset. Buttons sat at fixed offsets of 90 to 390 dp from the
+  top, which needs a view 416 dp tall; a phone in landscape is 320 to
+  412. They are now laid out from the real view size.
+- **RUN and JUMP were the same button**, so setting off at a run always
+  launched you into the air. Running now comes from how far the stick is
+  pushed.
+- **GEAR and the wheel brakes were the same button** in the aeroplane.
+- **Flaps could only ever be extended** - nothing set `flapsUp`, so once
+  they were out they stayed out.
+- **ENTER was drawn as an en dash** in the boat, helicopter and
+  aeroplane. The button worked; nothing told you it was there.
+
 ## Verification
 
 Nothing is published unless all of this passes first:

@@ -169,9 +169,13 @@ public final class AeroplanePhysics extends RigidBody {
             double pitchM = -elevator * elevatorPower * auth * 0.42;
             double rollM = aileron * aileronPower * auth * 0.30;
             double yawM = rudderInput * rudderPower * auth * 0.26;
+            // Signs follow from body +X being the port side and +Y giving a
+            // left yaw for a positive moment in this frame. Pitch was right;
+            // roll and yaw were both inverted, so the stick rolled and the
+            // pedals yawed the opposite way to the one asked for.
             addTorque(tmp3.x * pitchM, tmp3.y * pitchM, tmp3.z * pitchM);
-            addTorque(tmp1.x * -rollM, tmp1.y * -rollM, tmp1.z * -rollM);
-            addTorque(tmp2.x * yawM, tmp2.y * yawM, tmp2.z * yawM);
+            addTorque(tmp1.x * rollM, tmp1.y * rollM, tmp1.z * rollM);
+            addTorque(tmp2.x * -yawM, tmp2.y * -yawM, tmp2.z * -yawM);
 
             // --- static stability. A real aeroplane weathercocks into the
             // airflow and tends to return to its trimmed angle of attack.
@@ -180,18 +184,25 @@ public final class AeroplanePhysics extends RigidBody {
             // makes it divergent: it rotates, the moment grows with the angle
             // rather than resisting it, and it flips within a second.
             //
-            // Fin: slipping to the right means the airflow strikes the right
-            // side, the fin pushes the tail left and the nose swings right.
+            // Fin: the airflow strikes the side it is slipping towards, the
+            // fin pushes the tail the other way and the nose swings into
+            // the wind.
+            // Note the sign of sideslip: it is atan2(air . right, ...) and
+            // right is body +X, which is the PORT side in this frame. So a
+            // positive sideslip is a slip to the aeroplane's left, and the
+            // fin restores it by yawing the nose left, which is a positive
+            // moment about +Y here. Checked by letting go of a 11.5 degree
+            // slip and watching it wash out rather than grow.
             double fin = sideslip * auth * 0.55;
             addTorque(tmp2.x * fin, tmp2.y * fin, tmp2.z * fin);
             // Tailplane: above the trim angle it pushes the nose back down.
             double pitchStab = (angleOfAttack - 0.035) * auth * 0.62;
             addTorque(tmp3.x * pitchStab, tmp3.y * pitchStab, tmp3.z * pitchStab);
             // Dihedral: the windward wing meets the air at a greater angle,
-            // so the aeroplane rolls away from the slip.
-            addTorque(tmp1.x * sideslip * auth * 0.20,
-                    tmp1.y * sideslip * auth * 0.20,
-                    tmp1.z * sideslip * auth * 0.20);
+            // so the aeroplane rolls away from the slip. Same sign note as
+            // the fin above.
+            double dihedral = sideslip * auth * 0.20;
+            addTorque(tmp1.x * dihedral, tmp1.y * dihedral, tmp1.z * dihedral);
         } else {
             angleOfAttack = 0;
             sideslip = 0;

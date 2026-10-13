@@ -288,7 +288,10 @@ public final class BoatPhysics extends RigidBody {
         // A rudder only works with water flowing past it, which is why a boat
         // at rest cannot be steered and why backing into a berth is awkward.
         double flow = Math.abs(vFwd) + Math.abs(thrust) / Math.max(mass, 1) * 0.6;
-        double rudderForce = -rudderState * rudderAuthority * flow * mass * 0.085
+        // Positive rudder is starboard. The lateral axis used here is body
+        // +X, which is the hull's port side in this frame, so the sign has
+        // to follow: starboard helm used to swing her to port.
+        double rudderForce = rudderState * rudderAuthority * flow * mass * 0.085
                 * Math.signum(vFwd >= 0 ? 1 : -1);
         orientation.right(tmp2);
         tmp3.set(tmp2).scaleSelf(rudderForce);

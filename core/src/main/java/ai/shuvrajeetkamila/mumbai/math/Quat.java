@@ -122,11 +122,20 @@ public final class Quat {
         return Math.asin(Math.max(-1, Math.min(1, f.y)));
     }
 
-    /** Roll in radians; positive is right wing down. */
+    /**
+     * Roll in radians; positive is right wing down.
+     *
+     * <p>{@link #right()} returns body +X. In this world frame - X east,
+     * Y up, Z south, forward +Z - the physical right of something facing
+     * +Z is west, which is -X. So body +X is the machine's LEFT side, and
+     * the right wing being down means body +X is pointing UP. This
+     * reported the opposite of its own documentation for a long time; it
+     * is only read by tests and the artificial horizon, so nothing
+     * downstream was compensating for it.
+     */
     public double roll() {
         Vec3 r = right(new Vec3());
-        return Math.atan2(-r.y, Math.sqrt(Math.max(1e-12, 1 - r.y * r.y)) + 1e-12)
-                * (1.0);
+        return Math.atan2(r.y, Math.sqrt(Math.max(1e-12, 1 - r.y * r.y)) + 1e-12);
     }
 
     /**

@@ -44,7 +44,22 @@ public final class HelicopterPhysics extends RigidBody {
     public double bladeDragCoefficient = 0.011;
     public double nominalRotorRpm = 394;
     public double rotorInertia = 680;            // kg m^2
-    public double maxEngineTorque = 3400;        // N m at the rotor shaft
+    /**
+     * Torque the engine can deliver at the rotor shaft, N m.
+     *
+     * <p>Momentum theory for this machine: 2450 kg is 24.0 kN of thrust,
+     * a 5.35 m rotor gives 90 m2 of disc, so induced velocity is 10.4 m/s
+     * and ideal induced power 251 kW. At a figure of merit of 0.75 that is
+     * 335 kW, and at 394 rpm (41.3 rad/s) about 8100 N m just to hover.
+     *
+     * <p>This was 3400, which is 140 kW - 42 per cent of what hovering
+     * needs. The governor saturated immediately, rotor RPM drooped from
+     * 394 to under 200, and the machine sank at 3 m/s with the collective
+     * against the stop. It could not take off at all. 10200 N m is 421 kW,
+     * a 1.25 margin over hover, which is the sort of power a 2.4 tonne
+     * turbine single actually has.
+     */
+    public double maxEngineTorque = 10200;       // N m at the rotor shaft
 
     public double tailRotorRadius = 1.0;
     public double tailArm = 6.3;
@@ -191,6 +206,8 @@ public final class HelicopterPhysics extends RigidBody {
         addTorque(tmp3.x * -cyclicPitch * thrust * 0.55,
                 tmp3.y * -cyclicPitch * thrust * 0.55,
                 tmp3.z * -cyclicPitch * thrust * 0.55);
+        // Positive roll is right wing down, which is a positive moment
+        // about the forward axis in this frame.
         addTorque(tmp2.x * cyclicRoll * thrust * 0.42,
                 tmp2.y * cyclicRoll * thrust * 0.42,
                 tmp2.z * cyclicRoll * thrust * 0.42);
@@ -209,7 +226,11 @@ public final class HelicopterPhysics extends RigidBody {
         addTorque(tmp1.x * -torqueRequired, tmp1.y * -torqueRequired,
                 tmp1.z * -torqueRequired);
 
-        double tailThrust = (MathUtil.clamp(pedal, -1, 1) * 0.55 + 0.45)
+        // Neutral pedal must cancel the main rotor reaction, not 45 per
+        // cent of it. With the engine too weak to hover this never showed,
+        // because torqueRequired stayed small; with an engine that can
+        // actually lift the machine, feet off the pedals span it up.
+        double tailThrust = (1.0 + MathUtil.clamp(pedal, -1, 1) * 0.55)
                 * torqueRequired / tailArm;
         // Tail rotor authority falls off in a strong crosswind from the wrong
         // side, which is the loss-of-tail-rotor-effectiveness pilots train for.

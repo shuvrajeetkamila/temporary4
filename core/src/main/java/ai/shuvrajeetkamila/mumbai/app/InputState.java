@@ -29,12 +29,10 @@ public final class InputState {
     public boolean run;
     public boolean sprint;
     public boolean handbrake;
-    public boolean action;
     public boolean flapsUp;
     public boolean flapsDown;
     public boolean gearToggle;
     public boolean engineToggle;
-    public boolean cameraToggle;
     /**
      * Edge-triggered. On foot it enters the nearest vehicle; in a vehicle it
      * gets out. One button for both, as the genre has always done it.
@@ -49,12 +47,10 @@ public final class InputState {
 
     public void clearEdges() {
         jump = false;
-        action = false;
         flapsUp = false;
         flapsDown = false;
         gearToggle = false;
         engineToggle = false;
-        cameraToggle = false;
         enterExit = false;
         attack = false;
     }

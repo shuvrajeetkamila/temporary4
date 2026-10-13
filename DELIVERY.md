@@ -99,6 +99,9 @@ This matters more than anything above.
   platforms, you cannot board one, and the 380 OSM platform ways are not
   modelled. The metro is drawn 12 m below the street with no tunnel
   around it, so from underneath there would be nothing to see.
+- The control mapping and all five locomotion modes are covered by
+  tests that assert direction, not just magnitude. Nine faults found and
+  fixed in that audit are listed in the README.
 - Being arrested costs a quarter of your money and clears the wanted
   level. There is no hospital or police-station cycle, because that needs
   interiors and a save system and neither exists here.
