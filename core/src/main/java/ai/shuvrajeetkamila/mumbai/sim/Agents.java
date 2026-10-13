@@ -288,48 +288,76 @@ public final class Agents {
     private static final double NOTICE_M = 26.0;
 
     /**
-     * Slows a car for the player ahead of it.
+     * The speed a car should be doing with the player nearby. Pure, static
+     * and side-effect free, so the geometry can be tested on its own.
      *
-     * <p>Only for a player genuinely in the way: within a short distance,
-     * and in front rather than behind or alongside. A car that brakes for
-     * something it has already passed looks broken, and one that brakes for
-     * the pavement beside it makes the whole road crawl.
+     * <p>Only yields for a player genuinely in the way: within a short
+     * distance, ahead rather than behind, and within about a lane's width of
+     * the car's centreline. A car that brakes for something it has already
+     * passed looks broken, and one that brakes for the pavement beside it
+     * makes the whole road crawl.
      *
-     * @return the speed it should be doing now
+     * @return the speed it should be doing, between 0 and {@code cruise}
      */
-    private double yieldFor(Car c, double cruise) {
-        double dx = playerX - c.x, dz = playerZ - c.z;
+    public static double desiredSpeed(double carX, double carZ, double heading,
+                                      double px, double pz, double cruise) {
+        double dx = px - carX, dz = pz - carZ;
         double d2 = dx * dx + dz * dz;
-        if (d2 > NOTICE_M * NOTICE_M) { c.braking = false; return cruise; }
+        if (d2 > NOTICE_M * NOTICE_M) { return cruise; }
         double d = Math.sqrt(Math.max(1e-6, d2));
 
-        // Ahead, in the car's own frame. Heading is a bearing, so forward is
-        // (sin, -cos) in the X-east / Z-south world frame.
-        double fx = Math.sin(c.heading), fz = -Math.cos(c.heading);
+        // Heading is a bearing, so forward is (sin, -cos) in the X-east,
+        // Z-south world frame.
+        double fx = Math.sin(heading), fz = -Math.cos(heading);
         double ahead = (dx / d) * fx + (dz / d) * fz;
-        // Perpendicular distance from the car's centreline: the magnitude of
-        // the 2D cross product with the unit forward vector. It has to be
-        // the cross product and not a sum of products - the first version
-        // here was the latter, which happens to be right whenever the
-        // heading is axis-aligned and wrong everywhere else. A player dead
-        // ahead of a car on a 45 degree heading measured as 7 m off to the
-        // side, so nothing on a diagonal road ever braked.
+
+        // Perpendicular distance from the centreline: the magnitude of the
+        // 2D cross product with the unit forward vector. It has to be the
+        // cross product and not a sum of products - the first version was
+        // the latter, which is right whenever the heading is axis-aligned
+        // and wrong everywhere else. A player dead ahead of a car on a 45
+        // degree heading measured as 7 m off to the side, so nothing on a
+        // diagonal road ever braked.
         double lateral = Math.abs(dx * fz - dz * fx);
 
-        if (ahead < 0.25 || lateral > 3.4) { c.braking = false; return cruise; }
+        if (ahead < 0.25 || lateral > 3.4) { return cruise; }
 
-        // Stop short, and scale the slowdown with how close it is. Squared
-        // rather than linear, so a car two lanes back barely lifts off while
-        // one about to hit you stops hard.
         double clear = 5.5;
-        if (d <= clear) {
-            c.braking = true;
-            if (c.hornTimer <= 0 && playerSpeed < 2.0) { c.hornTimer = 1.1; }
-            return 0;
-        }
+        if (d <= clear) { return 0; }
+        // Squared rather than linear, so a car two lanes back barely lifts
+        // off while one about to hit you stops hard.
         double k = (d - clear) / (NOTICE_M - clear);
-        c.braking = k < 0.9;
         return cruise * k * k;
+    }
+
+    /**
+     * Whether a pedestrian should start running, given the player's speed
+     * and how far away they are. Static for the same reason as above.
+     *
+     * <p>Triggered by a vehicle moving fast and close, not by the player
+     * merely existing: someone walking past on the pavement is not a reason
+     * to bolt, and a crowd that scatters from a stationary person makes a
+     * city feel hostile rather than alive.
+     */
+    public static boolean shouldFlee(double playerSpeed, double distance) {
+        return playerSpeed > 5.0 && distance < 14.0;
+    }
+
+    /** Bearing that points a pedestrian directly away from the player. */
+    public static double fleeHeading(double pedX, double pedZ,
+                                     double px, double pz) {
+        double dx = pedX - px, dz = pedZ - pz;
+        double d = Math.hypot(dx, dz);
+        if (d < 1e-6) { return 0; }
+        return Math.atan2(dx / d, -(dz / d));
+    }
+
+    /** Applies {@link #desiredSpeed} and records the flags the HUD reads. */
+    private double yieldFor(Car c, double cruise) {
+        double want = desiredSpeed(c.x, c.z, c.heading, playerX, playerZ, cruise);
+        c.braking = want < cruise * 0.9;
+        if (want <= 0 && c.hornTimer <= 0 && playerSpeed < 2.0) { c.hornTimer = 1.1; }
+        return want;
     }
 
     private void stepCar(Car c, double dt) {
@@ -395,11 +423,10 @@ public final class Agents {
 
         if (p.fleeTimer > 0) {
             p.fleeTimer -= dt;
-        } else if (playerSpeed > 5.0 && d2 < 14.0 * 14.0) {
+        } else if (shouldFlee(playerSpeed, Math.sqrt(d2))) {
             // Directly away from the threat, with a little scatter so a
             // group does not move off as one block.
-            double d = Math.sqrt(Math.max(1e-6, d2));
-            p.heading = Math.atan2(dx / d, -(dz / d))
+            p.heading = fleeHeading(p.x, p.z, playerX, playerZ)
                     + (rng.nextDouble() - 0.5) * 0.9;
             p.fleeTimer = 1.6 + rng.nextDouble() * 1.8;
         }

@@ -272,13 +272,37 @@ jobs:
           {
             echo "Run ${{ github.run_id }} failed on ${{ github.ref_name }}."
             echo
-            echo '### verify.json'
+            echo '### failed tests'
+            echo '```'
+            # The JUnit XML is the only place the actual assertion message
+            # survives. Reports were being searched for .txt files that
+            # Gradle does not write, so two failures in a row were posted as
+            # an empty block and had to be guessed at.
+            python3 - <<'PYEOF' || echo "(could not parse test results)"
+          import glob, xml.etree.ElementTree as ET
+          found = False
+          for f in sorted(glob.glob('core/build/test-results/**/*.xml', recursive=True)):
+              try:
+                  root = ET.parse(f).getroot()
+              except Exception:
+                  continue
+              for tc in root.iter('testcase'):
+                  for bad in list(tc.findall('failure')) + list(tc.findall('error')):
+                      found = True
+                      print(f"{tc.get('classname')}.{tc.get('name')}")
+                      msg = (bad.get('message') or '').strip()
+                      print('   ' + msg[:600].replace(chr(10), chr(10) + '   '))
+                      body = (bad.text or '').strip().splitlines()
+                      for line in body[:6]:
+                          print('     ' + line[:200])
+                      print()
+          if not found:
+              print('no failing testcase found in the XML')
+          PYEOF
+            echo '```'
+            echo '### verify.json summary'
             echo '```json'
-            head -c 3000 data/reports/verify.json 2>/dev/null || echo "(absent)"
-            echo '```'
-            echo '### test failures'
-            echo '```'
-            find core/build/reports -name '*.txt' -exec tail -40 {} \; 2>/dev/null | head -120 || true
+            python3 -c "import json;d=json.load(open('data/reports/verify.json'));print(json.dumps({k:d[k] for k in ('passed','total','failed') if k in d}));print(json.dumps([g for g in d.get('gates',[]) if g.get('status')!='PASS'][:20], indent=1))" 2>/dev/null || echo "(absent)"
             echo '```'
           } > /tmp/body.md
           gh issue create --title "build-apk failed: run ${{ github.run_id }}" \
