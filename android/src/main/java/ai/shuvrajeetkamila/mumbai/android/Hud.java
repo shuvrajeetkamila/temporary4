@@ -37,6 +37,9 @@ final class Hud extends View {
     private final Paint money = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint objective = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint banner = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint starOn = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint starOff = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path starPath = new android.graphics.Path();
     private final android.graphics.Path arrowPath = new android.graphics.Path();
 
     private volatile Telemetry t;
@@ -101,6 +104,12 @@ final class Hud extends View {
         banner.setTextSize(20 * d);
         banner.setFakeBoldText(true);
 
+        starOn.setColor(0xFFFFC421);
+        starOn.setStyle(Paint.Style.FILL);
+        starOff.setColor(0x33FFFFFF);
+        starOff.setStyle(Paint.Style.STROKE);
+        starOff.setStrokeWidth(1.2f * d);
+
         attribution = c.getString(R.string.attribution);
     }
 
@@ -118,6 +127,20 @@ final class Hud extends View {
      * segments run well past the edge and overdrawing a panel on top of
      * them would hide the rest of the HUD underneath.
      */
+    /** A five-pointed star, built once per draw into a reused Path. */
+    private void drawStar(Canvas canvas, float cx, float cy, float r, Paint p) {
+        starPath.reset();
+        for (int i = 0; i < 10; i++) {
+            double a = -Math.PI / 2 + (Math.PI * i) / 5;
+            float rr = (i % 2 == 0) ? r : r * 0.42f;
+            float x = cx + (float) Math.cos(a) * rr;
+            float y = cy + (float) Math.sin(a) * rr;
+            if (i == 0) { starPath.moveTo(x, y); } else { starPath.lineTo(x, y); }
+        }
+        starPath.close();
+        canvas.drawPath(starPath, p);
+    }
+
     private void drawRadar(Canvas canvas, float d) {
         Minimap m = map;
         if (m == null) { return; }
@@ -245,6 +268,15 @@ final class Hud extends View {
         float cw = money.measureText(cash);
         canvas.drawText(cash, getWidth() - cw - 12 * d, 30 * d, money);
 
+        // --- wanted level, under the money -----------------------------------
+        if (s.wantedStars > 0) {
+            for (int i = 0; i < 5; i++) {
+                float sx = getWidth() - (float) (14 + i * 17) * d;
+                drawStar(canvas, sx, 52 * d, 7 * d,
+                        i < s.wantedStars ? starOn : starOff);
+            }
+        }
+
         if (!s.objective.isEmpty()) {
             String line = s.objective;
             if (s.jobDistance >= 0) {
@@ -253,20 +285,22 @@ final class Hud extends View {
                         : String.format("%d m", (int) s.jobDistance))
                         + "   " + line;
             }
+            float top = s.wantedStars > 0 ? 62 * d : 38 * d;
             float ow = objective.measureText(line);
             float ox = getWidth() - ow - 12 * d;
-            rect.set(ox - 8 * d, 38 * d, getWidth() - 6 * d, 60 * d);
+            rect.set(ox - 8 * d, top, getWidth() - 6 * d, top + 22 * d);
             canvas.drawRoundRect(rect, 4 * d, 4 * d, panel);
-            canvas.drawText(line, ox, 53 * d, objective);
-        }
-        if (s.jobTimeLeft > 0) {
-            int sec = (int) Math.ceil(s.jobTimeLeft);
-            String clk = String.format("%d:%02d", sec / 60, sec % 60);
-            // Red once it is tight, because that is the whole tension.
-            objective.setColor(sec <= 15 ? 0xFFFF6A5A : 0xFFF2F2F2);
-            float tw = objective.measureText(clk);
-            canvas.drawText(clk, getWidth() - tw - 12 * d, 78 * d, objective);
-            objective.setColor(0xFFF2F2F2);
+            canvas.drawText(line, ox, top + 15 * d, objective);
+            if (s.jobTimeLeft > 0) {
+                int sec = (int) Math.ceil(s.jobTimeLeft);
+                String clk = String.format("%d:%02d", sec / 60, sec % 60);
+                // Red once it is tight, because that is the whole tension.
+                objective.setColor(sec <= 15 ? 0xFFFF6A5A : 0xFFF2F2F2);
+                float tw = objective.measureText(clk);
+                canvas.drawText(clk, getWidth() - tw - 12 * d, top + 38 * d,
+                        objective);
+                objective.setColor(0xFFF2F2F2);
+            }
         }
 
         // --- job banner, upper centre ----------------------------------------

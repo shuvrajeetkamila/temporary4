@@ -159,14 +159,15 @@ final class TouchControls extends View {
         float d = getResources().getDisplayMetrics().density;
         float bx = getWidth() - 46 * d;
         float r = 26 * d;
-        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d};
-        for (int i = 0; i < 5; i++) {
+        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d, 390 * d};
+        for (int i = 0; i < 6; i++) {
             if (Math.hypot(x - bx, y - ys[i]) < r) {
                 switch (i) {
                     case 0: bA = true; edgeA = true; break;
                     case 1: bB = true; edgeB = true; break;
                     case 2: edgeEnter = true; break;
-                    case 3: onProfile.run(); break;
+                    case 3: edgeAttack = true; break;
+                    case 4: onProfile.run(); break;
                     default: onCamera.run(); break;
                 }
                 return true;
@@ -183,6 +184,9 @@ final class TouchControls extends View {
     /** Copy the current touch state into the engine's input block. */
     /** Set on the frame the enter/exit button goes down. */
     private boolean edgeEnter;
+
+    /** Set on the frame the baton button goes down. */
+    private boolean edgeAttack;
 
     void pump() {
         float lx = clampStick(leftX - leftCx);
@@ -234,9 +238,11 @@ final class TouchControls extends View {
         // One button, both directions, whatever is being driven: on foot it
         // gets you in, in a vehicle it gets you out.
         out.enterExit = edgeEnter;
+        out.attack = edgeAttack;
         edgeA = false;
         edgeB = false;
         edgeEnter = false;
+        edgeAttack = false;
     }
 
     private float clampStick(float v) {
@@ -258,9 +264,9 @@ final class TouchControls extends View {
         float bx = getWidth() - 46 * d;
         float r = 26 * d;
         String[] names = buttonNames();
-        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d};
-        boolean[] on = {bA, bB, false, false, false};
-        for (int i = 0; i < 5; i++) {
+        float[] ys = {90 * d, 150 * d, 210 * d, 270 * d, 330 * d, 390 * d};
+        boolean[] on = {bA, bB, false, false, false, false};
+        for (int i = 0; i < 6; i++) {
             canvas.drawCircle(bx, ys[i], r, on[i] ? knob : fill);
             canvas.drawCircle(bx, ys[i], r, ring);
             canvas.drawText(names[i], bx, ys[i] + 5 * d, label);
@@ -290,11 +296,17 @@ final class TouchControls extends View {
 
     private String[] buttonNames() {
         switch (profile) {
-            case CAR: return new String[]{"REV", "HBRK", "EXIT", "SWAP", "CAM"};
-            case BOAT: return new String[]{"\u2013", "\u2013", "\u2013", "SWAP", "CAM"};
-            case HELICOPTER: return new String[]{"\u2013", "ENG", "\u2013", "SWAP", "CAM"};
-            case AEROPLANE: return new String[]{"FLAP", "GEAR", "\u2013", "SWAP", "CAM"};
-            default: return new String[]{"RUN", "SPRT", "ENTER", "SWAP", "CAM"};
+            case CAR:
+                return new String[]{"REV", "HBRK", "EXIT", "\u2013", "SWAP", "CAM"};
+            case BOAT:
+                return new String[]{"\u2013", "\u2013", "\u2013", "\u2013", "SWAP", "CAM"};
+            case HELICOPTER:
+                return new String[]{"\u2013", "ENG", "\u2013", "\u2013", "SWAP", "CAM"};
+            case AEROPLANE:
+                return new String[]{"FLAP", "GEAR", "\u2013", "\u2013", "SWAP", "CAM"};
+            // BATON is the only weapon button there is, and only on foot.
+            default:
+                return new String[]{"RUN", "SPRT", "ENTER", "BATON", "SWAP", "CAM"};
         }
     }
 

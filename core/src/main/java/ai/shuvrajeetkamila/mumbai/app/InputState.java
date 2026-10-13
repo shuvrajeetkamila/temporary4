@@ -40,6 +40,11 @@ public final class InputState {
      * gets out. One button for both, as the genre has always done it.
      */
     public boolean enterExit;
+    /**
+     * Edge-triggered baton swing, on foot only. The only weapon in the
+     * game: there are no firearms anywhere in it, by design.
+     */
+    public boolean attack;
     public boolean reverse;
 
     public void clearEdges() {
@@ -51,6 +56,7 @@ public final class InputState {
         engineToggle = false;
         cameraToggle = false;
         enterExit = false;
+        attack = false;
     }
 
     public void reset() {

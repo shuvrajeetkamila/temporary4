@@ -76,4 +76,10 @@ public final class Telemetry {
     /** Metres to the current stop, or -1 when there is no job. */
     public volatile double jobDistance = -1;
     public volatile int jobsDone;
+
+    // --- the law -----------------------------------------------------------
+    /** Whole stars, 0 to 5. */
+    public volatile int wantedStars;
+    /** Police units currently hunting you. */
+    public volatile int policeUnits;
 }

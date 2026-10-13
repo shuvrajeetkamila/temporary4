@@ -88,11 +88,15 @@ This matters more than anything above.
 - Navi Mumbai, east of Thane Creek, is distant low-detail context, as the
   brief allows.
 - There is **no audio**. None at all.
-- **There is no wanted level and no police pursuit yet.** The police
-  vehicle exists and is excluded from ambient traffic, but nothing spawns
-  it, and there are no batons or melee. Paid work (fares, deliveries,
-  street races), money, checkpoints, reactive traffic, fleeing pedestrians
-  and the radar are all in.
+- Paid work (fares, deliveries, street races), money, checkpoints,
+  reactive traffic, fleeing pedestrians, the radar, the wanted level,
+  police pursuit and the baton are all in. **There is no siren light or
+  sound on the police car** - pursuit units are identifiable by the police
+  body only. There is no on-foot police officer: the response is vehicles
+  and arrest.
+- Being arrested costs a quarter of your money and clears the wanted
+  level. There is no hospital or police-station cycle, because that needs
+  interiors and a save system and neither exists here.
 - There is **no shadow pass**. Lighting is a sun term plus hemispheric
   ambient with no occlusion.
 - Interiors do not exist; buildings are solid extrusions.

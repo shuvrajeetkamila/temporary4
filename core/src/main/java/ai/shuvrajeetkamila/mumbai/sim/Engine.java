@@ -6,6 +6,7 @@ import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
 import ai.shuvrajeetkamila.mumbai.game.Missions;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
+import ai.shuvrajeetkamila.mumbai.game.Wanted;
 import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
 import ai.shuvrajeetkamila.mumbai.math.Quat;
@@ -45,6 +46,17 @@ public final class Engine {
 
     /** Jobs, money and progression. */
     public final Missions missions;
+
+    /** How much trouble you are in. */
+    public final Wanted wanted = new Wanted();
+
+    /** Radius police are called in at, metres. Beyond the spawn suppression. */
+    public static final double POLICE_SPAWN_M = 220.0;
+
+    /** Reach of a baton swing, metres, and its cooldown in seconds. */
+    public static final double BATON_REACH_M = 2.6;
+    public static final double BATON_COOLDOWN = 0.75;
+    private double batonTimer;
 
     public final HumanPhysics human = new HumanPhysics();
     public final CarPhysics car = new CarPhysics();
@@ -262,6 +274,7 @@ public final class Engine {
         // The monsoon raises the sea state as well as wetting the roads.
         ocean.setChoppiness(0.8 + wetness * 1.1);
 
+        if (in.attack) { swingBaton(); }
         if (in.enterExit) {
             if (profile == ControlProfile.ON_FOOT) { tryEnterVehicle(); }
             else if (profile == ControlProfile.CAR) { exitVehicle(); }
@@ -280,6 +293,82 @@ public final class Engine {
                 quality.medRadius * 0.55, quality.medRadius);
         missions.update(dt, b.position.x, b.position.z,
                 Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
+        updateWanted(dt, b);
+    }
+
+    /**
+     * Turns crimes into heat, heat into police cars, and a cornered player
+     * into an arrest.
+     */
+    private void updateWanted(double dt, RigidBody b) {
+        double speed = Math.hypot(b.velocity.x, b.velocity.z);
+        if (batonTimer > 0) { batonTimer -= dt; }
+
+        for (int i = 0; i < agents.pedsHit; i++) {
+            wanted.ranOverPedestrian(speed);
+        }
+        for (int i = 0; i < agents.carsHit; i++) {
+            wanted.rammedVehicle(speed, i < agents.policeHit);
+        }
+        agents.clearCrimeCounters();
+
+        double near = agents.nearestPolice(b.position.x, b.position.z);
+        wanted.update(dt, near, speed);
+        agents.pursuitPace = wanted.pursuitPace();
+
+        if (wanted.bustedThisStep) {
+            int fine = wanted.bust(missions.money);
+            missions.money -= fine;
+            if (missions.money < 0) { missions.money = 0; }
+            missions.reset();
+            agents.clearPolice();
+            return;
+        }
+
+        if (!wanted.active()) {
+            if (agents.policeCount() > 0) { agents.clearPolice(); }
+            return;
+        }
+
+        // Call in units one at a time rather than all at once, so a star
+        // arriving feels like a response and not a spawn event.
+        policeCallTimer += dt;
+        if (policeCallTimer >= 1.4) {
+            policeCallTimer = 0;
+            if (agents.policeCount() < wanted.desiredUnits()) {
+                agents.spawnPolice(b.position.x, b.position.z, POLICE_SPAWN_M);
+            }
+        }
+    }
+
+    private double policeCallTimer;
+
+    /**
+     * Swings the baton. The only weapon in the game, and deliberately so.
+     *
+     * @return the number of people knocked down
+     */
+    public int swingBaton() {
+        if (profile != ControlProfile.ON_FOOT || batonTimer > 0) { return 0; }
+        batonTimer = BATON_COOLDOWN;
+        double px = human.position.x, pz = human.position.z;
+        double h = human.orientation.heading();
+        double fx = Math.sin(h), fz = -Math.cos(h);
+        int hit = 0;
+        for (Agents.Ped p : agents.peds()) {
+            if (!p.active || p.downTimer > 0) { continue; }
+            double dx = p.x - px, dz = p.z - pz;
+            double d = Math.hypot(dx, dz);
+            if (d > BATON_REACH_M || d < 1e-6) { continue; }
+            // In front of you, not behind: a swing with a 360 degree reach
+            // reads as a magic blast rather than a baton.
+            if ((dx / d) * fx + (dz / d) * fz < 0.3) { continue; }
+            p.downTimer = 3.2;
+            p.speed = 0;
+            hit++;
+        }
+        if (hit > 0) { wanted.swungBaton(); }
+        return hit;
     }
 
     /**
@@ -561,6 +650,8 @@ public final class Engine {
         telemetry.objective = missions.objective();
         telemetry.banner = missions.banner;
         telemetry.jobsDone = missions.jobsDone;
+        telemetry.wantedStars = wanted.stars();
+        telemetry.policeUnits = agents.policeCount();
         telemetry.jobTimeLeft = missions.active != null && missions.active.timed()
                 ? Math.max(0, missions.active.timeLeft) : 0;
         telemetry.jobDistance = missions.distanceToTarget(

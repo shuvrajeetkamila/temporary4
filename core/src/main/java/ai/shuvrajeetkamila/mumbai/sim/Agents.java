@@ -1,6 +1,7 @@
 package ai.shuvrajeetkamila.mumbai.sim;
 
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
+import ai.shuvrajeetkamila.mumbai.game.Wanted;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 import java.util.Random;
@@ -46,6 +47,12 @@ public final class Agents {
         public double hornTimer;
         /** True while yielding to the player. */
         public boolean braking;
+        /** Debounce for the ramming test. */
+        public boolean hitRecently;
+        /** A police unit hunting the player. Does not yield, does not despawn. */
+        public boolean police;
+        /** Siren phase, seconds. Drives the flashing light in the renderer. */
+        public double siren;
     }
 
     public static final class Ped {
@@ -58,7 +65,23 @@ public final class Agents {
         public double wanderTimer;
         /** Seconds left of fleeing. Non-zero means startled by the player. */
         public double fleeTimer;
+        /** Seconds left on the ground after being hit. */
+        public double downTimer;
     }
+
+    /** Pedestrians run over since the counters were last read. */
+    public int pedsHit;
+    /** Vehicles rammed since the counters were last read. */
+    public int carsHit;
+    /** Whether the last vehicle rammed was a police unit. */
+    public int policeHit;
+
+    /** Contact distances for the crime test, metres. */
+    private static final double HIT_PED_M = 2.3;
+    private static final double HIT_CAR_M = 3.4;
+
+    /** Multiplier police apply to the speed limit. Set from the wanted level. */
+    public double pursuitPace = 1.1;
 
     private final WorldData world;
     private final Random rng = new Random(0x4D554D42L);
@@ -128,6 +151,70 @@ public final class Agents {
     public Car[] cars() { return cars; }
 
     /** An unused car slot, or -1 if every one is taken. */
+    /**
+     * Puts a police unit on the road near the player.
+     *
+     * <p>Spawned further out than ambient traffic and never in view range
+     * of the spawn suppression zone, so a car does not simply appear in
+     * the mirror. They do not despawn on distance the way traffic does;
+     * they are removed when the wanted level drops.
+     *
+     * @return true if one was placed
+     */
+    public boolean spawnPolice(double px, double pz, double radius) {
+        int slot = freeCarSlot();
+        if (slot < 0) { return false; }
+        Car c = cars[slot];
+        int e = pickEdgeNear(px, pz, radius);
+        if (e < 0) { return false; }
+        c.edge = e;
+        c.t = rng.nextDouble();
+        c.forward = rng.nextBoolean();
+        c.colour = 0;
+        c.parked = false;
+        c.police = true;
+        c.siren = rng.nextDouble() * 2.0;
+        c.kindOrdinal = VehicleKind.POLICE.ordinal();
+        c.body = VehicleKind.POLICE.ordinal();
+        c.targetSpeed = world.edgeSpeedKph(e) / 3.6 * pursuitPace;
+        c.speed = c.targetSpeed * 0.6;
+        c.active = true;
+        placeOnEdge(c);
+        return true;
+    }
+
+    /** How many police units are on the road. */
+    public int policeCount() {
+        int n = 0;
+        for (Car c : cars) { if (c.active && c.police) { n++; } }
+        return n;
+    }
+
+    /** Metres to the nearest active police unit, or a large number. */
+    public double nearestPolice(double px, double pz) {
+        double best = Double.MAX_VALUE;
+        for (Car c : cars) {
+            if (!c.active || !c.police) { continue; }
+            double d = Math.hypot(c.x - px, c.z - pz);
+            if (d < best) { best = d; }
+        }
+        return best;
+    }
+
+    /** Stands every police unit down, after an arrest or a clean getaway. */
+    public void clearPolice() {
+        for (Car c : cars) {
+            if (c.police) { c.active = false; c.police = false; }
+        }
+    }
+
+    /** Reads and resets the crime counters. */
+    public void clearCrimeCounters() {
+        pedsHit = 0;
+        carsHit = 0;
+        policeHit = 0;
+    }
+
     public int freeCarSlot() {
         for (int i = 0; i < cars.length; i++) {
             if (!cars[i].active) { return i; }
@@ -204,8 +291,26 @@ public final class Agents {
             // round, instead of driving itself away down the nearest edge.
             if (!c.parked) { stepCar(c, dt); }
             if (c.hornTimer > 0) { c.hornTimer -= dt; }
+            if (c.police) { c.siren += dt; }
             double dx = c.x - px, dz = c.z - pz;
-            if (dx * dx + dz * dz > despawnRadius * despawnRadius) { c.active = false; }
+            double cd2 = dx * dx + dz * dz;
+
+            // Ramming. Counted once per contact rather than once per step,
+            // or sitting against a bumper would rack up heat forever.
+            if (cd2 < HIT_CAR_M * HIT_CAR_M) {
+                if (!c.hitRecently) {
+                    c.hitRecently = true;
+                    carsHit++;
+                    if (c.police) { policeHit++; }
+                }
+            } else if (cd2 > (HIT_CAR_M * 2.2) * (HIT_CAR_M * 2.2)) {
+                c.hitRecently = false;
+            }
+
+            // Police stay until they are stood down; traffic drifts away.
+            if (!c.police && cd2 > despawnRadius * despawnRadius) {
+                c.active = false;
+            }
         }
         for (int i = 0; i < pedCap && i < peds.length; i++) {
             Ped p = peds[i];
@@ -213,8 +318,22 @@ public final class Agents {
                 if (rng.nextDouble() < 0.3) { spawnPed(p, px, pz, spawnRadius * 0.35); }
                 continue;
             }
-            stepPed(p, dt);
+            if (p.downTimer > 0) {
+                // Knocked down: stays put, then gets up and is removed.
+                p.downTimer -= dt;
+                if (p.downTimer <= 0) { p.active = false; }
+            } else {
+                stepPed(p, dt);
+            }
             double dx = p.x - px, dz = p.z - pz;
+            // One threshold, shared with the wanted system, so there is no
+            // band where you can knock somebody down for free.
+            if (p.downTimer <= 0 && dx * dx + dz * dz < HIT_PED_M * HIT_PED_M
+                    && playerSpeed >= Wanted.CRIME_SPEED) {
+                pedsHit++;
+                p.downTimer = 4.0;
+                p.speed = 0;
+            }
             if (dx * dx + dz * dz > (despawnRadius * 0.4) * (despawnRadius * 0.4)) {
                 p.active = false;
             }
@@ -360,6 +479,37 @@ public final class Agents {
         return want;
     }
 
+    /**
+     * The connected edge that gets a pursuing car closest to the player.
+     *
+     * <p>Not a route: it is a greedy choice at each junction, which is what
+     * makes police feel like they are chasing rather than following an
+     * optimal path. It also means they can be lost by doubling back, which
+     * is the whole point of a chase. A proper search over 352,000 edges
+     * every time a car reached a junction would cost more than the rest of
+     * the simulation together and would be impossible to escape.
+     */
+    private int pickEdgeToward(double x, double z, double tx, double tz,
+                               double radius) {
+        int best = -1;
+        double bestScore = Double.MAX_VALUE;
+        int tries = 0;
+        for (int attempt = 0; attempt < 24; attempt++) {
+            int e = pickEdgeNear(x, z, radius);
+            if (e < 0) { continue; }
+            tries++;
+            int a = world.graphEdge[e * 2], b = world.graphEdge[e * 2 + 1];
+            double ax = world.graphNodeXZ[a * 2], az = world.graphNodeXZ[a * 2 + 1];
+            double bx = world.graphNodeXZ[b * 2], bz = world.graphNodeXZ[b * 2 + 1];
+            // Whichever end of the candidate is nearer the target.
+            double da = Math.hypot(ax - tx, az - tz);
+            double db = Math.hypot(bx - tx, bz - tz);
+            double score = Math.min(da, db);
+            if (score < bestScore) { bestScore = score; best = e; }
+        }
+        return tries == 0 ? -1 : best;
+    }
+
     private void stepCar(Car c, double dt) {
         int a = world.graphEdge[c.edge * 2];
         int b = world.graphEdge[c.edge * 2 + 1];
@@ -371,7 +521,8 @@ public final class Agents {
         // Approach the speed this edge wants, braking far harder than it
         // accelerates. Real traffic does; symmetric rates make a queue
         // breathe in and out like a concertina.
-        double want = yieldFor(c, c.targetSpeed);
+        // Police do not give way. Everything else does.
+        double want = c.police ? c.targetSpeed : yieldFor(c, c.targetSpeed);
         double rate = want < c.speed ? 7.0 : 2.1;
         c.speed += Math.max(-rate * dt, Math.min(rate * dt, want - c.speed));
         if (c.speed < 0) { c.speed = 0; }
@@ -379,13 +530,27 @@ public final class Agents {
         c.t += c.speed * dt / len;
         if (c.t >= 1.0) {
             // Hand off to a connected edge, or retire.
-            int next = pickEdgeNear(c.x, c.z, 90);
+            int next = c.police
+                    ? pickEdgeToward(c.x, c.z, playerX, playerZ, 110)
+                    : pickEdgeNear(c.x, c.z, 90);
             if (next < 0) { c.active = false; return; }
             c.edge = next;
             c.t = 0;
-            c.forward = rng.nextBoolean();
             double limit = world.edgeSpeedKph(next);
-            c.targetSpeed = limit / 3.6 * (0.72 + rng.nextDouble() * 0.3);
+            if (c.police) {
+                // Head down the new edge from whichever end is further from
+                // the player, so the car drives towards them rather than
+                // away and then back.
+                int a2 = world.graphEdge[next * 2], b2 = world.graphEdge[next * 2 + 1];
+                double axx = world.graphNodeXZ[a2 * 2], azz = world.graphNodeXZ[a2 * 2 + 1];
+                double bxx = world.graphNodeXZ[b2 * 2], bzz = world.graphNodeXZ[b2 * 2 + 1];
+                c.forward = Math.hypot(axx - playerX, azz - playerZ)
+                        > Math.hypot(bxx - playerX, bzz - playerZ);
+                c.targetSpeed = limit / 3.6 * pursuitPace;
+            } else {
+                c.forward = rng.nextBoolean();
+                c.targetSpeed = limit / 3.6 * (0.72 + rng.nextDouble() * 0.3);
+            }
         }
         placeOnEdge(c);
     }
