@@ -583,6 +583,42 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
 # Road graph for traffic and navigation
 # --------------------------------------------------------------------------
 
+MAX_JOIN_TURN = 75.0
+"""Sharpest turn, in degrees, allowed when chaining two fragments."""
+
+MAX_VERTEX_TURN = 100.0
+"""Sharpest turn allowed to survive inside a finished route."""
+
+
+def _unit(a, b):
+    dx, dz = b[0] - a[0], b[1] - a[1]
+    n = math.hypot(dx, dz)
+    return None if n < 1e-9 else (dx / n, dz / n)
+
+
+def _turn_deg(u, v):
+    dot = max(-1.0, min(1.0, u[0] * v[0] + u[1] * v[1]))
+    return math.degrees(math.acos(dot))
+
+
+def _split_hairpins(chain):
+    """Breaks a polyline wherever it reverses on itself."""
+    out, cur = [], [chain[0]] if chain else []
+    for i in range(1, len(chain)):
+        cur.append(chain[i])
+        if i + 1 >= len(chain):
+            break
+        u = _unit(chain[i - 1], chain[i])
+        v = _unit(chain[i], chain[i + 1])
+        if u is not None and v is not None and _turn_deg(u, v) > MAX_VERTEX_TURN:
+            if len(cur) >= 2:
+                out.append(cur)
+            cur = [chain[i]]
+    if len(cur) >= 2:
+        out.append(cur)
+    return out
+
+
 def _clip_runs(chain, x0, z0, x1, z1):
     """Maximal runs of a polyline that lie inside a rectangle.
 
@@ -653,21 +689,42 @@ def build_transit(lay):
             used[seed] = True
             chain = list(pool[seed])
             # Extend from both ends until nothing else connects.
+            #
+            # At a junction, take the straightest continuation rather than
+            # whichever fragment happens to come first. Picking arbitrarily
+            # runs the route out onto a siding and straight back: the first
+            # version produced 92 vertices turning more than 100 degrees,
+            # the sharpest a full 179, which is a route doubling back along
+            # itself. Tracing the line the way a person would reads the
+            # geometry correctly and keeps a service on its own line
+            # through a station throat.
             for _ in range(2):
                 while True:
                     tail = key(chain[-1])
-                    nxt = None
+                    indir = _unit(chain[-2], chain[-1]) if len(chain) >= 2 else None
+                    nxt, best_turn, flip = None, MAX_JOIN_TURN, False
                     for cand in ends.get(tail, ()):
                         if used[cand]:
                             continue
-                        nxt = cand
-                        break
+                        seg = pool[cand]
+                        at_start = key(seg[0]) == tail
+                        if at_start:
+                            out = _unit(seg[0], seg[1])
+                        elif key(seg[-1]) == tail:
+                            out = _unit(seg[-1], seg[-2])
+                        else:
+                            continue
+                        if out is None:
+                            continue
+                        turn = 0.0 if indir is None else _turn_deg(indir, out)
+                        if turn < best_turn:
+                            nxt, best_turn, flip = cand, turn, not at_start
                     if nxt is None:
                         break
                     used[nxt] = True
                     seg = pool[nxt]
                     # Join on whichever end matches, dropping the shared point.
-                    if key(seg[0]) == tail:
+                    if not flip:
                         chain.extend(seg[1:])
                     else:
                         chain.extend(reversed(seg[:-1]))
@@ -679,22 +736,27 @@ def build_transit(lay):
             # the compiled world, and a train running out there would be
             # gliding over nothing. Split into the runs that are inside
             # rather than discarding the whole route.
-            for piece in _clip_runs(chain, bx0, bz0, bx1, bz1):
-                length = sum(math.hypot(piece[j + 1][0] - piece[j][0],
-                                        piece[j + 1][1] - piece[j][1])
-                             for j in range(len(piece) - 1))
-                # Short stubs are sidings and crossovers; nothing runs on
-                # them.
-                if length < 600.0:
-                    continue
-                # 0.8 m rather than the 2 m used for roads: a train
-                # visibly cuts the corner on a chunky polyline, and the
-                # whole network still costs a tenth of a megabyte.
-                simple = simplify(np.asarray(piece, dtype="f8"), 0.8)
-                if len(simple) < 2:
-                    continue
-                lines.append(np.asarray(simple, dtype="<f4"))
-                classes.append(cls)
+            # Belt and braces: whatever survives, split at any vertex that
+            # still doubles back. Nothing on rails turns 100 degrees on the
+            # spot, and one such vertex puts two carriages in the same
+            # place.
+            for straight in _split_hairpins(chain):
+                for piece in _clip_runs(straight, bx0, bz0, bx1, bz1):
+                    length = sum(math.hypot(piece[j + 1][0] - piece[j][0],
+                                            piece[j + 1][1] - piece[j][1])
+                                 for j in range(len(piece) - 1))
+                    # Short stubs are sidings and crossovers; nothing runs
+                    # on them.
+                    if length < 600.0:
+                        continue
+                    # 0.8 m rather than the 2 m used for roads: a train
+                    # visibly cuts the corner on a chunky polyline, and
+                    # the whole network still costs a tenth of a megabyte.
+                    simple = simplify(np.asarray(piece, dtype="f8"), 0.8)
+                    if len(simple) < 2:
+                        continue
+                    lines.append(np.asarray(simple, dtype="<f4"))
+                    classes.append(cls)
 
     if lines:
         pts = np.concatenate(lines, axis=0)
