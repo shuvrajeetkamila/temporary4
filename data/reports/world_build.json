@@ -1,11 +1,11 @@
 {
- "seconds": 52.2,
- "total_bytes": 14647747,
+ "seconds": 40.3,
+ "total_bytes": 14647454,
  "files": {
   "terrain.mwl": 3058655,
   "chunks.mwl": 7866293,
-  "network.mwl": 3719239,
-  "manifest.mwl": 3560
+  "network.mwl": 3718952,
+  "manifest.mwl": 3554
  },
  "manifest": {
   "format": "MWL2",
@@ -88,12 +88,12 @@
    "drivable_km": 13984.4
   },
   "transit": {
-   "routes": 459,
-   "km": 1733.0,
+   "routes": 460,
+   "km": 1691.7,
    "by_class": {
     "rail": {
      "routes": 430,
-     "km": 1406.6
+     "km": 1395.1
     },
     "subway": {
      "routes": 21,
@@ -104,8 +104,8 @@
      "km": 40.0
     },
     "ferry": {
-     "routes": 5,
-     "km": 90.9
+     "routes": 6,
+     "km": 61.1
     }
    }
   },
@@ -532,7 +532,7 @@
     "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
     "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-13T10:04:57+00:00",
+    "retrieved_utc": "2026-10-13T10:08:49+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
     "clip": {
      "tool": "osmium-tool",
@@ -559,7 +559,7 @@
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-13T10:05:06+00:00",
+    "retrieved_utc": "2026-10-13T10:08:59+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
