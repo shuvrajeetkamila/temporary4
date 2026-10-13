@@ -1,6 +1,6 @@
 {
- "passed": 123,
- "total": 123,
+ "passed": 135,
+ "total": 135,
  "failed": 0,
  "gates": [
   {
@@ -25,13 +25,13 @@
    "group": "files",
    "name": "network.mwl exists",
    "status": "PASS",
-   "detail": "3.63 MB"
+   "detail": "3.72 MB"
   },
   {
    "group": "files",
    "name": "all four files share one build id",
    "status": "PASS",
-   "detail": "ab19ba23e408ce9a817c663cee013a67"
+   "detail": "2abf2fa1570887a378d34f0369f6e472"
   },
   {
    "group": "files",
@@ -49,13 +49,13 @@
    "group": "provenance",
    "name": "OSM retrieval date recorded",
    "status": "PASS",
-   "detail": "2026-10-12T15:15:59+00:00"
+   "detail": "2026-10-13T10:18:39+00:00"
   },
   {
    "group": "provenance",
    "name": "OSM extract sha256 recorded",
    "status": "PASS",
-   "detail": "b537a1aa09386cfa..."
+   "detail": "49995cfaa5edb7cc..."
   },
   {
    "group": "provenance",
@@ -157,7 +157,7 @@
    "group": "chunks",
    "name": "at least 50k road runs",
    "status": "PASS",
-   "detail": "124,592"
+   "detail": "124,616"
   },
   {
    "group": "cp:vasai_creek",
@@ -487,13 +487,13 @@
    "group": "coverage",
    "name": "bandra_bkc: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "17236 buildings + 12429 road runs in the 3x3 chunks around 5 checkpoints"
+   "detail": "17236 buildings + 12432 road runs in the 3x3 chunks around 5 checkpoints"
   },
   {
    "group": "coverage",
    "name": "bandra_bkc: roads near its checkpoints",
    "status": "PASS",
-   "detail": "12429 road runs"
+   "detail": "12432 road runs"
   },
   {
    "group": "coverage",
@@ -505,13 +505,13 @@
    "group": "coverage",
    "name": "central_mumbai: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "7582 buildings + 7734 road runs in the 3x3 chunks around 4 checkpoints"
+   "detail": "7582 buildings + 7722 road runs in the 3x3 chunks around 4 checkpoints"
   },
   {
    "group": "coverage",
    "name": "central_mumbai: roads near its checkpoints",
    "status": "PASS",
-   "detail": "7734 road runs"
+   "detail": "7722 road runs"
   },
   {
    "group": "coverage",
@@ -631,13 +631,13 @@
    "group": "coverage",
    "name": "western_suburbs: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "8238 buildings + 6186 road runs in the 3x3 chunks around 4 checkpoints"
+   "detail": "8238 buildings + 6192 road runs in the 3x3 chunks around 4 checkpoints"
   },
   {
    "group": "coverage",
    "name": "western_suburbs: roads near its checkpoints",
    "status": "PASS",
-   "detail": "6186 road runs"
+   "detail": "6192 road runs"
   },
   {
    "group": "coverage",
@@ -673,31 +673,103 @@
    "group": "network",
    "name": "graph has >= 100k nodes",
    "status": "PASS",
-   "detail": "370,415"
+   "detail": "370,546"
   },
   {
    "group": "network",
    "name": "graph has >= 100k edges",
    "status": "PASS",
-   "detail": "352,267"
+   "detail": "352,391"
   },
   {
    "group": "network",
    "name": "edge endpoints are in range",
    "status": "PASS",
-   "detail": "max index 370414"
+   "detail": "max index 370545"
   },
   {
    "group": "network",
    "name": ">= 3000 km of drivable road",
    "status": "PASS",
-   "detail": "13,983 km"
+   "detail": "13,984 km"
   },
   {
    "group": "network",
    "name": "95% of road nodes are on land",
    "status": "PASS",
-   "detail": "99.0% of 4027 sampled"
+   "detail": "99.0% of 4028 sampled"
+  },
+  {
+   "group": "transit",
+   "name": "transit routes exist",
+   "status": "PASS",
+   "detail": "443 routes"
+  },
+  {
+   "group": "transit",
+   "name": "offsets are consistent with the points",
+   "status": "PASS",
+   "detail": "444 offsets, 11,970 points"
+  },
+  {
+   "group": "transit",
+   "name": "offsets increase",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "group": "transit",
+   "name": "suburban rail is present",
+   "status": "PASS",
+   "detail": "409 routes, 1394.1 km"
+  },
+  {
+   "group": "transit",
+   "name": "the monorail is present",
+   "status": "PASS",
+   "detail": "3 routes, 40.0 km"
+  },
+  {
+   "group": "transit",
+   "name": "the metro is present",
+   "status": "PASS",
+   "detail": "21 routes"
+  },
+  {
+   "group": "transit",
+   "name": "harbour ferry routes are present",
+   "status": "PASS",
+   "detail": "10 routes"
+  },
+  {
+   "group": "transit",
+   "name": ">= 150 km of transit alignment",
+   "status": "PASS",
+   "detail": "1,689.7 km"
+  },
+  {
+   "group": "transit",
+   "name": "transit points are inside the AOI",
+   "status": "PASS",
+   "detail": "x -14792..23339"
+  },
+  {
+   "group": "transit",
+   "name": "stitching produced a route over 8 km",
+   "status": "PASS",
+   "detail": "longest 62.5 km"
+  },
+  {
+   "group": "transit",
+   "name": "no route is a stub",
+   "status": "PASS",
+   "detail": "shortest 600 m"
+  },
+  {
+   "group": "network",
+   "name": "no rail, runway or ferry class in the road graph",
+   "status": "PASS",
+   "detail": "stray classes []"
   },
   {
    "group": "places",
