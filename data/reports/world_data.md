@@ -1,6 +1,6 @@
 # World data acquisition
 
-Run `38382352128`, 2026-10-13T10:19:56Z.
+Run `38424028057`, 2026-10-13T15:42:05Z.
 
 ## `data/provenance/osm.json`
 ```json
@@ -15,7 +15,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
  "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
  "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-13T10:18:39+00:00",
+ "retrieved_utc": "2026-10-13T15:41:05+00:00",
  "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
  "clip": {
   "tool": "osmium-tool",
@@ -45,7 +45,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-13T10:18:48+00:00",
+ "retrieved_utc": "2026-10-13T15:41:12+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -107,7 +107,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
  "land_rings": 23,
  "land_area_km2": 1571.76,
  "poi": 1283,
- "seconds": 21.7,
+ "seconds": 16.7,
  "detail": {
   "bheight_src_0": 166425,
   "bheight_src_1": 7214,
@@ -186,13 +186,13 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
 ## `data/reports/world_build.json`
 ```json
 {
- "seconds": 45.5,
- "total_bytes": 14647199,
+ "seconds": 35.0,
+ "total_bytes": 14648963,
  "files": {
   "terrain.mwl": 3058655,
   "chunks.mwl": 7866293,
-  "network.mwl": 3718695,
-  "manifest.mwl": 3556
+  "network.mwl": 3720325,
+  "manifest.mwl": 3690
  },
  "manifest": {
   "format": "MWL2",
@@ -297,6 +297,26 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
    }
   },
   "places": 1283,
+  "craft": {
+   "kept": 89,
+   "by_kind": {
+    "BOAT": 56,
+    "PLANE": 6,
+    "HELI": 27
+   },
+   "rejected": {
+    "BOAT:dry": 16,
+    "BOAT:moved_inshore": 79,
+    "BOAT:ashore": 71,
+    "BOAT:outside": 1,
+    "HELI:steep": 12,
+    "BOAT:no_landing": 53,
+    "HELI:shoreline": 1,
+    "BOAT:crowded": 54,
+    "HELI:crowded": 26,
+    "BOAT:final_check": 1
+   }
+  },
   "checkpoints": [
    {
     "group": "vasai_creek",
@@ -719,7 +739,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
     "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
     "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-13T10:18:39+00:00",
+    "retrieved_utc": "2026-10-13T15:41:05+00:00",
     "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
     "clip": {
      "tool": "osmium-tool",
@@ -746,7 +766,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-13T10:18:48+00:00",
+    "retrieved_utc": "2026-10-13T15:41:12+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -810,7 +830,7 @@ Run `38382352128`, 2026-10-13T10:19:56Z.
 19M	data/osm
 28M	data/pinned
 12K	data/provenance
-84K	data/reports
+92K	data/reports
 14M	android/src/main/assets/world
 /dev/root       145G   60G   85G  42% /
 ```
