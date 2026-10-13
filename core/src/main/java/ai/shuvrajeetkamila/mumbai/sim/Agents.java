@@ -40,6 +40,12 @@ public final class Agents {
         public int kindOrdinal;
         /** Standing still at the kerb rather than driving a route. */
         public boolean parked;
+        /** Cruise speed for this edge. {@code speed} is braked away from it. */
+        public double targetSpeed;
+        /** Seconds left on the horn. Drives the HUD and, later, audio. */
+        public double hornTimer;
+        /** True while yielding to the player. */
+        public boolean braking;
     }
 
     public static final class Ped {
@@ -50,6 +56,8 @@ public final class Agents {
         public int outfit;
         public boolean active;
         public double wanderTimer;
+        /** Seconds left of fleeing. Non-zero means startled by the player. */
+        public double fleeTimer;
     }
 
     private final WorldData world;
@@ -57,6 +65,8 @@ public final class Agents {
 
     private Car[] cars = new Car[0];
     private Ped[] peds = new Ped[0];
+    private double playerX, playerZ, playerVx, playerVz, playerSpeed;
+
     private int carCap;
     private int pedCap;
 
@@ -74,7 +84,7 @@ public final class Agents {
         int n = world.graphEdge.length / 2;
         for (int e = 0; e < n; e++) {
             // Only drivable edges carry a positive speed limit.
-            if (world.graphAttr[e * 5] <= 0) { continue; }
+            if (world.edgeSpeedKph(e) <= 0) { continue; }
             int a = world.graphEdge[e * 2];
             double x = world.graphNodeXZ[a * 2];
             double z = world.graphNodeXZ[a * 2 + 1];
@@ -161,8 +171,28 @@ public final class Agents {
         return -1;
     }
 
+    /**
+     * Advance the ambient city.
+     *
+     * <p>The player's position and velocity are passed in because traffic
+     * and pedestrians react to them. Without that this is a cellular
+     * automaton you happen to be standing in: cars drive through you at a
+     * constant speed and nobody looks up. Reacting is most of what makes a
+     * street feel inhabited rather than animated.
+     */
     public void update(double dt, double px, double pz, double spawnRadius,
                        double despawnRadius) {
+        update(dt, px, pz, 0, 0, spawnRadius, despawnRadius);
+    }
+
+    public void update(double dt, double px, double pz,
+                       double pvx, double pvz,
+                       double spawnRadius, double despawnRadius) {
+        this.playerX = px;
+        this.playerZ = pz;
+        this.playerVx = pvx;
+        this.playerVz = pvz;
+        this.playerSpeed = Math.hypot(pvx, pvz);
         for (int i = 0; i < carCap && i < cars.length; i++) {
             Car c = cars[i];
             if (!c.active) {
@@ -173,6 +203,7 @@ public final class Agents {
             // vehicle you got out of still be standing there when you turn
             // round, instead of driving itself away down the nearest edge.
             if (!c.parked) { stepCar(c, dt); }
+            if (c.hornTimer > 0) { c.hornTimer -= dt; }
             double dx = c.x - px, dz = c.z - pz;
             if (dx * dx + dz * dz > despawnRadius * despawnRadius) { c.active = false; }
         }
@@ -205,7 +236,7 @@ public final class Agents {
         VehicleKind kind = VehicleKind.sample(rng.nextDouble(), c.z);
         c.kindOrdinal = kind.ordinal();
         c.body = kind.ordinal();
-        double limit = world.graphAttr[e * 5];
+        double limit = world.edgeSpeedKph(e);
         // Each type runs at its own fraction of the limit. A loaded tempo
         // does not keep up with a scooter, and the difference in how traffic
         // bunches is most of what makes a street look busy rather than
@@ -219,7 +250,8 @@ public final class Agents {
             case KAALI_PEELI: pace = 0.78; break;
             default: pace = 0.85; break;
         }
-        c.speed = limit / 3.6 * pace * (0.86 + rng.nextDouble() * 0.26);
+        c.targetSpeed = limit / 3.6 * pace * (0.86 + rng.nextDouble() * 0.26);
+        c.speed = c.targetSpeed;
         // Do not pop a car into existence right in front of the player.
         double dx = c.x - px, dz = c.z - pz;
         if (dx * dx + dz * dz < 45 * 45) { return; }
@@ -247,6 +279,59 @@ public final class Agents {
         c.heading = Math.atan2(dx, -dz);
     }
 
+    /**
+     * How close the player has to be before traffic takes any notice, m.
+     * Beyond this nothing is evaluated at all, which keeps the whole
+     * reaction system off the profile for the hundred-odd cars that are not
+     * near anybody.
+     */
+    private static final double NOTICE_M = 26.0;
+
+    /**
+     * Slows a car for the player ahead of it.
+     *
+     * <p>Only for a player genuinely in the way: within a short distance,
+     * and in front rather than behind or alongside. A car that brakes for
+     * something it has already passed looks broken, and one that brakes for
+     * the pavement beside it makes the whole road crawl.
+     *
+     * @return the speed it should be doing now
+     */
+    private double yieldFor(Car c, double cruise) {
+        double dx = playerX - c.x, dz = playerZ - c.z;
+        double d2 = dx * dx + dz * dz;
+        if (d2 > NOTICE_M * NOTICE_M) { c.braking = false; return cruise; }
+        double d = Math.sqrt(Math.max(1e-6, d2));
+
+        // Ahead, in the car's own frame. Heading is a bearing, so forward is
+        // (sin, -cos) in the X-east / Z-south world frame.
+        double fx = Math.sin(c.heading), fz = -Math.cos(c.heading);
+        double ahead = (dx / d) * fx + (dz / d) * fz;
+        // Perpendicular distance from the car's centreline: the magnitude of
+        // the 2D cross product with the unit forward vector. It has to be
+        // the cross product and not a sum of products - the first version
+        // here was the latter, which happens to be right whenever the
+        // heading is axis-aligned and wrong everywhere else. A player dead
+        // ahead of a car on a 45 degree heading measured as 7 m off to the
+        // side, so nothing on a diagonal road ever braked.
+        double lateral = Math.abs(dx * fz - dz * fx);
+
+        if (ahead < 0.25 || lateral > 3.4) { c.braking = false; return cruise; }
+
+        // Stop short, and scale the slowdown with how close it is. Squared
+        // rather than linear, so a car two lanes back barely lifts off while
+        // one about to hit you stops hard.
+        double clear = 5.5;
+        if (d <= clear) {
+            c.braking = true;
+            if (c.hornTimer <= 0 && playerSpeed < 2.0) { c.hornTimer = 1.1; }
+            return 0;
+        }
+        double k = (d - clear) / (NOTICE_M - clear);
+        c.braking = k < 0.9;
+        return cruise * k * k;
+    }
+
     private void stepCar(Car c, double dt) {
         int a = world.graphEdge[c.edge * 2];
         int b = world.graphEdge[c.edge * 2 + 1];
@@ -254,6 +339,15 @@ public final class Agents {
         double bx = world.graphNodeXZ[b * 2], bz = world.graphNodeXZ[b * 2 + 1];
         double len = Math.hypot(bx - ax, bz - az);
         if (len < 1e-3) { c.active = false; return; }
+
+        // Approach the speed this edge wants, braking far harder than it
+        // accelerates. Real traffic does; symmetric rates make a queue
+        // breathe in and out like a concertina.
+        double want = yieldFor(c, c.targetSpeed);
+        double rate = want < c.speed ? 7.0 : 2.1;
+        c.speed += Math.max(-rate * dt, Math.min(rate * dt, want - c.speed));
+        if (c.speed < 0) { c.speed = 0; }
+
         c.t += c.speed * dt / len;
         if (c.t >= 1.0) {
             // Hand off to a connected edge, or retire.
@@ -262,8 +356,8 @@ public final class Agents {
             c.edge = next;
             c.t = 0;
             c.forward = rng.nextBoolean();
-            double limit = world.graphAttr[next * 5];
-            c.speed = limit / 3.6 * (0.72 + rng.nextDouble() * 0.3);
+            double limit = world.edgeSpeedKph(next);
+            c.targetSpeed = limit / 3.6 * (0.72 + rng.nextDouble() * 0.3);
         }
         placeOnEdge(c);
     }
@@ -283,17 +377,46 @@ public final class Agents {
         p.outfit = rng.nextInt(8);
         p.phase = rng.nextDouble() * 6.28;
         p.wanderTimer = 2 + rng.nextDouble() * 6;
+        p.fleeTimer = 0;
         p.active = true;
     }
 
+    /**
+     * Pedestrian step, including getting out of the way.
+     *
+     * <p>What triggers it is a vehicle moving fast and close, not merely the
+     * player existing. Someone walking past you on the pavement has no
+     * reason to bolt, and a crowd that scatters from a stationary person is
+     * a well-known way to make a city feel hostile rather than alive.
+     */
     private void stepPed(Ped p, double dt) {
-        p.wanderTimer -= dt;
-        if (p.wanderTimer <= 0) {
-            p.heading += (rng.nextDouble() - 0.5) * 1.4;
-            p.wanderTimer = 2 + rng.nextDouble() * 6;
+        double dx = p.x - playerX, dz = p.z - playerZ;
+        double d2 = dx * dx + dz * dz;
+
+        if (p.fleeTimer > 0) {
+            p.fleeTimer -= dt;
+        } else if (playerSpeed > 5.0 && d2 < 14.0 * 14.0) {
+            // Directly away from the threat, with a little scatter so a
+            // group does not move off as one block.
+            double d = Math.sqrt(Math.max(1e-6, d2));
+            p.heading = Math.atan2(dx / d, -(dz / d))
+                    + (rng.nextDouble() - 0.5) * 0.9;
+            p.fleeTimer = 1.6 + rng.nextDouble() * 1.8;
         }
-        double nx = p.x + Math.sin(p.heading) * p.speed * dt;
-        double nz = p.z - Math.cos(p.heading) * p.speed * dt;
+
+        double pace = p.speed;
+        if (p.fleeTimer > 0) {
+            pace = p.speed * 2.6;          // a run, not a brisk walk
+        } else {
+            p.wanderTimer -= dt;
+            if (p.wanderTimer <= 0) {
+                p.heading += (rng.nextDouble() - 0.5) * 1.4;
+                p.wanderTimer = 2 + rng.nextDouble() * 6;
+            }
+        }
+
+        double nx = p.x + Math.sin(p.heading) * pace * dt;
+        double nz = p.z - Math.cos(p.heading) * pace * dt;
         if (!world.inBounds(nx, nz) || !world.isLand(nx, nz)) {
             p.heading += Math.PI * 0.75;
             return;
@@ -301,7 +424,7 @@ public final class Agents {
         p.x = nx;
         p.z = nz;
         p.y = world.height(nx, nz);
-        p.phase += dt * p.speed * 2.1;
+        p.phase += dt * pace * 2.1;
     }
 
     public void clear() {

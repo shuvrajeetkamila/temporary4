@@ -234,7 +234,8 @@ public final class MainActivity extends Activity
 
         if (frameNumber % 8 == 0) {
             Telemetry t = e.telemetry;
-            ui.post(() -> hud.update(t));
+            ai.shuvrajeetkamila.mumbai.game.Minimap m = e.minimap;
+            ui.post(() -> hud.update(t, m));
         }
         if (frameNumber == 30) {
             Log.i(TAG, "MUMBAI_RENDER_OK frames=30 quality=" + e.quality

@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.View;
 
+import ai.shuvrajeetkamila.mumbai.game.Minimap;
 import ai.shuvrajeetkamila.mumbai.sim.Telemetry;
 
 /**
@@ -26,7 +27,21 @@ final class Hud extends View {
     private final Paint warn = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
 
+    private final Paint roadMinor = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint roadMajor = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint radarBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint radarRing = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint arrow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path arrowPath = new android.graphics.Path();
+
     private volatile Telemetry t;
+    /**
+     * Read on the UI thread, written on the GL thread. Only ever read as a
+     * snapshot of segment data that is replaced wholesale, so a torn read
+     * shows one stale segment rather than a corrupt one - acceptable for a
+     * radar, and far cheaper than locking the simulation for the HUD.
+     */
+    private volatile Minimap map;
     private final String attribution;
 
     Hud(Context c) {
@@ -50,12 +65,78 @@ final class Hud extends View {
         warn.setTextSize(19 * d);
         warn.setFakeBoldText(true);
 
+        roadMinor.setColor(Color.argb(190, 150, 164, 178));
+        roadMinor.setStyle(Paint.Style.STROKE);
+        roadMinor.setStrokeWidth(1.4f * d);
+        roadMinor.setStrokeCap(Paint.Cap.ROUND);
+
+        roadMajor.setColor(Color.argb(235, 246, 214, 136));
+        roadMajor.setStyle(Paint.Style.STROKE);
+        roadMajor.setStrokeWidth(2.8f * d);
+        roadMajor.setStrokeCap(Paint.Cap.ROUND);
+
+        radarBg.setColor(Color.argb(150, 6, 13, 22));
+        radarRing.setColor(Color.argb(170, 196, 212, 228));
+        radarRing.setStyle(Paint.Style.STROKE);
+        radarRing.setStrokeWidth(1.6f * d);
+
+        arrow.setColor(Color.rgb(255, 232, 110));
+
         attribution = c.getString(R.string.attribution);
     }
 
-    void update(Telemetry telemetry) {
+    void update(Telemetry telemetry, Minimap minimap) {
         this.t = telemetry;
+        this.map = minimap;
         invalidate();
+    }
+
+    /**
+     * The radar: real OSM centrelines, rotated so the way you are facing is
+     * up.
+     *
+     * <p>Clipped to the disc rather than drawn and covered, because the
+     * segments run well past the edge and overdrawing a panel on top of
+     * them would hide the rest of the HUD underneath.
+     */
+    private void drawRadar(Canvas canvas, float d) {
+        Minimap m = map;
+        if (m == null) { return; }
+
+        float r = 58 * d;
+        float cx = getWidth() - r - 14 * d;
+        float cy = getHeight() - r - 26 * d;
+        float scale = r / (float) Minimap.RANGE_M;
+
+        int saved = canvas.save();
+        canvas.drawCircle(cx, cy, r, radarBg);
+        canvas.clipRect(cx - r, cy - r, cx + r, cy + r);
+
+        int n = m.segmentCount;
+        double[] seg = m.segments;
+        int[] cls = m.segmentClass;
+        for (int i = 0; i < n; i++) {
+            int o = i * 4;
+            float x0 = cx + (float) seg[o] * scale;
+            float y0 = cy - (float) seg[o + 1] * scale;
+            float x1 = cx + (float) seg[o + 2] * scale;
+            float y1 = cy - (float) seg[o + 3] * scale;
+            // Classes 0-3 are motorway through secondary: the roads worth
+            // picking out when you are deciding where to turn.
+            canvas.drawLine(x0, y0, x1, y1, cls[i] <= 3 ? roadMajor : roadMinor);
+        }
+        canvas.restoreToCount(saved);
+
+        canvas.drawCircle(cx, cy, r, radarRing);
+
+        // Player, always at the centre, always pointing up.
+        arrowPath.reset();
+        arrowPath.moveTo(cx, cy - 7 * d);
+        arrowPath.lineTo(cx - 5 * d, cy + 5 * d);
+        arrowPath.lineTo(cx, cy + 2.5f * d);
+        arrowPath.lineTo(cx + 5 * d, cy + 5 * d);
+        arrowPath.close();
+        canvas.drawPath(arrowPath, arrow);
     }
 
     @Override
@@ -121,6 +202,9 @@ final class Hud extends View {
         ry += 15 * d;
         canvas.drawText(String.format("%d cars   %d people", s.cars, s.pedestrians),
                 rx, ry, small);
+
+        // --- radar, bottom right ---------------------------------------------
+        drawRadar(canvas, d);
 
         // --- clock, under the main panel -------------------------------------
         int hh = (int) s.timeOfDay;

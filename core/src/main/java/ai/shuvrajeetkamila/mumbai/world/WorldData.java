@@ -49,7 +49,41 @@ public final class WorldData {
     /** Drivable road graph. */
     public final float[] graphNodeXZ;
     public final int[] graphEdge;
+    /**
+     * Five floats per edge. Use the accessors below rather than indexing
+     * this directly: every consumer of it had the speed limit wrong,
+     * reading slot 0 - the road class - as a speed in km/h. Motorways are
+     * class 0, so the fastest roads in the city got a limit of zero and no
+     * traffic at all, while everything else crawled at its class number.
+     */
     public final float[] graphAttr;
+
+    public static final int ATTR_STRIDE = 5;
+    public static final int ATTR_CLASS = 0;
+    public static final int ATTR_LANES = 1;
+    public static final int ATTR_ONEWAY = 2;
+    public static final int ATTR_WIDTH = 3;
+    public static final int ATTR_SPEED_KPH = 4;
+
+    /** OSM road class of an edge; 0 is motorway. */
+    public int edgeClass(int e) {
+        return (int) graphAttr[e * ATTR_STRIDE + ATTR_CLASS];
+    }
+
+    /** Posted or inferred speed limit, km/h. */
+    public double edgeSpeedKph(int e) {
+        return graphAttr[e * ATTR_STRIDE + ATTR_SPEED_KPH];
+    }
+
+    public int edgeLanes(int e) {
+        return (int) graphAttr[e * ATTR_STRIDE + ATTR_LANES];
+    }
+
+    public double edgeWidthM(int e) {
+        return graphAttr[e * ATTR_STRIDE + ATTR_WIDTH];
+    }
+
+    public int edgeCount() { return graphEdge.length / 2; }
 
     private final String manifestJson;
     private final String buildId;

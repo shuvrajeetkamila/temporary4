@@ -3,6 +3,7 @@ package ai.shuvrajeetkamila.mumbai.sim;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
+import ai.shuvrajeetkamila.mumbai.game.Minimap;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
@@ -38,6 +39,8 @@ public final class Engine {
     public final FixedStep clock = new FixedStep();
     public final FloatingOrigin origin = new FloatingOrigin();
     public final Agents agents;
+    /** Radar geometry. Refreshed with the telemetry, not every frame. */
+    public final Minimap minimap;
 
     public final HumanPhysics human = new HumanPhysics();
     public final CarPhysics car = new CarPhysics();
@@ -136,6 +139,7 @@ public final class Engine {
         this.world = world;
         this.streamer = new WorldStreamer(world);
         this.agents = new Agents(world);
+        this.minimap = new Minimap(world);
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
         this.heliGround = (x, z) -> {
             if (!world.inBounds(x, z)) { return 0; }
@@ -233,6 +237,10 @@ public final class Engine {
         telemetryTimer += frameSeconds;
         if (telemetryTimer >= 1.0 / 15.0) {
             publishTelemetry(frameSeconds);
+            // The radar is rebuilt here rather than per frame. It cannot
+            // change meaningfully in 16 ms, and the spatial query is the
+            // most expensive thing the HUD asks for.
+            minimap.update(b.position.x, b.position.z, b.orientation.heading());
             telemetryTimer = 0;
         }
         in.clearEdges();
@@ -261,7 +269,7 @@ public final class Engine {
         }
 
         RigidBody b = activeBody();
-        agents.update(dt, b.position.x, b.position.z,
+        agents.update(dt, b.position.x, b.position.z, b.velocity.x, b.velocity.z,
                 quality.medRadius * 0.55, quality.medRadius);
     }
 
