@@ -93,7 +93,8 @@ This matters more than anything above.
   sirens, horns, rain, wind and collisions are there, and music, voices
   and footsteps are not.
 - Paid work (fares, deliveries, street races), money, checkpoints,
-  reactive traffic, fleeing pedestrians, the radar, the wanted level,
+  reactive traffic, fleeing pedestrians, the radar, the full-screen
+  map with tap-to-teleport, the wanted level,
   police pursuit, the baton, the monsoon, and trains, metro, monorail and
   harbour vessels are all in. Police cars now **sound** like police cars;
   **there is still no flashing siren light** on them, so at a distance

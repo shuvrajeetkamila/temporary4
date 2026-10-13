@@ -44,6 +44,18 @@ public final class InputState {
      */
     public boolean attack;
     public boolean reverse;
+    /**
+     * Edge-triggered: opens or closes the full-screen map. Works from
+     * every profile, including mid-flight.
+     */
+    public boolean map;
+    /**
+     * Edge-triggered: teleport to whatever is marked on the map. Set by
+     * the map overlay on the UI thread and consumed by the engine on its
+     * own, because moving a rigid body and rebasing the floating origin
+     * from under the renderer is a race worth not having.
+     */
+    public boolean mapConfirm;
 
     public void clearEdges() {
         jump = false;
@@ -53,6 +65,8 @@ public final class InputState {
         engineToggle = false;
         enterExit = false;
         attack = false;
+        map = false;
+        mapConfirm = false;
     }
 
     public void reset() {

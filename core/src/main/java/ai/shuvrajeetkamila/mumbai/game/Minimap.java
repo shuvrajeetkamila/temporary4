@@ -135,6 +135,101 @@ public final class Minimap {
         return found ? new double[]{bx, bz} : null;
     }
 
+    /**
+     * Collects road segments inside a world rectangle, for the
+     * full-screen map.
+     *
+     * <p>The radar only ever extracts a 320 m disc, which is useless for
+     * a map of a 52 by 72 km island. This walks the same spatial index
+     * over a rectangle instead, and filters by road class so that
+     * zooming out does not try to draw all 352,267 edges: at city scale
+     * only the trunk network is legible anyway, and drawing the rest is
+     * both slow and a grey smear.
+     *
+     * <p>Output is packed as x1, z1, x2, z2, class per segment, in world
+     * metres - the caller projects. Returns the number of segments
+     * written, which may be less than asked for if the budget runs out.
+     *
+     * @param maxClass highest road class to include; lower is bigger
+     * @param out      packed destination, 5 doubles per segment
+     */
+    public int collectInRect(double minX, double minZ, double maxX, double maxZ,
+                             int maxClass, double[] out, int maxSegments) {
+        ensureIndex();
+        int written = 0;
+        int budget = Math.min(maxSegments, out.length / 5);
+        if (budget <= 0) { return 0; }
+
+        int gx0 = (int) Math.floor((minX - gridMinX) / CELL_M);
+        int gx1 = (int) Math.floor((maxX - gridMinX) / CELL_M);
+        int gz0 = (int) Math.floor((minZ - gridMinZ) / CELL_M);
+        int gz1 = (int) Math.floor((maxZ - gridMinZ) / CELL_M);
+        if (gx0 < 0) { gx0 = 0; }
+        if (gz0 < 0) { gz0 = 0; }
+        if (gx1 >= gridW) { gx1 = gridW - 1; }
+        if (gz1 >= gridH) { gz1 = gridH - 1; }
+
+        // An edge straddling a cell boundary is listed in both cells, so
+        // without this it is drawn twice. At wide zoom that doubles the
+        // work for no visible gain.
+        if (seenEpoch == null || seenEpoch.length < world.graphEdge.length / 2) {
+            seenEpoch = new int[Math.max(1, world.graphEdge.length / 2)];
+        }
+        epoch++;
+
+        for (int gz = gz0; gz <= gz1; gz++) {
+            for (int gx = gx0; gx <= gx1; gx++) {
+                int cell = gz * gridW + gx;
+                for (int i = cellStart[cell]; i < cellStart[cell + 1]; i++) {
+                    int e = cellEdge[i];
+                    if (seenEpoch[e] == epoch) { continue; }
+                    seenEpoch[e] = epoch;
+                    int cls = world.edgeClass(e);
+                    if (cls > maxClass) { continue; }
+                    int a = world.graphEdge[e * 2];
+                    int b = world.graphEdge[e * 2 + 1];
+                    double ax = world.graphNodeXZ[a * 2];
+                    double az = world.graphNodeXZ[a * 2 + 1];
+                    double bx = world.graphNodeXZ[b * 2];
+                    double bz = world.graphNodeXZ[b * 2 + 1];
+                    // Reject segments wholly outside the window.
+                    if (Math.max(ax, bx) < minX || Math.min(ax, bx) > maxX
+                            || Math.max(az, bz) < minZ
+                            || Math.min(az, bz) > maxZ) {
+                        continue;
+                    }
+                    if (written >= budget) { return written; }
+                    int o = written * 5;
+                    out[o] = ax;
+                    out[o + 1] = az;
+                    out[o + 2] = bx;
+                    out[o + 3] = bz;
+                    out[o + 4] = cls;
+                    written++;
+                }
+            }
+        }
+        return written;
+    }
+
+    private int[] seenEpoch;
+    private int epoch;
+
+    /**
+     * The coarsest road class worth drawing at a given zoom.
+     *
+     * <p>Metres per pixel, not a zoom level, because that is the quantity
+     * that decides whether a residential street is one pixel wide or
+     * twenty.
+     */
+    public static int classLimitFor(double metresPerPixel) {
+        if (metresPerPixel > 24) { return 0; }   // motorway only
+        if (metresPerPixel > 11) { return 1; }   // + trunk
+        if (metresPerPixel > 5) { return 2; }    // + primary
+        if (metresPerPixel > 2.2) { return 3; }  // + secondary
+        return 9;                                // everything
+    }
+
     /** Places a blip, converting world metres into heading-up map space. */
     public void addBlip(double wx, double wz, double px, double pz,
                         double heading, int kind) {

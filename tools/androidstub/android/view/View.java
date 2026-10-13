@@ -7,4 +7,6 @@ public class View { public static final int SYSTEM_UI_FLAG_IMMERSIVE_STICKY=1,SY
  public int getHeight(){return 0;} public android.content.res.Resources getResources(){return null;}
  protected void onDraw(android.graphics.Canvas c){} protected void onSizeChanged(int w,int h,int ow,int oh){}
  public boolean onTouchEvent(MotionEvent e){return false;}
- public void setSystemUiVisibility(int v){} public void setVisibility(int v){} }
+ public void setSystemUiVisibility(int v){} public void setVisibility(int v){}
+ public static final int INVISIBLE=4;
+ public int getVisibility(){return 0;} }

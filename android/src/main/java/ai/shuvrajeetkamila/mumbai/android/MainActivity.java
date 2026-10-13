@@ -41,6 +41,7 @@ public final class MainActivity extends Activity
     private GLSurfaceView surface;
     private SceneRenderer renderer;
     private Hud hud;
+    private MapOverlay mapOverlay;
     private TouchControls controls;
     private TextView loading;
 
@@ -80,6 +81,14 @@ public final class MainActivity extends Activity
 
         hud = new Hud(this);
         root.addView(hud);
+
+        // Above the HUD, because when it is up it is the whole interface.
+        // It starts GONE so it is not in the touch path at all while
+        // closed, rather than relying on it declining every event.
+        mapOverlay = new MapOverlay(this, input);
+        root.addView(mapOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
 
         loading = new TextView(this);
         loading.setText(getString(R.string.loading));
@@ -133,6 +142,7 @@ public final class MainActivity extends Activity
             ui.post(() -> {
                 loading.setVisibility(View.GONE);
                 controls.setProfile(ControlProfile.ON_FOOT);
+                mapOverlay.setProfile(ControlProfile.ON_FOOT);
             });
         } catch (IOException | RuntimeException err) {
             Log.e(TAG, "world load failed", err);
@@ -183,7 +193,10 @@ public final class MainActivity extends Activity
         surface.queueEvent(() -> {
             ControlProfile next = e.profile.next();
             e.switchProfile(next);
-            ui.post(() -> controls.setProfile(next));
+            ui.post(() -> {
+                controls.setProfile(next);
+                mapOverlay.setProfile(next);
+            });
         });
     }
 
@@ -245,6 +258,13 @@ public final class MainActivity extends Activity
             Telemetry t = e.telemetry;
             ai.shuvrajeetkamila.mumbai.game.Minimap m = e.minimap;
             ui.post(() -> hud.update(t, m));
+            ai.shuvrajeetkamila.mumbai.game.MapView mv = e.mapView;
+            ai.shuvrajeetkamila.mumbai.physics.RigidBody b = e.activeBody();
+            double px = b.position.x;
+            double pz = b.position.z;
+            double hdg = b.orientation.heading();
+            ai.shuvrajeetkamila.mumbai.world.WorldData wd = e.world;
+            ui.post(() -> mapOverlay.update(mv, m, wd, px, pz, hdg));
         }
         if (frameNumber == 30) {
             Log.i(TAG, "MUMBAI_RENDER_OK frames=30 quality=" + e.quality

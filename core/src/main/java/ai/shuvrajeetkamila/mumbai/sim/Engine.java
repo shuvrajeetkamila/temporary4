@@ -5,6 +5,7 @@ import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.audio.AudioDirector;
 import ai.shuvrajeetkamila.mumbai.audio.AudioMixer;
+import ai.shuvrajeetkamila.mumbai.game.MapView;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
 import ai.shuvrajeetkamila.mumbai.game.Missions;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
@@ -49,6 +50,9 @@ public final class Engine {
     public final Transit transit;
     /** Radar geometry. Refreshed with the telemetry, not every frame. */
     public final Minimap minimap;
+
+    /** The full-screen map, and the teleport destination picked on it. */
+    public final MapView mapView = new MapView();
 
     /** Jobs, money and progression. */
     public final Missions missions;
@@ -179,6 +183,7 @@ public final class Engine {
         this.agents = new Agents(world);
         this.transit = new Transit(world);
         this.minimap = new Minimap(world);
+        this.mapView.setWorldBounds(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
         this.heliGround = (x, z) -> {
@@ -250,6 +255,20 @@ public final class Engine {
      * fixed 60 Hz substeps.
      */
     public void frame(double frameSeconds, InputState in) {
+        if (in.map) { toggleMap(); in.map = false; }
+        if (mapView.open) {
+            if (in.mapConfirm) {
+                in.mapConfirm = false;
+                teleportToTarget();
+            }
+            // The world stops while the map is up. Reading a map at
+            // 90 km/h is not a feature, and returning before the fixed
+            // clock is touched means no time accumulates: the step
+            // accumulator does not then have to swallow however long the
+            // player spent looking at it.
+            in.clearEdges();
+            return;
+        }
         int steps = clock.beginFrame(frameSeconds);
         for (int i = 0; i < steps; i++) {
             snapshot();
@@ -779,6 +798,106 @@ public final class Engine {
         double g = groundHeight(out.x, out.z) + 1.1;
         if (out.y < g) { out.y = g; }
         return out;
+    }
+
+    /**
+     * Puts the player, and whatever they are driving, somewhere else.
+     *
+     * <p>Picked off the full-screen map. There are four things that have
+     * to happen together or the arrival is broken:
+     *
+     * <ul>
+     *   <li>the body has to land on the ground at the destination, not at
+     *       the altitude it left from, or you arrive underground or in
+     *       the air;
+     *   <li>velocity and spin have to go, or you arrive at 140 km/h
+     *       sideways and the first thing the new neighbourhood does is
+     *       kill you;
+     *   <li>the car's driveline has to be reset, because wheel speeds
+     *       and a slipping clutch carried across a jump describe a
+     *       vehicle that no longer exists;
+     *   <li>the floating origin has to rebase, because the whole point
+     *       of a 52 by 72 km world in double precision is that the
+     *       render path never sees a large coordinate. Teleporting 40 km
+     *       without rebasing is exactly the case the origin exists for.
+     * </ul>
+     *
+     * @return true if the destination was usable
+     */
+    public boolean teleportTo(double x, double z) {
+        if (!world.inBounds(x, z)) { return false; }
+
+        RigidBody b = activeBody();
+        boolean water = world.isWater(x, z);
+        double ground = water ? ocean.heightAt(x, z) : world.height(x, z);
+
+        // Clearance enough that the body is not intersecting the ground on
+        // the first step, and small enough that it is not a drop.
+        double clearance;
+        switch (profile) {
+            case BOAT: clearance = 0.0; break;
+            case HELICOPTER: clearance = 2.2; break;
+            case AEROPLANE: clearance = 2.0; break;
+            case CAR: clearance = 0.9; break;
+            default: clearance = 1.2; break;
+        }
+
+        b.position.set(x, ground + clearance, z);
+        b.velocity.zero();
+        b.angularVelocity.zero();
+        // Keep the heading, lose the attitude: arriving upside down
+        // because you were mid-barrel-roll is not useful.
+        b.orientation.set(Quat.yaw(b.orientation.heading()));
+
+        if (profile == ControlProfile.CAR) {
+            for (CarPhysics.Wheel w : car.wheels) {
+                w.spin = 0;
+                w.slipRatio = 0;
+                w.slipAngle = 0;
+                w.compression = 0;
+                w.lastCompression = 0;
+                w.longForce = 0;
+                w.latForce = 0;
+            }
+            car.engineRpm = car.idleRpm;
+            car.gear = 1;
+            car.shiftTimer = 0;
+            car.clutchSlipping = true;
+            car.clutchEngagement = 0;
+        }
+
+        origin.update(x, z);
+        origin.consumeRebase(rebase2);
+
+        // The radar's spatial query is keyed on where the player is, and
+        // the HUD would otherwise show the old neighbourhood until the
+        // next telemetry tick.
+        minimap.update(x, z, b.orientation.heading());
+
+        // Twice, or the first rendered frame interpolates from the old
+        // position and the camera flies the length of the island.
+        snapshot();
+        snapshot();
+        mapView.close();
+        return true;
+    }
+
+    /**
+     * Teleports to whatever is currently selected on the map, if it is a
+     * place this profile can be put down.
+     */
+    public boolean teleportToTarget() {
+        if (!mapView.hasTarget || !mapView.targetSuits(profile)) { return false; }
+        return teleportTo(mapView.targetX, mapView.targetZ);
+    }
+
+    public void toggleMap() {
+        if (mapView.open) {
+            mapView.close();
+        } else {
+            RigidBody b = activeBody();
+            mapView.openAt(b.position.x, b.position.z);
+        }
     }
 
     public void switchProfile(ControlProfile p) {

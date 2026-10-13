@@ -32,8 +32,9 @@ public final class ControlMapping {
     public static final int ACT_FLAP_UP = 11;
     public static final int ACT_GEAR = 12;
     public static final int ACT_WHEEL_BRAKE = 13;
+    public static final int ACT_MAP = 14;
 
-    public static final int ACT_COUNT = 14;
+    public static final int ACT_COUNT = 15;
 
     /** Most buttons that can be shown at once: two columns of four. */
     public static final int MAX_SLOTS = 8;
@@ -51,17 +52,17 @@ public final class ControlMapping {
         switch (p) {
             case CAR:
                 return new int[]{ACT_HANDBRAKE, ACT_REVERSE, ACT_ENTER,
-                        ACT_CAM, ACT_SWAP};
+                        ACT_CAM, ACT_SWAP, ACT_MAP};
             case BOAT:
-                return new int[]{ACT_ENTER, ACT_CAM, ACT_SWAP};
+                return new int[]{ACT_ENTER, ACT_CAM, ACT_SWAP, ACT_MAP};
             case HELICOPTER:
-                return new int[]{ACT_ENGINE, ACT_ENTER, ACT_CAM, ACT_SWAP};
+                return new int[]{ACT_ENGINE, ACT_ENTER, ACT_CAM, ACT_SWAP, ACT_MAP};
             case AEROPLANE:
                 return new int[]{ACT_WHEEL_BRAKE, ACT_FLAP_DOWN, ACT_FLAP_UP,
-                        ACT_GEAR, ACT_ENTER, ACT_CAM, ACT_SWAP};
+                        ACT_GEAR, ACT_ENTER, ACT_CAM, ACT_SWAP, ACT_MAP};
             default:
                 return new int[]{ACT_SPRINT, ACT_JUMP, ACT_ENTER, ACT_BATON,
-                        ACT_CAM, ACT_SWAP};
+                        ACT_CAM, ACT_SWAP, ACT_MAP};
         }
     }
 
@@ -81,6 +82,7 @@ public final class ControlMapping {
             case ACT_FLAP_UP: return "FLAP-";
             case ACT_GEAR: return "GEAR";
             case ACT_WHEEL_BRAKE: return "BRAKE";
+            case ACT_MAP: return "MAP";
             default: return "";
         }
     }
@@ -129,6 +131,15 @@ public final class ControlMapping {
         out.moveY = ly;
         out.lookX = rx;
         out.lookY = ry;
+
+        // The map opens from every profile, so it is handled before
+        // the per-profile switch rather than repeated in each branch.
+        // OR rather than assign. The map overlay's own CLOSE button sets
+        // this same edge from the UI thread, and the control pump runs
+        // every frame whether or not anything is being touched - a plain
+        // assignment wiped the request before the engine ever saw it, so
+        // CLOSE did nothing. The engine clears it when it consumes it.
+        out.map = out.map || edge[ACT_MAP];
 
         switch (profile) {
             case CAR:

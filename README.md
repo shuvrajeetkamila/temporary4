@@ -221,6 +221,39 @@ Only `AudioOutput` touches `AudioTrack`, on its own thread, and every
 failure there is swallowed - a phone with a busy audio device should
 still be playable in silence.
 
+### The map, and getting across the island
+
+The radar shows 320 m. The city is 52 km by 72 km. Those two numbers do
+not go together: the radar tells you which way the next junction bends
+and nothing whatever about where Bandra is relative to where you are
+standing.
+
+So there is a full-screen map on the MAP button, from every profile
+including mid-flight. Drag to pan, pinch or use the buttons to zoom from
+a 200 m junction out to the whole island in one screen, tap to drop a
+marker, GO to teleport to it. ME recentres on you. The simulation stops
+while it is up - reading a map at 90 km/h is not a feature - and because
+the engine returns before it touches the fixed clock, no time
+accumulates while you are deciding and the step accumulator does not
+have to swallow it afterwards.
+
+A tap is pulled onto the nearest road within 140 m when there is one,
+because a destination in the middle of a block is somewhere you cannot
+drive out of. Water is allowed but the marker turns red unless you are
+in something that floats or flies, and GO greys out. Teleporting is not
+just a position change: the body lands on the ground at the far end,
+velocity and spin go, a car's wheel speeds and clutch are reset rather
+than carried across, and the floating origin rebases - which is rather
+the point of having one, since a 50 km jump is exactly the case single
+precision cannot survive.
+
+Zooming out drops road classes rather than trying to draw all 352,267
+graph edges: at city scale only the trunk network is legible anyway. The
+world-to-screen transform goes through the same `Minimap.mapX` and
+`mapY` the radar uses, because the radar once had two copies of that
+rotation that disagreed, and road lines and mission blips drew in
+different places.
+
 ### Controls, and an audit of them
 
 Every control is mapped in one place, `app/ControlMapping`, which lives
@@ -268,6 +301,63 @@ the input layer had never been tested at all:
   they were out they stayed out.
 - **ENTER was drawn as an en dash** in the boat, helicopter and
   aeroplane. The button worked; nothing told you it was there.
+
+### A second pass over the physics
+
+The first audit checked signs and stability: that a torque turns a
+vehicle the right way, that nothing diverges. Everything passed. A
+double-decker bus still could not exceed 2.5 km/h, and a saloon with the
+throttle shut quietly drove itself backwards and kept accelerating.
+Neither shows up in a sign test or a magnitude bound.
+
+The second pass drove every vehicle and measured what it does against
+what the real thing does. Eight faults:
+
+| Fault | Effect |
+| --- | --- |
+| `configure()` never sized the running gear | Every vehicle inherited a saloon's 42 kN/m springs, 0.32 m wheels, 2.6 kN m brakes and 320 N m clutch. A 12.4 t bus needs 30 kN per corner against a spring good for 9.2 kN: it bottomed out and sank to y = -21 m. A 142 kg scooter was thrown into the air by its own suspension. |
+| Slipping clutch against a bare wheel inertia | Full capacity through a 29:1 first gear is 15 rad/s in one 60 Hz step. |
+| Explicit tyre reaction | Drive force flipped sign every few steps; the bus alternated +25 kN and -31 kN and averaged nothing. |
+| Overrun torque applied in a fixed direction | Every car idled itself into reverse; the saloon reached 4.1 m/s backwards. |
+| Torque curve and shift points in absolute rpm | A 2300 rpm diesel bus never reached its own torque plateau; a scooter's engine braking was six times its peak torque. |
+| One shared final drive | A rickshaw was geared for 95 km/h and a bus for nearly 100. |
+| Rotor torque omitted climb power | The helicopter climbed at 148 m/s - about 7 MW against gravity - on a 560 kW engine. |
+| Blade element used induced inflow, not total | Invisible in a hover, where the two are identical. In a descent thrust collapsed to nothing, so an engine failure was a 105 m/s free fall rather than an autorotation. |
+
+Spring rates now come from a target ride frequency, damping from a
+fraction of critical, brakes from a 1 g lock, clutch from 1.6x peak
+torque, final drive from the speed the vehicle is meant to reach. The
+clutch is clamped to its synchronisation torque and the tyre reaction
+takes one Newton step of backward Euler, which is a no-op whenever the
+wheel is well conditioned and only bites when it is genuinely stiff.
+
+Measured afterwards, against the real figures:
+
+| | before | after | real |
+| --- | --- | --- | --- |
+| Double-decker top speed | 2.5 km/h | 74 km/h | ~70 |
+| Autorickshaw top speed | 14.6 km/h | 68 km/h | ~60 |
+| Saloon 0-100 km/h | 17.6 s | 12.9 s | ~10 |
+| Braking 100-0 | 44 m | 44 m | ~40 |
+| Lateral grip, car | 0.15 g | 0.82 g | 0.8-0.9 |
+| Lateral grip, bus | 0.00 g | 0.54 g | lower than a car |
+| Turning circle, bus | n/a | 10.3 m | ~11 |
+| Turning circle, rickshaw | n/a | 2.7 m | ~2.5 |
+| Hover collective | 1% (broken) | 58% | 50-60 |
+| Helicopter climb | 148 m/s | 12.6 m/s | ~10 |
+| Standing jump | 0.94 m | 0.62 m | 0.4-0.5 |
+
+Seventeen regression tests hold all of it, including the ones that would
+have caught the original faults: that the suspension can carry the
+vehicle's own weight, that nothing moves with the throttle shut, that
+drive force does not change sign during steady acceleration, and that
+the helicopter cannot climb on energy its engine does not have.
+
+Two-wheelers remain the weakest part. A scooter is modelled as a narrow
+four-wheeler, so it does not lean, and it corners at about 0.2 g when
+the real thing does far better. Autorotation is survivable and has a
+best-glide collective, but the descent is about twice as steep as a real
+one.
 
 ## Verification
 

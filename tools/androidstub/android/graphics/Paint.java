@@ -14,4 +14,5 @@ public class Paint {
   public void setStrokeCap(Cap c) {}
   public void setTextAlign(Align a) {}
   public float measureText(String s) { return 0; }
+  public float getTextSize() { return 0; }
 }
