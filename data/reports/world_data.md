@@ -1,6 +1,6 @@
 # World data acquisition
 
-Run `38273241879`, 2026-10-12T15:53:23Z.
+Run `38380809148`, 2026-10-13T10:06:21Z.
 
 ## `data/provenance/osm.json`
 ```json
@@ -11,12 +11,12 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
  "attribution": "\u00a9 OpenStreetMap contributors",
  "copyright_url": "https://www.openstreetmap.org/copyright",
  "source_url": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf",
- "source_bytes": 221112187,
- "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
- "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
+ "source_bytes": 221177381,
+ "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
+ "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-12T15:52:23+00:00",
- "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
+ "retrieved_utc": "2026-10-13T10:04:57+00:00",
+ "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
  "clip": {
   "tool": "osmium-tool",
   "tool_version": "osmium version 1.16.0",
@@ -25,12 +25,12 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
   "aoi_version": "2.1.0",
   "aoi_vertices": 29,
   "output": "data/osm/mumbai-aoi.osm.pbf",
-  "output_bytes": 19132182,
-  "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
+  "output_bytes": 19134820,
+  "output_sha256": "49995cfaa5edb7cc66436b194f135a541c70665d9e78bad938171c491d503af1",
   "counts": {
    "changesets": 0,
-   "nodes": 2144390,
-   "ways": 330942,
+   "nodes": 2144562,
+   "ways": 330964,
    "relations": 4379
   }
  }
@@ -45,7 +45,7 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
  "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
  "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
  "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
- "retrieved_utc": "2026-10-12T15:52:30+00:00",
+ "retrieved_utc": "2026-10-13T10:05:06+00:00",
  "tiles": [
   {
    "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -97,17 +97,17 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
 ```json
 {
  "source_pbf": "data/osm/mumbai-aoi.osm.pbf",
- "roads": 105095,
- "road_points": 732666,
+ "roads": 105117,
+ "road_points": 732861,
  "buildings": 196899,
- "building_points": 1459514,
+ "building_points": 1459515,
  "landuse": 14168,
  "water_areas": 1626,
  "coastline_ways": 105,
  "land_rings": 23,
  "land_area_km2": 1571.76,
  "poi": 1283,
- "seconds": 17.1,
+ "seconds": 22.7,
  "detail": {
   "bheight_src_0": 166425,
   "bheight_src_1": 7214,
@@ -163,14 +163,14 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
   "road_pier": 111,
   "road_primary": 2806,
   "road_rail": 2196,
-  "road_residential": 53471,
+  "road_residential": 53497,
   "road_runway": 12,
-  "road_secondary": 4280,
-  "road_service": 20404,
+  "road_secondary": 4261,
+  "road_service": 20402,
   "road_steps": 1736,
   "road_subway": 355,
   "road_taxiway": 333,
-  "road_tertiary": 6612,
+  "road_tertiary": 6629,
   "road_track": 1703,
   "road_trunk": 1454,
   "road_unclassified": 633,
@@ -186,19 +186,19 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
 ## `data/reports/world_build.json`
 ```json
 {
- "seconds": 34.9,
- "total_bytes": 14556953,
+ "seconds": 52.2,
+ "total_bytes": 14647747,
  "files": {
   "terrain.mwl": 3058655,
-  "chunks.mwl": 7865588,
-  "network.mwl": 3629232,
-  "manifest.mwl": 3478
+  "chunks.mwl": 7866293,
+  "network.mwl": 3719239,
+  "manifest.mwl": 3560
  },
  "manifest": {
   "format": "MWL2",
   "aoi_name": "Mumbai / Salsette island",
   "aoi_version": "2.1.0",
-  "build_id": "ab19ba23e408ce9a817c663cee013a67",
+  "build_id": "2abf2fa1570887a378d34f0369f6e472",
   "selftest": false,
   "origin_lat": 19.076,
   "origin_lon": 72.8777,
@@ -233,9 +233,9 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
     "sand": 318,
     "rock": 305,
     "forest": 631571,
-    "scrub": 1760661,
-    "grass": 11984,
-    "park": 251013,
+    "scrub": 1760658,
+    "grass": 11982,
+    "park": 251000,
     "farmland": 81886,
     "cemetery": 1586,
     "residential": 234803,
@@ -245,7 +245,7 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
     "military": 29203,
     "railway_land": 21009,
     "airport_land": 15001,
-    "construction": 42309,
+    "construction": 42327,
     "quarry": 18287,
     "pitch": 12535,
     "parking": 2877
@@ -260,7 +260,7 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
    "quant": 0.05,
    "buildings": 195743,
    "building_runs": 195743,
-   "road_runs": 124592,
+   "road_runs": 124616,
    "height_src": {
     "osm_height": 20582,
     "osm_levels": 7363,
@@ -270,9 +270,31 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
    "names": 4674
   },
   "graph": {
-   "nodes": 370415,
-   "edges": 352267,
-   "drivable_km": 13983.4
+   "nodes": 370546,
+   "edges": 352391,
+   "drivable_km": 13984.4
+  },
+  "transit": {
+   "routes": 459,
+   "km": 1733.0,
+   "by_class": {
+    "rail": {
+     "routes": 430,
+     "km": 1406.6
+    },
+    "subway": {
+     "routes": 21,
+     "km": 195.9
+    },
+    "monorail": {
+     "routes": 3,
+     "km": 40.0
+    },
+    "ferry": {
+     "routes": 5,
+     "km": 90.9
+    }
+   }
   },
   "places": 1283,
   "checkpoints": [
@@ -693,12 +715,12 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
     "attribution": "\u00a9 OpenStreetMap contributors",
     "copyright_url": "https://www.openstreetmap.org/copyright",
     "source_url": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf",
-    "source_bytes": 221112187,
-    "source_sha256": "b24f654c326812c8c68439c1962b5521d54eb541c34d31ee9b8ed97874049bb1",
-    "source_md5_published": "5e9cc051deec5c4196fe996a4100eba7",
+    "source_bytes": 221177381,
+    "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
+    "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
     "osm_replication_timestamp": "unknown",
-    "retrieved_utc": "2026-10-12T15:52:23+00:00",
-    "http_last_modified": "Mon, 12 Oct 2026 01:03:14 GMT",
+    "retrieved_utc": "2026-10-13T10:04:57+00:00",
+    "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
     "clip": {
      "tool": "osmium-tool",
      "tool_version": "osmium version 1.16.0",
@@ -707,12 +729,12 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
      "aoi_version": "2.1.0",
      "aoi_vertices": 29,
      "output": "data/osm/mumbai-aoi.osm.pbf",
-     "output_bytes": 19132182,
-     "output_sha256": "b537a1aa09386cfa0811bb383b3010cbbf347070cb44c6d65302e2274fe62809",
+     "output_bytes": 19134820,
+     "output_sha256": "49995cfaa5edb7cc66436b194f135a541c70665d9e78bad938171c491d503af1",
      "counts": {
       "changesets": 0,
-      "nodes": 2144390,
-      "ways": 330942,
+      "nodes": 2144562,
+      "ways": 330964,
       "relations": 4379
      }
     }
@@ -724,7 +746,7 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
     "licence_url": "https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf",
     "attribution": "\u00a9 DLR e.V. 2010-2014 / \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA, all rights reserved",
     "access": "public AWS S3 bucket copernicus-dem-30m, no credentials",
-    "retrieved_utc": "2026-10-12T15:52:30+00:00",
+    "retrieved_utc": "2026-10-13T10:05:06+00:00",
     "tiles": [
      {
       "tile": "Copernicus_DSM_COG_10_N18_00_E072_00_DEM",
@@ -788,7 +810,7 @@ Run `38273241879`, 2026-10-12T15:53:23Z.
 19M	data/osm
 28M	data/pinned
 12K	data/provenance
-60K	data/reports
+84K	data/reports
 14M	android/src/main/assets/world
 /dev/root       145G   60G   85G  42% /
 ```
