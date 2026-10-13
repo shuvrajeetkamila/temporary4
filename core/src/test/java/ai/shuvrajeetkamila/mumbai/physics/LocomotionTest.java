@@ -182,10 +182,22 @@ final class LocomotionTest {
         c.position.set(0, 0.6, 0);
         c.throttle = 0.55;
         for (int i = 0; i < 60 * 4; i++) { c.step(DT, flatCar(), 0); }
-        double h0 = c.orientation.heading();
         c.steerInput = steer;
-        for (int i = 0; i < 60 * 3; i++) { c.step(DT, flatCar(), 0); }
-        return headingDelta(h0, c.orientation.heading());
+        // Accumulate the change step by step rather than comparing the
+        // start and end headings. On full lock the car now turns at about
+        // 1.2 rad/s, so it passes half a turn inside this window and a
+        // single start-to-end comparison wraps and reports the opposite
+        // sign - which looks exactly like a steering inversion and is not
+        // one.
+        double total = 0;
+        double prev = c.orientation.heading();
+        for (int i = 0; i < 60 * 3; i++) {
+            c.step(DT, flatCar(), 0);
+            double now = c.orientation.heading();
+            total += headingDelta(prev, now);
+            prev = now;
+        }
+        return total;
     }
 
     @Test

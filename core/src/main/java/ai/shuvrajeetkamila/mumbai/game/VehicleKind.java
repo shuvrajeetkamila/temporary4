@@ -134,6 +134,52 @@ public enum VehicleKind {
     public boolean isTwoWheeler() { return this == SCOOTER; }
 
     /**
+     * Rolling radius of a driven wheel, metres.
+     *
+     * <p>This is not cosmetic. The wheel radius converts engine speed into
+     * road speed and brake torque into deceleration, so getting it wrong
+     * mis-gears the whole vehicle. A bus on a car's 0.32 m wheel is
+     * geared roughly a third too short and cannot reach its own top
+     * speed; a scooter on the same wheel is geared far too long to pull
+     * away.
+     *
+     * <p>The car case is centred on a mid-size saloon at 0.32 m and
+     * scaled gently with wheelbase, which tracks real tyre sizes closely
+     * enough across the range this game contains.
+     */
+    /**
+     * Governed top speed in km/h, used to choose the final drive.
+     *
+     * <p>Real gearing is picked so the engine reaches its limiter at the
+     * vehicle's design speed, and that is what this is for. Without it
+     * every vehicle inherited a saloon's 4.06 final drive, which geared
+     * an autorickshaw for 95 km/h and a double-decker for nearly 100 -
+     * both roughly half as long as they should be.
+     */
+    public double topSpeedKph() {
+        switch (this) {
+            case AUTORICKSHAW: return 62;
+            case DOUBLE_DECKER: return 70;
+            case CITY_BUS: return 80;
+            case SCOOTER: return 85;
+            case TEMPO: return 92;
+            case KAALI_PEELI: return 130;
+            case HATCHBACK: return 158;
+            case SUV: return 182;
+            case POLICE: return 205;
+            default: return 196;
+        }
+    }
+
+    public double wheelRadiusM() {
+        if (isTwoWheeler()) { return 0.25; }          // 12 inch rim plus tyre
+        if (massKg > 5000) { return 0.52; }           // 22.5 inch truck wheel
+        if (isThreeWheeler()) { return 0.21; }        // auto and tempo
+        double r = 0.32 + (wheelbaseM - 2.62) * 0.06;
+        return Math.max(0.26, Math.min(0.40, r));
+    }
+
+    /**
      * Yaw inertia, kg·m². Approximated as a uniform box about the vertical,
      * which for a vehicle is within about fifteen percent of measured values
      * and is the right shape of answer: long vehicles resist turning.

@@ -131,6 +131,70 @@ public final class CarPhysics extends RigidBody {
         layoutWheels();
     }
 
+    /**
+     * Sizes springs, dampers, wheels and brakes for the vehicle's mass.
+     *
+     * <p>This used to be missing entirely, and it was the single worst
+     * fault in the car model. Every vehicle inherited a mid-size saloon's
+     * running gear: 42 kN/m springs, 0.32 m wheels and 2.6 kN m brakes.
+     * A 12.4 t double-decker needs about 30 kN per corner, but a 42 kN/m
+     * spring over 0.22 m of travel can only push back 9.2 kN, so the bus
+     * bottomed out, sank through the road surface and could not exceed
+     * 2.5 km/h. At the other end a 142 kg scooter sat on springs eight
+     * times too stiff for it and was flung into the air by its own
+     * suspension before it had moved.
+     *
+     * <p>Everything below is derived rather than tuned. Spring rate comes
+     * from a target ride frequency, which is the parameter vehicle
+     * engineers actually use: k = m (2 pi f)^2 per corner. Damping is
+     * expressed as a fraction of critical, 2 sqrt(k m), so it means the
+     * same thing on a scooter as on a bus. Brake torque is whatever locks
+     * the wheels at about 1 g. The saloon's existing numbers fall out of
+     * these formulae unchanged, which is how they were calibrated.
+     */
+    private void sizeRunningGear(VehicleKind k) {
+        double corner = mass / 4.0;
+        // Ride frequency, Hz. Soft and long-travel on something heavy,
+        // stiff and short on two wheels. 1.78 Hz is what the saloon
+        // already had.
+        double rideHz = k.massKg > 5000 ? 1.15
+                : k.isTwoWheeler() ? 2.55
+                : k.isThreeWheeler() ? 2.15
+                : 1.78;
+        double w0 = 2 * Math.PI * rideHz;
+        double kSpring = corner * w0 * w0;
+        double cCritical = 2 * Math.sqrt(kSpring * corner);
+        double travelM = k.massKg > 5000 ? 0.30
+                : k.isTwoWheeler() ? 0.14
+                : k.isThreeWheeler() ? 0.17
+                : 0.22;
+        double radius = k.wheelRadiusM();
+        // Static deflection under the vehicle's own weight. The spring's
+        // free length has to clear this, or it sits on the bump stop.
+        double sag = 9.81 / (w0 * w0);
+        // A wheel is closer to a ring than a disc once the tyre is on it,
+        // so 0.65 m r^2 rather than 0.5. Too little rotational inertia is
+        // what makes a loaded wheel numerically fragile against tyre
+        // forces of tens of kilonewtons.
+        double wheelMass = MathUtil.clamp(0.0134 * mass, 8, 150);
+
+        for (Wheel w : wheels) {
+            w.stiffness = kSpring;
+            // Fractions of critical. Rebound is always the firmer of the
+            // two, which is what stops a car floating after a crest.
+            w.damperBump = 0.56 * cCritical;
+            w.damperRebound = 0.72 * cCritical;
+            w.travel = travelM;
+            w.restLength = sag + 0.943 * radius;
+            w.radius = radius;
+            w.inertia = 0.65 * wheelMass * radius * radius;
+        }
+
+        // Enough torque to lock a wheel at roughly 1 g, per axle pair.
+        brakeTorqueMax = 0.62 * mass * 9.81 * radius;
+        handbrakeTorque = 0.69 * brakeTorqueMax;
+    }
+
     /** Standard front-engine layout: front pair steered, rear pair driven. */
     public void layoutWheels() {
         double hw = trackWidth * 0.5;
@@ -209,9 +273,31 @@ public final class CarPhysics extends RigidBody {
             g[i + 2] = first * Math.pow(top / first, t);
         }
         gearRatios = g;
-        finalDrive = k.massKg > 5000 ? 5.20 : 4.06;
+        // Choose the final drive so the engine arrives at its limiter in
+        // top gear at the vehicle's design speed, which is how real
+        // gearing is picked. A single shared 4.06 geared a rickshaw for
+        // 95 km/h and a bus for nearly 100.
+        double topGear = g[g.length - 1];
+        double vTop = k.topSpeedKph() / 3.6;
+        finalDrive = MathUtil.clamp(
+                k.redlineRpm * (Math.PI / 30.0) * k.wheelRadiusM()
+                        / Math.max(1e-6, vTop * topGear), 2.2, 9.0);
         gear = 2;
+        idleRpm = MathUtil.clamp(k.redlineRpm * 0.137, 550, 1500);
+        engineRpm = idleRpm;
+        // A clutch is sized to hold rather more than the engine can make.
+        // Leaving this at a saloon's 320 N m meant a 620 N m bus engine
+        // could never transmit its own torque: the clutch slipped for ever
+        // and the bus would not pull away.
+        clutchCapacity = 1.60 * peakTorqueNm;
+        engineInertia = MathUtil.clamp(0.10 + peakTorqueNm * 0.00082, 0.04, 1.6);
 
+        // A bus cannot crank its wheels to a saloon's angle, and a
+        // rickshaw turns inside anything on the road.
+        maxSteerAngle = Math.toRadians(
+                k.massKg > 5000 ? 26 : k.isThreeWheeler() ? 38 : 33);
+
+        sizeRunningGear(k);
         layoutWheels();
         if (k.isThreeWheeler()) {
             // One wheel at the front, on the centreline. It steers and, on an
@@ -236,22 +322,36 @@ public final class CarPhysics extends RigidBody {
      * the limiter.
      */
     public double engineTorque(double rpm, double throttlePos) {
-        if (rpm > maxRpm) { return -40; }
-        double r = MathUtil.clamp(rpm, 500, maxRpm);
+        if (rpm > maxRpm) { return -0.2 * peakTorqueNm; }
+        // The shape of a torque curve belongs to the engine, not to a
+        // fixed set of rpm numbers. These breakpoints used to be absolute
+        // - peak at 2600, falling past 4800 - which is a petrol saloon's
+        // curve. A diesel bus that redlines at 2300 never reached the
+        // plateau at all, and a scooter spinning to 7500 spent its whole
+        // range past the drop-off. Everything is a fraction of redline
+        // now, so each engine gets the same shape over its own range.
+        double idleRef = Math.min(500, redlineRpm * 0.12);
+        double r = MathUtil.clamp(rpm, idleRef, maxRpm);
         double peak = peakTorqueNm;
+        double rise = 0.42 * redlineRpm;      // peak torque arrives
+        double mid = 0.58 * redlineRpm;
+        double fall = 0.77 * redlineRpm;      // and starts to go away
+        double halfWidth = 0.19 * redlineRpm;
         double t;
-        if (r < 2600) {
-            t = peak * (0.44 + 0.56 * (r - 500) / 2100.0);
-        } else if (r < 4800) {
-            t = peak * (1.0 - 0.04 * Math.abs(r - 3600) / 1200.0);
+        if (r < rise) {
+            t = peak * (0.44 + 0.56 * (r - idleRef) / Math.max(1, rise - idleRef));
+        } else if (r < fall) {
+            t = peak * (1.0 - 0.04 * Math.abs(r - mid) / Math.max(1, halfWidth));
         } else {
-            t = peak * (0.96 - 0.34 * (r - 4800) / (maxRpm - 4800));
+            t = peak * (0.96 - 0.34 * (r - fall) / Math.max(1, maxRpm - fall));
         }
         if (r > redlineRpm) {
             t *= MathUtil.clamp(1.0 - (r - redlineRpm) / (maxRpm - redlineRpm), 0, 1);
         }
-        // Engine braking when closed, proportional to speed.
-        double drag = 16.0 + 0.0075 * r;
+        // Engine braking when closed. Also scaled by the engine's size:
+        // a flat 16 + 0.0075 rpm is six times a 125 cc scooter's peak
+        // torque at its redline, which braked it to a standstill.
+        double drag = peak * (0.081 + 0.259 * r / maxRpm);
         return t * throttlePos - drag * (1.0 - throttlePos);
     }
 
@@ -441,7 +541,38 @@ public final class CarPhysics extends RigidBody {
         }
 
         // React the tyre's longitudinal force back onto the wheel's spin.
-        w.spin -= fLong * w.radius / Math.max(0.35, effectiveWheelInertia(w)) * dt;
+        //
+        // Friction can bring the wheel to the free-rolling speed and no
+        // further. Letting it overshoot is what made every heavy vehicle
+        // undriveable: a 12 t bus loads its driven wheels to 30 kN, which
+        // against a slipping clutch's bare 13 kg m^2 is a 16 rad/s
+        // correction in one 60 Hz step. That jumps clean over the rolling
+        // point, the slip ratio flips sign, and the next step pulls just
+        // as hard the other way. The bus sat at 0.1 m/s with its tyres
+        // alternately driving at +25 kN and braking at -31 kN. Landing
+        // exactly on free rolling is the standard Coulomb treatment.
+        double inertiaW = Math.max(0.35, effectiveWheelInertia(w));
+        double dSpin = -fLong * w.radius / inertiaW * dt;
+        // Semi-implicit, because this term is stiff. The tyre's chord
+        // stiffness d(force)/d(slip) can reach 25 kN per unit slip under a
+        // loaded bus wheel, and an explicit step against a bare wheel
+        // inertia jumps clean over the rolling point: the slip ratio flips
+        // sign and the next step pulls as hard the other way. The bus sat
+        // at 0.1 m/s with its tyres alternately driving at +25 kN and
+        // braking at -31 kN.
+        //
+        // Dividing by (1 + B) is one Newton step of a backward-Euler
+        // solve on the same update. It is deliberately a chord rather than
+        // a tangent: B collapses to zero whenever the wheel is near
+        // rolling, so a well-conditioned wheel is left exactly as it was
+        // and only a genuinely stiff one is damped. An earlier attempt
+        // clamped the spin to the rolling point instead, which also killed
+        // the small steady-state slip a tyre needs to make any force at
+        // all, and left every light car unable to pass 7 km/h.
+        double chordStiffness = Math.abs(fLong) / Math.max(0.02, Math.abs(w.slipRatio));
+        double b = w.radius * w.radius * dt * chordStiffness
+                / Math.max(1e-6, inertiaW * denom);
+        w.spin += dSpin / (1.0 + Math.max(0, b));
     }
 
     /**
@@ -535,7 +666,49 @@ public final class CarPhysics extends RigidBody {
         for (Wheel w : wheels) {
             double inertiaEff = effectiveWheelInertia(w);
             if (w.driven && engaged) {
-                w.spin += wheelTorque / inertiaEff * dt;
+                // A slipping clutch is a friction element. It can drag the
+                // wheel up to the speed the engine is turning and no
+                // further - once the two match it locks, by definition.
+                // Without that limit the full clutch capacity multiplied by
+                // a 29:1 first gear lands on a bare wheel inertia and spins
+                // the wheel by 15 rad/s in a single 60 Hz step. The tyre
+                // saturates, the slip ratio flips sign every step, and
+                // every heavy vehicle sits in a permanent standing burnout
+                // at walking pace: the double-decker could not pass
+                // 3.5 km/h. Clamping to the synchronisation torque is the
+                // standard semi-implicit treatment and costs nothing.
+                double applied = wheelTorque;
+
+                // Engine braking is a brake, not a reverse gear. A closed
+                // throttle produces negative crank torque, and feeding
+                // that straight through the ratios applied it in a fixed
+                // direction regardless of which way the wheel was
+                // actually turning. From rest it spun the wheels
+                // backwards, so every car idled its way into reverse and
+                // kept accelerating - the saloon reached 4.1 m/s
+                // backwards with the throttle shut and showed no sign of
+                // stopping. Overrun torque may only oppose rotation, and
+                // may not reverse it within a step.
+                boolean overrun = wheelTorque * w.spin < 0
+                        || (w.spin == 0 && wheelTorque < 0 && throttle < 0.02);
+                if (overrun) {
+                    double toStop = Math.abs(w.spin) * inertiaEff / dt;
+                    applied = -Math.signum(w.spin)
+                            * Math.min(Math.abs(wheelTorque), toStop);
+                }
+
+                if (clutchSlipping && Math.abs(ratio) > 1e-6) {
+                    double sgn = w.spin != 0 ? Math.signum(w.spin)
+                            : Math.signum(wheelTorque);
+                    double syncOmega = sgn * Math.abs(engineRpm)
+                            * (Math.PI / 30.0) / Math.abs(ratio);
+                    double syncTorque = (syncOmega - w.spin) * inertiaEff / dt;
+                    if (applied * syncTorque > 0
+                            && Math.abs(applied) > Math.abs(syncTorque)) {
+                        applied = syncTorque;
+                    }
+                }
+                w.spin += applied / inertiaEff * dt;
             }
             // Brakes. Torque opposes spin and cannot reverse it within a step.
             double bt = brake * brakeTorqueMax * (w.steered ? 0.62 : 0.38);
@@ -574,11 +747,16 @@ public final class CarPhysics extends RigidBody {
         // The slipping-clutch guard must only block changes UP. Blocking
         // changes down as well leaves the car coasting to a halt in top.
         boolean mayGoUp = !(clutchSlipping && Math.abs(fwd) < 6.0);
-        if (mayGoUp && gear >= 2 && engineRpm > redlineRpm - 250
+        // Shift points are fractions of redline for the same reason the
+        // torque curve is: a fixed 1500 rpm downshift is a quarter of a
+        // saloon's range but two thirds of a bus's, which had the bus
+        // hunting between gears continuously.
+        if (mayGoUp && gear >= 2 && engineRpm > redlineRpm * 0.96
                 && gear < gearRatios.length - 1) {
             gear++;
             shiftTimer = shiftDuration;
-        } else if (gear > 2 && (engineRpm < 1500 || Math.abs(fwd) < 2.0)) {
+        } else if (gear > 2
+                && (engineRpm < redlineRpm * 0.242 || Math.abs(fwd) < 2.0)) {
             // Drop straight to the gear that suits the road speed rather than
             // walking down one at a time. Stepping down singly means a hard
             // stop from the motorway ends with the car stationary in fifth,
@@ -592,7 +770,7 @@ public final class CarPhysics extends RigidBody {
             for (int g = 3; g < gearRatios.length; g++) {
                 double rpm = Math.abs(fwd) / wheels[0].radius
                         * gearRatios[g] * finalDrive * 60.0 / (2 * Math.PI);
-                if (rpm > 1800) { want = g; } else { break; }
+                if (rpm > redlineRpm * 0.29) { want = g; } else { break; }
             }
             gear = MathUtil.clampi(Math.min(want, gear - 1), 2, gearRatios.length - 1);
             shiftTimer = shiftDuration;

@@ -59,7 +59,17 @@ public final class HelicopterPhysics extends RigidBody {
      * a 1.25 margin over hover, which is the sort of power a 2.4 tonne
      * turbine single actually has.
      */
-    public double maxEngineTorque = 10200;       // N m at the rotor shaft
+    /**
+     * Shaft torque available, N m at the rotor.
+     *
+     * <p>At the nominal 394 rpm this is about 560 kW, or 750 shp, which
+     * is the right order for a 2.45 t machine. Hovering costs roughly
+     * 290 kW here - 250 of it induced - so the surplus buys a climb of
+     * about 11 m/s, which is what a light helicopter actually does.
+     * 10200 N m looked ample until the rotor torque started charging for
+     * climb power, at which point it could only just hold a hover.
+     */
+    public double maxEngineTorque = 13600;       // N m at the rotor shaft
 
     public double tailRotorRadius = 1.0;
     public double tailArm = 6.3;
@@ -120,15 +130,37 @@ public final class HelicopterPhysics extends RigidBody {
         double sigma = solidity();
         double mu = forwardSpeed / tipSpeed;                 // advance ratio
         double lambdaC = climbRate / tipSpeed;               // climb inflow
+        // Momentum theory is only valid down to about twice the hover
+        // induced velocity in descent. Past that the rotor is in the
+        // vortex-ring and then the windmill-brake state, where the simple
+        // square root has no physical solution and the solver collapses
+        // thrust to nothing. Left alone, an engine-off descent became a
+        // free fall at 105 m/s instead of an autorotation at twelve.
+        // Clamping the inflow at the edge of validity holds thrust at
+        // roughly its hover value through the descent, which is both what
+        // the empirical curves show and what makes autorotation flyable.
+        double lambdaHover = Math.sqrt(Math.max(1e-9,
+                solidity() * liftSlope / 16.0));
+        if (lambdaC < -2.0 * lambdaHover) { lambdaC = -2.0 * lambdaHover; }
         double lambda = Math.max(0.001, Math.sqrt(Math.max(1e-6,
                 sigma * liftSlope / 16.0)));                 // first guess
 
         double ct = 0;
         for (int i = 0; i < 20; i++) {
             // Thrust coefficient for this inflow.
+            // Blade element theory wants the TOTAL inflow through the
+            // disc, induced plus climb, because that is what sets the
+            // angle the blade actually meets the air at. Using the
+            // induced part alone is invisible in a hover - where the
+            // climb inflow is zero and the two are identical - and wrong
+            // everywhere else: too much thrust in a climb, and in a
+            // descent the induced term grows while the climb term that
+            // should cancel it is absent, so thrust collapses to nothing.
+            // That is what turned an engine-off descent into a 105 m/s
+            // free fall instead of an autorotation.
             ct = sigma * liftSlope / 2.0
                     * (collectivePitchRad / 3.0 * (1 + 1.5 * mu * mu)
-                    - (lambda) / 2.0);
+                    - (lambda + lambdaC) / 2.0);
             if (ct < 0) { ct = 0; }
             // Momentum theory inflow for that thrust, including forward flight.
             double next;
@@ -215,8 +247,18 @@ public final class HelicopterPhysics extends RigidBody {
         // --- rotor torque and the tail rotor ------------------------------------
         double ct = thrust / Math.max(1e-6, rho * discArea()
                 * Math.pow(omega * rotorRadius, 2));
+        // Induced + profile + CLIMB power. The climb term was missing, and
+        // it is not a detail: the rotor must do work against gravity to
+        // lift the machine, so leaving T Vc out of the torque is a free
+        // energy source. The helicopter climbed at 148 m/s - about 7 MW of
+        // work - on an engine that can supply 421 kW, and the governor
+        // never drooped the rotor because it was never asked for the
+        // torque. The term is signed on purpose: in a descent the airflow
+        // drives the rotor instead, which is precisely what keeps the
+        // blades turning in autorotation.
         double cq = solidity() * bladeDragCoefficient / 8.0
-                + ct * inducedVelocity / Math.max(1e-6, omega * rotorRadius);
+                + ct * (inducedVelocity + climb)
+                        / Math.max(1e-6, omega * rotorRadius);
         torqueRequired = cq * rho * discArea() * Math.pow(omega * rotorRadius, 2)
                 * rotorRadius;
 

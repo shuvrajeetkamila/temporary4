@@ -28,7 +28,15 @@ public final class HumanPhysics extends RigidBody {
     public double runSpeed = 4.35;
     public double sprintSpeed = 6.1;
     public double swimSpeed = 1.25;
-    public double jumpSpeed = 4.3;
+    /**
+     * Take-off speed for a jump, m/s.
+     *
+     * <p>v^2/2g, so 4.3 m/s lifted the player's centre of mass 0.94 m -
+     * a world-class high jump, from a standing start, in sandals. 3.4
+     * gives 0.59 m, which is still athletic but reads as a person rather
+     * than a frog.
+     */
+    public double jumpSpeed = 3.4;
     /** Cap on the force the legs can apply, newtons. */
     public double legForceMax = 1750;
 
