@@ -106,9 +106,12 @@ This matters more than anything above.
   reactive traffic, fleeing pedestrians, the radar, the full-screen
   map with tap-to-teleport, the wanted level,
   police pursuit, the baton, the monsoon, and trains, metro, monorail and
-  harbour vessels are all in. Police cars now **sound** like police cars;
-  **there is still no flashing siren light** on them, so at a distance
-  they are identified by ear and by the police body.
+  harbour vessels are all in. Police cars sound like police cars and
+  their light bars now flash: blue and red in antiphase, two and a half
+  times a second, unshaded and untextured because a lamp is a light
+  source rather than a surface, and dark unless somebody is actually
+  responding to you. The bars do not cast light on anything around them;
+  there are no dynamic lights in this renderer.
   There is no on-foot police officer: the response is vehicles and arrest.
 - **Transit has no stations or timetable.** Services run between the ends
   of their line with a dwell at each terminus; they do not stop at

@@ -390,6 +390,14 @@ bottom row of windows was sliced wherever a multiple of the 6.2 m tile
 happened to fall relative to the pavement. The vertex now carries its own
 height-above-base in an eleventh channel.
 
+**Police light bars did not flash.** They were two painted boxes carrying
+a night-emission value, so they glowed faintly after dark and were
+invisible by day. A lamp is a light source, not a surface: the beacon
+vertices now carry a sentinel in the aux channel and are handled before
+anything else in the fragment shader, unshaded and untextured, blue and
+red in antiphase at two and a half flashes a second, and dark unless you
+are actually wanted.
+
 **And the boats, helicopters and aeroplanes could not be reached.** All
 three models were finished and tested and there was no way into one.
 Moorings are now derived from the map — piers, ferry wharves, marked
