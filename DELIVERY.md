@@ -90,10 +90,15 @@ This matters more than anything above.
 - There is **no audio**. None at all.
 - Paid work (fares, deliveries, street races), money, checkpoints,
   reactive traffic, fleeing pedestrians, the radar, the wanted level,
-  police pursuit and the baton are all in. **There is no siren light or
-  sound on the police car** - pursuit units are identifiable by the police
-  body only. There is no on-foot police officer: the response is vehicles
-  and arrest.
+  police pursuit, the baton, the monsoon, and trains, metro, monorail and
+  harbour vessels are all in. **There is no siren light or sound on the
+  police car** - pursuit units are identifiable by the police body only.
+  There is no on-foot police officer: the response is vehicles and arrest.
+- **Transit has no stations or timetable.** Services run between the ends
+  of their line with a dwell at each terminus; they do not stop at
+  platforms, you cannot board one, and the 380 OSM platform ways are not
+  modelled. The metro is drawn 12 m below the street with no tunnel
+  around it, so from underneath there would be nothing to see.
 - Being arrested costs a quarter of your money and clears the wanted
   level. There is no hospital or police-station cycle, because that needs
   interiors and a save system and neither exists here.

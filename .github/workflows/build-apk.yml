@@ -89,7 +89,7 @@ jobs:
       # The independent gate. It re-derives the projection from first
       # principles rather than importing it, so a bug in aoi.py cannot hide
       # behind itself, and it fails the build if any checkpoint is missing.
-      - name: Verify world coverage (123 gates)
+      - name: Verify world coverage
         run: python tools/verify_world.py --world android/src/main/assets/world
 
       - name: World size report
@@ -135,6 +135,12 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
+          # Read the gate count from the report rather than hard-coding
+          # it. It said 123 for two releases after the count had moved to
+          # 135, which is exactly the sort of stale claim this project is
+          # not allowed to make.
+          GATES=$(python3 -c "import json;print(json.load(open('data/reports/verify.json'))['passed'])" 2>/dev/null || echo "all")
+          echo "gates=$GATES" >> "$GITHUB_OUTPUT"
           APK=$(find android/build/outputs/apk/release -name '*.apk' | head -1)
           test -n "$APK"
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
@@ -221,9 +227,9 @@ jobs:
             - **minSdk** 26, **targetSdk** 34, universal ABI
             - **CI run**: ${{ github.run_id }}
 
-            Gates that passed before this was published: 123 Python world
-            checks and the full core suite, including all 51 geographic
-            checkpoints from Vasai Creek to Navy Nagar.
+            Gates that passed before this was published: ${{ steps.meta.outputs.gates }}
+            Python world checks and the full core suite, including all 51
+            geographic checkpoints from Vasai Creek to Navy Nagar.
 
             Map data © OpenStreetMap contributors, ODbL 1.0.
             Elevation: Copernicus DEM © DLR e.V. / Airbus DS, ESA.
