@@ -5,11 +5,13 @@ import android.opengl.GLSurfaceView;
 import android.util.Log;
 
 import ai.shuvrajeetkamila.mumbai.app.InputState;
+import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.math.Vec3;
 import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
 import ai.shuvrajeetkamila.mumbai.world.ChunkMesher;
+import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
 import ai.shuvrajeetkamila.mumbai.world.WorldStreamer;
 
 import java.nio.ByteBuffer;
@@ -42,13 +44,36 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
     private int uSceneViewProj, uSceneOrigin, uSceneCam, uSceneSunDir;
     private int uSceneSunCol, uSceneSky, uSceneFogCol, uSceneFogDen, uSceneWet;
-    private int uInstViewProj, uInstCam;
+    private int uSceneAtlas, uSceneMatScale, uSceneNight;
+    private int uInstViewProj, uInstCam, uInstSunDir, uInstSunCol, uInstSky;
+    private int uInstFogCol, uInstFogDen, uInstWet, uInstAtlas, uInstMatScale, uInstNight;
+
+    /** The procedural texture array. One GL_TEXTURE_2D_ARRAY, built once. */
+    private int atlas;
+    /** 0 in daylight, 1 after dark. Set from the sun elevation each frame. */
+    private float nightFactor;
     private int uSeaViewProj, uSeaCam, uSeaTime, uSeaExtent, uSeaTide;
     private int uSeaChop, uSeaSunDir, uSeaSunCol, uSeaSky, uSeaFogCol, uSeaFogDen;
     private int uSkySky, uSkyFog, uSkyHorizon;
 
     private int seaVao, seaVbo, seaIbo, seaIndexCount, seaGridBuilt;
     private int skyVao, skyVbo;
+    /**
+     * One of these per vehicle type. Ten instanced draws a frame rather than
+     * one, which is a trade worth making: a single shared box for everything
+     * made a double-decker the size of a scooter, and silhouette is most of
+     * what identifies a vehicle at traffic distance.
+     */
+    private static final class VehicleGpu {
+        int vao, vbo, ibo, instVbo, indexCount;
+    }
+
+    private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
+    /** Instance counts per kind, refilled every frame. */
+    private final int[] vehCount = new int[VehicleKind.values().length];
+    private FloatBuffer[] vehScratch;
+    private static final int MAX_PER_KIND = 192;
+
     private int propVao, propVbo, propIbo, propIndexCount, propInstVbo;
 
     private final float[] proj = new float[16];
@@ -97,9 +122,23 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uSceneFogCol = GLES30.glGetUniformLocation(sceneProg, "uFogColour");
         uSceneFogDen = GLES30.glGetUniformLocation(sceneProg, "uFogDensity");
         uSceneWet = GLES30.glGetUniformLocation(sceneProg, "uWetness");
+        uSceneAtlas = GLES30.glGetUniformLocation(sceneProg, "uAtlas");
+        uSceneMatScale = GLES30.glGetUniformLocation(sceneProg, "uMatScale");
+        uSceneNight = GLES30.glGetUniformLocation(sceneProg, "uNight");
 
         uInstViewProj = GLES30.glGetUniformLocation(instProg, "uViewProj");
         uInstCam = GLES30.glGetUniformLocation(instProg, "uCamera");
+        uInstSunDir = GLES30.glGetUniformLocation(instProg, "uSunDir");
+        uInstSunCol = GLES30.glGetUniformLocation(instProg, "uSunColour");
+        uInstSky = GLES30.glGetUniformLocation(instProg, "uSkyColour");
+        uInstFogCol = GLES30.glGetUniformLocation(instProg, "uFogColour");
+        uInstFogDen = GLES30.glGetUniformLocation(instProg, "uFogDensity");
+        uInstWet = GLES30.glGetUniformLocation(instProg, "uWetness");
+        uInstAtlas = GLES30.glGetUniformLocation(instProg, "uAtlas");
+        uInstMatScale = GLES30.glGetUniformLocation(instProg, "uMatScale");
+        uInstNight = GLES30.glGetUniformLocation(instProg, "uNight");
+
+        atlas = buildAtlas();
 
         uSeaViewProj = GLES30.glGetUniformLocation(seaProg, "uViewProj");
         uSeaCam = GLES30.glGetUniformLocation(seaProg, "uCamera");
@@ -122,7 +161,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glEnable(GLES30.GL_CULL_FACE);
         GLES30.glCullFace(GLES30.GL_BACK);
         GLES30.glFrontFace(GLES30.GL_CCW);
-        GLES30.glClearColor(0.55f, 0.68f, 0.78f, 1f);
+        GLES30.glClearColor(0.55f, 0.68f, 0.78f, 1f);   // replaced per frame
 
         buildSky();
         buildProps();
@@ -241,23 +280,25 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLUtil.multiply(viewProj, proj, view);
         frustum.set(viewProj);
 
-        double hour = 8.0 + (e.ocean.time() / 300.0) % 12.0;
-        float sunHeight = (float) Math.sin(Math.PI * (hour - 6) / 12.0);
-        float[] sunDir = {0.42f, Math.max(0.12f, sunHeight), -0.58f};
-        float sl = (float) Math.sqrt(sunDir[0] * sunDir[0] + sunDir[1] * sunDir[1]
-                + sunDir[2] * sunDir[2]);
-        sunDir[0] /= sl; sunDir[1] /= sl; sunDir[2] /= sl;
+        // Time of day comes from the simulation, which owns the clock, and
+        // the palette from core's Sky, which is tested for continuity across
+        // the whole twenty-four hours. The renderer only consumes it.
+        float[] sunDir = e.sky.sunDir;
+        float[] sky = e.sky.skyColour;
+        float[] fog = e.sky.fogColour;
+        float[] sun = e.sky.sunColour;
+        nightFactor = e.sky.nightFactor;
 
-        float haze = (float) (0.25 + e.wetness * 0.55);
-        float[] sky = {0.50f - haze * 0.14f, 0.64f - haze * 0.10f, 0.79f - haze * 0.05f};
-        float[] fog = {0.66f - haze * 0.16f, 0.71f - haze * 0.13f, 0.76f - haze * 0.08f};
-        float[] sun = {1.02f, 0.96f, 0.86f};
         // Visibility: clear air in Mumbai is good for tens of kilometres, but
-        // the monsoon and the haze cut it hard. Tied to the far plane so the
-        // chunk pop-in always happens inside the fog.
-        float fogDensity = (float) (1.6 / Math.max(900, q.farRadius * 0.85))
-                * (1f + haze * 2.2f);
+        // the monsoon and the haze cut it hard. Sky supplies the atmospheric
+        // part; this floor ties it to the far plane as well, so chunk pop-in
+        // always happens inside the fog whatever the weather is doing.
+        float fogDensity = Math.max(e.sky.fogDensity,
+                (float) (1.35 / Math.max(900, q.farRadius * 0.9)));
 
+        // Clear to the fog colour so anything beyond the far plane
+        // dissolves into the same air the near geometry fades into.
+        GLES30.glClearColor(fog[0], fog[1], fog[2], 1f);
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
 
         // --- sky, first, with depth writes off -------------------------------
@@ -280,6 +321,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUniform3fv(uSceneFogCol, 1, fog, 0);
         GLES30.glUniform1f(uSceneFogDen, fogDensity);
         GLES30.glUniform1f(uSceneWet, (float) e.wetness);
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, atlas);
+        GLES30.glUniform1i(uSceneAtlas, 0);
+        GLES30.glUniform1fv(uSceneMatScale, TextureLibrary.MAT_COUNT,
+                TextureLibrary.SCALE_M, 0);
+        GLES30.glUniform1f(uSceneNight, nightFactor);
 
         int drawn = 0;
         long tris = 0;
@@ -321,34 +368,88 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         drawn++;
         tris += seaIndexCount / 3;
 
-        // --- traffic and pedestrians, instanced ---------------------------------
+        // --- traffic, instanced per vehicle type --------------------------------
         int instances = uploadInstances(e);
         if (instances > 0) {
             GLES30.glUseProgram(instProg);
             GLES30.glUniformMatrix4fv(uInstViewProj, 1, false, viewProj, 0);
             GLES30.glUniform3f(uInstCam, ox, oy, oz);
-            GLES30.glUniform3fv(
-                    GLES30.glGetUniformLocation(instProg, "uSunDir"), 1, sunDir, 0);
-            GLES30.glUniform3fv(
-                    GLES30.glGetUniformLocation(instProg, "uSunColour"), 1, sun, 0);
-            GLES30.glUniform3fv(
-                    GLES30.glGetUniformLocation(instProg, "uSkyColour"), 1, sky, 0);
-            GLES30.glUniform3fv(
-                    GLES30.glGetUniformLocation(instProg, "uFogColour"), 1, fog, 0);
-            GLES30.glUniform1f(
-                    GLES30.glGetUniformLocation(instProg, "uFogDensity"), fogDensity);
-            GLES30.glUniform1f(
-                    GLES30.glGetUniformLocation(instProg, "uWetness"), (float) e.wetness);
-            GLES30.glBindVertexArray(propVao);
-            GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, propIndexCount,
-                    GLES30.GL_UNSIGNED_INT, 0, instances);
-            drawn++;
-            tris += (long) (propIndexCount / 3) * instances;
+            // Locations are cached in onSurfaceCreated. Looking them up by
+            // string every frame, as this used to, is a driver-side hash of
+            // eight names per frame for a value that never changes.
+            GLES30.glUniform3fv(uInstSunDir, 1, sunDir, 0);
+            GLES30.glUniform3fv(uInstSunCol, 1, sun, 0);
+            GLES30.glUniform3fv(uInstSky, 1, sky, 0);
+            GLES30.glUniform3fv(uInstFogCol, 1, fog, 0);
+            GLES30.glUniform1f(uInstFogDen, fogDensity);
+            GLES30.glUniform1f(uInstWet, (float) e.wetness);
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, atlas);
+            GLES30.glUniform1i(uInstAtlas, 0);
+            GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
+                    TextureLibrary.SCALE_M, 0);
+            GLES30.glUniform1f(uInstNight, nightFactor);
+            for (int ki = 0; ki < vehCount.length; ki++) {
+                int n = vehCount[ki];
+                if (n <= 0) { continue; }
+                VehicleGpu g = vehGpu[ki];
+                GLES30.glBindVertexArray(g.vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
+                        GLES30.GL_UNSIGNED_INT, 0, n);
+                drawn++;
+                tris += (long) (g.indexCount / 3) * n;
+            }
         }
 
         GLES30.glBindVertexArray(0);
         e.telemetry.drawCalls = drawn;
         e.telemetry.trianglesK = (int) (tris / 1000);
+    }
+
+    /**
+     * Uploads the procedural atlas as a single {@code GL_TEXTURE_2D_ARRAY}.
+     *
+     * <p>An array rather than one packed sheet, because a packed atlas bleeds:
+     * at a mip level or a grazing angle the sampler reaches past a tile's
+     * edge and pulls in its neighbour, and with GL_REPEAT UVs derived from
+     * world position there is no sub-rectangle to clamp to. Array layers each
+     * wrap independently, which is exactly the behaviour the tiling needs.
+     */
+    private int buildAtlas() {
+        int[] id = new int[1];
+        GLES30.glGenTextures(1, id, 0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D_ARRAY, id[0]);
+
+        int size = TextureLibrary.SIZE;
+        int levels = 1;
+        while ((size >> levels) > 0) { levels++; }
+        GLES30.glTexStorage3D(GLES30.GL_TEXTURE_2D_ARRAY, levels, GLES30.GL_RGBA8,
+                size, size, TextureLibrary.MAT_COUNT);
+
+        ByteBuffer buf = ByteBuffer.allocateDirect(size * size * 4)
+                .order(ByteOrder.nativeOrder());
+        long t0 = System.nanoTime();
+        for (int m = 0; m < TextureLibrary.MAT_COUNT; m++) {
+            byte[] tile = TextureLibrary.tile(m);
+            buf.clear();
+            buf.put(tile);
+            buf.position(0);
+            GLES30.glTexSubImage3D(GLES30.GL_TEXTURE_2D_ARRAY, 0, 0, 0, m,
+                    size, size, 1, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buf);
+        }
+        GLES30.glGenerateMipmap(GLES30.GL_TEXTURE_2D_ARRAY);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D_ARRAY,
+                GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR_MIPMAP_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D_ARRAY,
+                GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D_ARRAY,
+                GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_REPEAT);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D_ARRAY,
+                GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_REPEAT);
+        Log.i(GLUtil.TAG, "atlas: " + TextureLibrary.MAT_COUNT + " layers of "
+                + size + "x" + size + " in "
+                + ((System.nanoTime() - t0) / 1000000L) + " ms");
+        return id[0];
     }
 
     // ---------------------------------------------------------------- buffers
@@ -487,8 +588,65 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBindVertexArray(0);
     }
 
-    /** A single generic car body, instanced for every ambient vehicle. */
+    /** One mesh and one instance buffer for every vehicle type. */
     private void buildProps() {
+        vehScratch = new FloatBuffer[VehicleKind.values().length];
+        for (VehicleKind k : VehicleKind.values()) {
+            vehGpu[k.ordinal()] = buildVehicleGpu(k);
+            vehScratch[k.ordinal()] = GLUtil.floats(MAX_PER_KIND * 4);
+        }
+        buildLegacyProp();
+    }
+
+    private VehicleGpu buildVehicleGpu(VehicleKind kind) {
+        VehicleGpu g = new VehicleGpu();
+        float[] v = Meshes.vehicleVertices(kind);
+        int[] i = Meshes.vehicleIndices(kind);
+        g.indexCount = i.length;
+
+        int[] ids = new int[1];
+        GLES30.glGenVertexArrays(1, ids, 0);
+        g.vao = ids[0];
+        GLES30.glBindVertexArray(g.vao);
+        int[] bufs = new int[3];
+        GLES30.glGenBuffers(3, bufs, 0);
+        g.vbo = bufs[0];
+        g.ibo = bufs[1];
+        g.instVbo = bufs[2];
+
+        FloatBuffer vb = GLUtil.floats(v.length);
+        vb.put(v).position(0);
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, g.vbo);
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, v.length * 4, vb,
+                GLES30.GL_STATIC_DRAW);
+        int stride = ChunkMesher.STRIDE * 4;
+        GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0);
+        GLES30.glEnableVertexAttribArray(0);
+        GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, stride, 12);
+        GLES30.glEnableVertexAttribArray(1);
+        GLES30.glVertexAttribPointer(2, 3, GLES30.GL_FLOAT, false, stride, 24);
+        GLES30.glEnableVertexAttribArray(2);
+        GLES30.glVertexAttribPointer(3, 1, GLES30.GL_FLOAT, false, stride, 36);
+        GLES30.glEnableVertexAttribArray(3);
+
+        IntBuffer ib2 = ByteBuffer.allocateDirect(i.length * 4)
+                .order(ByteOrder.nativeOrder()).asIntBuffer();
+        ib2.put(i).position(0);
+        GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, g.ibo);
+        GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, i.length * 4, ib2,
+                GLES30.GL_STATIC_DRAW);
+
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, g.instVbo);
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, MAX_PER_KIND * 16, null,
+                GLES30.GL_DYNAMIC_DRAW);
+        GLES30.glVertexAttribPointer(4, 4, GLES30.GL_FLOAT, false, 16, 0);
+        GLES30.glEnableVertexAttribArray(4);
+        GLES30.glVertexAttribDivisor(4, 1);
+        GLES30.glBindVertexArray(0);
+        return g;
+    }
+
+    private void buildLegacyProp() {
         float[] v = Meshes.genericCar();
         int[] i = Meshes.genericCarIndices();
         propIndexCount = i.length;
@@ -535,26 +693,69 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBindVertexArray(0);
     }
 
+    /**
+     * Sorts visible traffic into one instance buffer per vehicle type.
+     *
+     * <p>The player's own vehicle is included. With a chase camera it is the
+     * single most looked-at object on screen, and leaving it out - which is
+     * what happened while this drew one shared mesh - meant driving an
+     * invisible car.
+     *
+     * @return total instances across all kinds
+     */
     private int uploadInstances(Engine e) {
-        Agents.Car[] cars = e.agents.cars();
-        if (instanceScratch == null || instanceScratch.capacity() < 512 * 4) {
-            instanceScratch = GLUtil.floats(512 * 4);
+        for (int i = 0; i < vehCount.length; i++) {
+            vehCount[i] = 0;
+            vehScratch[i].position(0);
         }
-        instanceScratch.position(0);
-        int n = 0;
+
+        Agents.Car[] cars = e.agents.cars();
+        int total = 0;
         for (Agents.Car c : cars) {
-            if (!c.active || n >= 512) { continue; }
+            if (!c.active) { continue; }
+            int ki = c.kindOrdinal;
+            if (ki < 0 || ki >= vehCount.length) { ki = VehicleKind.HATCHBACK.ordinal(); }
+            if (vehCount[ki] >= MAX_PER_KIND) { continue; }
             float x = (float) (c.x - e.origin.offsetX());
             float z = (float) (c.z - e.origin.offsetZ());
-            if (!frustum.sphereVisible(x, (float) c.y + 0.8f, z, 3.2f)) { continue; }
-            instanceScratch.put(x).put((float) c.y).put(z).put((float) c.heading);
-            n++;
+            // Cull against the vehicle's own size, not a single fixed radius:
+            // a 10 m bus popped out of view at the screen edge when it was
+            // tested against a car's 3.2 m sphere.
+            float r = (float) VehicleKind.values()[ki].lengthM * 0.62f;
+            if (!frustum.sphereVisible(x, (float) c.y + 0.9f, z, r)) { continue; }
+            vehScratch[ki].put(x).put((float) c.y).put(z).put((float) c.heading);
+            vehCount[ki]++;
+            total++;
         }
-        if (n == 0) { return 0; }
-        instanceScratch.position(0);
-        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, propInstVbo);
-        GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16, instanceScratch);
-        return n;
+
+        // The player's vehicle, drawn from the physics body rather than from
+        // an agent, so it shows the interpolated render pose.
+        VehicleKind pk = e.drivingKind();
+        if (pk != null) {
+            int ki = pk.ordinal();
+            if (vehCount[ki] < MAX_PER_KIND) {
+                Vec3 rp = e.renderPosition();
+                float x = (float) (rp.x - e.origin.offsetX());
+                float z = (float) (rp.z - e.origin.offsetZ());
+                // The body origin sits at the centre of mass; the mesh origin
+                // is on the ground under it.
+                float y = (float) (rp.y - pk.comHeightM - 0.22);
+                vehScratch[ki].put(x).put(y).put(z)
+                        .put((float) e.renderOrientation().heading());
+                vehCount[ki]++;
+                total++;
+            }
+        }
+
+        if (total == 0) { return 0; }
+        for (int ki = 0; ki < vehCount.length; ki++) {
+            int n = vehCount[ki];
+            if (n <= 0) { continue; }
+            vehScratch[ki].position(0);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vehGpu[ki].instVbo);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16, vehScratch[ki]);
+        }
+        return total;
     }
 
     void shutdown() {

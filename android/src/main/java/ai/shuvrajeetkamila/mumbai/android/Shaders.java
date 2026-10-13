@@ -20,6 +20,10 @@ package ai.shuvrajeetkamila.mumbai.android;
  */
 final class Shaders {
 
+    /** Must equal TextureLibrary.MAT_COUNT; the uniform array is sized by it. */
+    private static final int MAT_COUNT =
+            ai.shuvrajeetkamila.mumbai.render.TextureLibrary.MAT_COUNT;
+
     /** Shared header. Keep the two stages in step. */
     private static final String VS_HEAD =
             "#version 300 es\n"
@@ -33,7 +37,8 @@ final class Shaders {
             // all on a conforming driver.
             + "precision highp float;\n"
             + "precision highp int;\n"
-            + "precision mediump sampler2D;\n";
+            + "precision mediump sampler2D;\n"
+            + "precision mediump sampler2DArray;\n";
 
     /** Terrain and buildings. One shader, because the vertex format is one. */
     static final String SCENE_VS = VS_HEAD
@@ -48,7 +53,7 @@ final class Shaders {
             + "out highp vec3 vWorld;\n"
             + "out mediump vec3 vNormal;\n"
             + "out mediump vec3 vAlbedo;\n"
-            + "out mediump float vAux;\n"
+            + "out highp float vAux;\n"
             + "out highp float vDepth;\n"
             + "void main() {\n"
             // Chunk-local float plus a double-derived origin passed as a
@@ -67,7 +72,11 @@ final class Shaders {
             + "in highp vec3 vWorld;\n"
             + "in mediump vec3 vNormal;\n"
             + "in mediump vec3 vAlbedo;\n"
-            + "in mediump float vAux;\n"
+            // highp, and not for show: this carries a packed material index
+            // in its integer part. mediump has a ten bit mantissa, so 14.0
+            // can be held as 13.99, floor() returns 13, and the building is
+            // dressed in the wrong texture.
+            + "in highp float vAux;\n"
             + "in highp float vDepth;\n"
             + "uniform mediump vec3 uSunDir;\n"
             + "uniform mediump vec3 uSunColour;\n"
@@ -77,6 +86,10 @@ final class Shaders {
             // vanishes. It cost a day to find the first time.
             + "uniform highp float uFogDensity;\n"
             + "uniform mediump float uWetness;\n"
+            + "uniform mediump sampler2DArray uAtlas;\n"
+            + "uniform mediump float uMatScale[" + MAT_COUNT + "];\n"
+            // 0 in daylight, 1 after dark. Drives window emission.
+            + "uniform mediump float uNight;\n"
             + "out mediump vec4 fragColour;\n"
             + "void main() {\n"
             + "  mediump vec3 n = normalize(vNormal);\n"
@@ -85,19 +98,49 @@ final class Shaders {
             + "  mediump float hemi = 0.5 + 0.5 * n.y;\n"
             + "  mediump vec3 ambient = mix(vec3(0.22, 0.20, 0.18), uSkyColour, hemi) * 0.55;\n"
             + "  mediump vec3 albedo = vAlbedo;\n"
+            + "  if (vAux < -0.5) {\n"
+            // aux = -1 marks water. Fresnel plus a sky tint, cheap but reads
+            // correctly against the land. Untextured by design: the sea gets
+            // its detail from the wave geometry, not from a tile.
+            + "    mediump float fres = pow(1.0 - max(n.y, 0.0), 3.0);\n"
+            + "    mediump vec3 lit = mix(vec3(0.045, 0.105, 0.135), uSkyColour,\n"
+            + "                           0.22 + 0.55 * fres);\n"
+            + "    lit += uSunColour * pow(ndl, 48.0) * 0.8;\n"
+            + "    highp float fw = clamp(1.0 - exp(-vDepth * uFogDensity), 0.0, 1.0);\n"
+            + "    fragColour = vec4(mix(lit, uFogColour, fw), 1.0);\n"
+            + "    return;\n"
+            + "  }\n"
+            // Unpack: integer part selects the tile, fraction is how hard the
+            // windows burn after dark.
+            + "  highp float matF = floor(vAux + 0.0005);\n"
+            + "  mediump float emis = vAux - matF;\n"
+            + "  int mat = int(matF);\n"
+            + "  mediump float scale = uMatScale[mat];\n"
+            // UVs from world position rather than from the vertex format. A
+            // per-vertex UV would have meant widening the vertex, rebuilding
+            // every chunk and re-running the whole data pipeline; this costs
+            // four instructions and leaves the compiled world untouched.
+            + "  highp vec2 uv;\n"
+            + "  if (abs(n.y) > 0.65) {\n"
+            + "    uv = vWorld.xz / scale;\n"
+            + "  } else {\n"
+            // Tangential distance around the facade, and height. Negated so
+            // the tile's first row renders at the top of the wall.
+            + "    uv = vec2(vWorld.x * n.z - vWorld.z * n.x, -vWorld.y) / scale;\n"
+            + "  }\n"
+            + "  mediump vec4 tex = texture(uAtlas, vec3(uv, matF));\n"
+            + "  albedo *= tex.rgb;\n"
             // Rain darkens and glosses surfaces.
             + "  albedo *= mix(1.0, 0.72, uWetness);\n"
             + "  mediump vec3 lit = albedo * (ambient + uSunColour * ndl);\n"
-            + "  if (vAux < -0.5) {\n"
-            // aux = -1 marks water. Fresnel plus a sky tint, cheap but reads
-            // correctly against the land.
-            + "    mediump vec3 v = normalize(uSkyColour);\n"
-            + "    mediump float fres = pow(1.0 - max(n.y, 0.0), 3.0);\n"
-            + "    lit = mix(vec3(0.045, 0.105, 0.135), uSkyColour, 0.22 + 0.55 * fres);\n"
-            + "    lit += uSunColour * pow(ndl, 48.0) * 0.8;\n"
-            + "  } else if (vAux > 0.01) {\n"
-            + "    lit += albedo * vAux;\n"
+            // Wet horizontal surfaces throw a weak sun glare back up.
+            + "  if (uWetness > 0.01 && n.y > 0.6) {\n"
+            + "    lit += uSunColour * pow(ndl, 22.0) * uWetness * 0.45;\n"
             + "  }\n"
+            // The texture's alpha is a window mask, so only glass lights up.
+            // Emission applied to a whole face makes the entire slab
+            // fluoresce, which is the thing that always looks wrong.
+            + "  lit += tex.rgb * (emis * tex.a * uNight * 2.6);\n"
             + "  highp float f = 1.0 - exp(-vDepth * uFogDensity);\n"
             + "  f = clamp(f, 0.0, 1.0);\n"
             + "  fragColour = vec4(mix(lit, uFogColour, f), 1.0);\n"
@@ -116,7 +159,7 @@ final class Shaders {
             + "out highp vec3 vWorld;\n"
             + "out mediump vec3 vNormal;\n"
             + "out mediump vec3 vAlbedo;\n"
-            + "out mediump float vAux;\n"
+            + "out highp float vAux;\n"
             + "out highp float vDepth;\n"
             + "void main() {\n"
             + "  highp float s = sin(aInstance.w);\n"

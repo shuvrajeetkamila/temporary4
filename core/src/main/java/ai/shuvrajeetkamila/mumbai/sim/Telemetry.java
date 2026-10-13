@@ -53,4 +53,14 @@ public final class Telemetry {
     public volatile String warning = "";
     public volatile boolean onWater;
     public volatile double tideM;
+
+    /**
+     * "Press ENTER to get in", or empty. Computed in the simulation and
+     * published like everything else the HUD shows, so the view layer never
+     * reaches into the engine across a thread boundary.
+     */
+    public volatile String prompt = "";
+
+    /** Hours since midnight, for the clock readout. */
+    public volatile double timeOfDay;
 }

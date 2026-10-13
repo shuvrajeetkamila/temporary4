@@ -27,4 +27,31 @@ public class GLES30 {
  public static void glEnableVertexAttribArray(int i){} public static void glVertexAttribDivisor(int i,int d){}
  public static void glDrawArrays(int m,int f,int c){} public static void glDrawElements(int m,int c,int t,int o){}
  public static void glDrawElementsInstanced(int m,int c,int t,int o,int n){}
- public static int glGetError(){return 0;} public static String glGetString(int n){return "";} }
+ public static int glGetError(){return 0;} public static String glGetString(int n){return "";} 
+    // --- added for the procedural texture atlas ---------------------------
+    public static final int GL_TEXTURE_2D_ARRAY = 0x8C1A;
+    public static final int GL_TEXTURE0 = 0x84C0;
+    public static final int GL_RGBA8 = 0x8058;
+    public static final int GL_RGBA = 0x1908;
+    public static final int GL_UNSIGNED_BYTE = 0x1401;
+    public static final int GL_TEXTURE_MIN_FILTER = 0x2801;
+    public static final int GL_TEXTURE_MAG_FILTER = 0x2800;
+    public static final int GL_TEXTURE_WRAP_S = 0x2802;
+    public static final int GL_TEXTURE_WRAP_T = 0x2803;
+    public static final int GL_LINEAR = 0x2601;
+    public static final int GL_LINEAR_MIPMAP_LINEAR = 0x2703;
+    public static final int GL_REPEAT = 0x2901;
+
+    public static void glGenTextures(int n, int[] t, int o) { }
+    public static void glBindTexture(int target, int id) { }
+    public static void glActiveTexture(int unit) { }
+    public static void glTexStorage3D(int target, int levels, int fmt,
+            int w, int h, int d) { }
+    public static void glTexSubImage3D(int target, int level, int xo, int yo,
+            int zo, int w, int h, int d, int fmt, int type,
+            java.nio.Buffer pixels) { }
+    public static void glGenerateMipmap(int target) { }
+    public static void glTexParameteri(int target, int pname, int param) { }
+    public static void glUniform1fv(int loc, int count, float[] v, int o) { }
+    public static void glUniform1i(int loc, int v) { }
+}

@@ -1,5 +1,6 @@
 package ai.shuvrajeetkamila.mumbai.sim;
 
+import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 import java.util.Random;
@@ -35,6 +36,10 @@ public final class Agents {
         public int colour;
         public int body;              // which mesh variant
         public boolean active;
+        /** {@link ai.shuvrajeetkamila.mumbai.game.VehicleKind} ordinal. */
+        public int kindOrdinal;
+        /** Standing still at the kerb rather than driving a route. */
+        public boolean parked;
     }
 
     public static final class Ped {
@@ -112,6 +117,14 @@ public final class Agents {
 
     public Car[] cars() { return cars; }
 
+    /** An unused car slot, or -1 if every one is taken. */
+    public int freeCarSlot() {
+        for (int i = 0; i < cars.length; i++) {
+            if (!cars[i].active) { return i; }
+        }
+        return -1;
+    }
+
     public Ped[] peds() { return peds; }
 
     public int activeCars() {
@@ -156,7 +169,10 @@ public final class Agents {
                 if (rng.nextDouble() < 0.35) { spawnCar(c, px, pz, spawnRadius); }
                 continue;
             }
-            stepCar(c, dt);
+            // A parked car stays where it was put. This is what lets the
+            // vehicle you got out of still be standing there when you turn
+            // round, instead of driving itself away down the nearest edge.
+            if (!c.parked) { stepCar(c, dt); }
             double dx = c.x - px, dz = c.z - pz;
             if (dx * dx + dz * dz > despawnRadius * despawnRadius) { c.active = false; }
         }
@@ -181,10 +197,29 @@ public final class Agents {
         c.t = rng.nextDouble();
         c.forward = rng.nextBoolean();
         c.colour = rng.nextInt(10);
-        c.body = rng.nextInt(5);
-        double limit = world.graphAttr[e * 5];
-        c.speed = limit / 3.6 * (0.72 + rng.nextDouble() * 0.3);
+        c.parked = false;
         placeOnEdge(c);
+        // Weighted by the real mix of the city's traffic, and filtered by
+        // where each type is actually licensed to go: no autorickshaw turns
+        // up south of Mahim, because none is allowed to.
+        VehicleKind kind = VehicleKind.sample(rng.nextDouble(), c.z);
+        c.kindOrdinal = kind.ordinal();
+        c.body = kind.ordinal();
+        double limit = world.graphAttr[e * 5];
+        // Each type runs at its own fraction of the limit. A loaded tempo
+        // does not keep up with a scooter, and the difference in how traffic
+        // bunches is most of what makes a street look busy rather than
+        // marching in step.
+        double pace;
+        switch (kind) {
+            case SCOOTER: pace = 0.92; break;
+            case AUTORICKSHAW: pace = 0.70; break;
+            case TEMPO: pace = 0.62; break;
+            case DOUBLE_DECKER: case CITY_BUS: pace = 0.58; break;
+            case KAALI_PEELI: pace = 0.78; break;
+            default: pace = 0.85; break;
+        }
+        c.speed = limit / 3.6 * pace * (0.86 + rng.nextDouble() * 0.26);
         // Do not pop a car into existence right in front of the player.
         double dx = c.x - px, dz = c.z - pz;
         if (dx * dx + dz * dz < 45 * 45) { return; }

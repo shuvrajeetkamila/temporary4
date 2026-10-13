@@ -35,6 +35,11 @@ public final class InputState {
     public boolean gearToggle;
     public boolean engineToggle;
     public boolean cameraToggle;
+    /**
+     * Edge-triggered. On foot it enters the nearest vehicle; in a vehicle it
+     * gets out. One button for both, as the genre has always done it.
+     */
+    public boolean enterExit;
     public boolean reverse;
 
     public void clearEdges() {
@@ -45,6 +50,7 @@ public final class InputState {
         gearToggle = false;
         engineToggle = false;
         cameraToggle = false;
+        enterExit = false;
     }
 
     public void reset() {

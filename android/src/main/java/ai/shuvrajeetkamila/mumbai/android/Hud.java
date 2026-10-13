@@ -122,6 +122,21 @@ final class Hud extends View {
         canvas.drawText(String.format("%d cars   %d people", s.cars, s.pedestrians),
                 rx, ry, small);
 
+        // --- clock, under the main panel -------------------------------------
+        int hh = (int) s.timeOfDay;
+        int mm = (int) ((s.timeOfDay - hh) * 60.0);
+        canvas.drawText(String.format("%02d:%02d", hh, mm), x, 168 * d, text);
+
+        // --- action prompt, above the controls -------------------------------
+        if (!s.prompt.isEmpty()) {
+            float pw = text.measureText(s.prompt);
+            float px = (getWidth() - pw) * 0.5f;
+            float py = getHeight() * 0.72f;
+            rect.set(px - 10 * d, py - 15 * d, px + pw + 10 * d, py + 7 * d);
+            canvas.drawRoundRect(rect, 5 * d, 5 * d, panel);
+            canvas.drawText(s.prompt, px, py, text);
+        }
+
         // --- warnings, centre ------------------------------------------------
         if (!s.warning.isEmpty()) {
             float w = warn.measureText(s.warning);

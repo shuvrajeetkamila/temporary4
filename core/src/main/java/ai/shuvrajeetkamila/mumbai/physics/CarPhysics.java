@@ -1,5 +1,6 @@
 package ai.shuvrajeetkamila.mumbai.physics;
 
+import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
 import ai.shuvrajeetkamila.mumbai.math.Vec3;
 
@@ -79,6 +80,10 @@ public final class CarPhysics extends RigidBody {
     public double idleRpm = 850;
     public double maxRpm = 6600;
     public double redlineRpm = 6200;
+    /** Peak crank torque, N m. Set by {@link #configure}. */
+    public double peakTorqueNm = 196.0;
+    /** Which vehicle this currently is. Drives the mesh the renderer picks. */
+    public VehicleKind kind = VehicleKind.SEDAN;
     /** Engine plus flywheel plus gearbox, kg m^2 at the crank. */
     public double engineInertia = 0.26;
     public double drivelineEfficiency = 0.88;
@@ -140,6 +145,92 @@ public final class CarPhysics extends RigidBody {
     }
 
     /**
+     * Clears all transient state. Called when the player takes a vehicle
+     * over, so the wheel speeds, clutch and gearbox of whatever was driven
+     * last do not carry across into a different machine.
+     */
+    public void reset() {
+        velocity.set(0, 0, 0);
+        angularVelocity.set(0, 0, 0);
+        orientation.identity();
+        for (Wheel w : wheels) {
+            w.spin = 0;
+            w.compression = 0;
+            w.load = 0;
+            w.grounded = false;
+        }
+        engineRpm = idleRpm;
+        gear = 2;
+        shiftTimer = 0;
+        clutchEngagement = 0;
+        clutchSlipping = false;
+        steerState = 0;
+        throttle = brake = steerInput = 0;
+        handbrakeOn = false;
+    }
+
+    /**
+     * Re-specifies this as a different vehicle.
+     *
+     * <p>Everything that distinguishes a scooter from a double-decker is set
+     * here, and nothing is faked afterwards: an autorickshaw tips into
+     * corners because 340 kg carried 0.60 m up on a 1.40 m track genuinely
+     * does tip, and the bus understeers because 12.4 tonnes on a 5.3 m
+     * wheelbase genuinely does.
+     *
+     * <p>The inertia scalings are measured-vehicle corrections to the
+     * uniform-box estimate. A real car's mass sits low and central, so it
+     * pitches and yaws more readily than a solid block of the same size;
+     * roll is close enough to the box value to leave alone.
+     */
+    public void configure(VehicleKind k) {
+        kind = k;
+        mass = k.massKg;
+        inertia.set(k.pitchInertia() * 0.70, k.yawInertia() * 0.82, k.rollInertia());
+        wheelbase = k.wheelbaseM;
+        trackWidth = Math.max(0.52, k.widthM - 0.22);
+        comHeight = k.comHeightM;
+        peakTorqueNm = k.peakTorqueNm;
+        redlineRpm = k.redlineRpm;
+        maxRpm = k.redlineRpm * 1.09;
+        dragArea = k.dragArea;
+
+        // Reverse, neutral, then the forward gears spread geometrically from
+        // a first tall enough to pull away to a top that reaches the
+        // vehicle's terminal speed just under the limiter.
+        int n = Math.max(3, k.gearCount);
+        double[] g = new double[n + 2];
+        g[0] = -3.40;
+        g[1] = 0.0;
+        double first = k.isTwoWheeler() ? 2.85 : (k.massKg > 5000 ? 5.60 : 3.55);
+        double top = k.massKg > 5000 ? 0.92 : 0.68;
+        for (int i = 0; i < n; i++) {
+            double t = n == 1 ? 0 : i / (double) (n - 1);
+            g[i + 2] = first * Math.pow(top / first, t);
+        }
+        gearRatios = g;
+        finalDrive = k.massKg > 5000 ? 5.20 : 4.06;
+        gear = 2;
+
+        layoutWheels();
+        if (k.isThreeWheeler()) {
+            // One wheel at the front, on the centreline. It steers and, on an
+            // autorickshaw, it also drives.
+            wheels[0].attach.set(0, 0.08, wheelbase * 0.5);
+            wheels[1].attach.set(0, 0.08, wheelbase * 0.5);
+            wheels[0].driven = wheels[1].driven = (k == VehicleKind.AUTORICKSHAW);
+        } else if (k.isTwoWheeler()) {
+            // Both "pairs" collapse onto the centreline. A scooter is not a
+            // motorcycle simulator here: it is a narrow, light, twitchy car
+            // that cannot be rolled over, which is the honest simplification.
+            wheels[0].attach.set(0, 0.08, wheelbase * 0.5);
+            wheels[1].attach.set(0, 0.08, wheelbase * 0.5);
+            wheels[2].attach.set(0, 0.08, -wheelbase * 0.5);
+            wheels[3].attach.set(0, 0.08, -wheelbase * 0.5);
+        }
+    }
+
+    /**
      * Naturally aspirated torque curve, N m at the crank. A broad plateau from
      * about 2,600 to 4,800 rpm, falling away either side, with a hard cut at
      * the limiter.
@@ -147,7 +238,7 @@ public final class CarPhysics extends RigidBody {
     public double engineTorque(double rpm, double throttlePos) {
         if (rpm > maxRpm) { return -40; }
         double r = MathUtil.clamp(rpm, 500, maxRpm);
-        double peak = 196.0;
+        double peak = peakTorqueNm;
         double t;
         if (r < 2600) {
             t = peak * (0.44 + 0.56 * (r - 500) / 2100.0);

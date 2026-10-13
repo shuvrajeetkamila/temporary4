@@ -1,5 +1,7 @@
 package ai.shuvrajeetkamila.mumbai.world;
 
+import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
+
 /**
  * Builds renderable triangles from the real OSM features in a chunk.
  *
@@ -14,7 +16,15 @@ package ai.shuvrajeetkamila.mumbai.world;
  *
  * <pre>  position.xyz | normal.xyz | albedo.rgb | aux </pre>
  *
- * <p>{@code aux} is a small channel the shader reads for material behaviour:
+ * <p>{@code aux} packs two things into one float, which is why the vertex
+ * format did not have to grow to carry textures. Its integer part is the
+ * material index into {@link TextureLibrary}; its fractional part is how
+ * strongly the surface emits light after dark. A value of -1 still means
+ * water and is tested for before either is unpacked. Encoding it this way
+ * meant the compiled world, the container format and all 123 verification
+ * gates were untouched by the entire texturing change.
+ *
+ * <p>The older meaning of {@code aux} was:
  * zero or more for emissive strength, and exactly -1 to mark a water surface,
  * which the fragment stage animates. Chunk-local floats keep the mesh precise:
  * at 45 km from the origin a float world coordinate quantises to about 4 mm,
@@ -125,7 +135,8 @@ public final class ChunkMesher {
                 }
                 push((float) lx, (float) h, (float) lz,
                         (float) nrm[0], (float) nrm[1], (float) nrm[2],
-                        rgb[0], rgb[1], rgb[2], land ? 0f : -1f);
+                        rgb[0], rgb[1], rgb[2],
+                        land ? (float) coverMaterial(cv) : -1f);
             }
         }
         int row = n + 1;
@@ -201,7 +212,9 @@ public final class ChunkMesher {
             if (tunnel) { continue; }
             float lift = bridge ? 0.0f : 0.07f;
             float[] rgb = new float[3];
-            roadColour(cls, (f.roadFlags[r] & ChunkFeatures.FLAG_UNPAVED) != 0, rgb);
+            boolean unpavedRoad = (f.roadFlags[r] & ChunkFeatures.FLAG_UNPAVED) != 0;
+            roadColour(cls, unpavedRoad, rgb);
+            float roadMat = unpavedRoad ? TextureLibrary.MAT_DIRT : TextureLibrary.MAT_TARMAC;
 
             // Bridge decks follow a straight line between their ends rather
             // than the seabed underneath, which is what makes the Sea Link and
@@ -247,9 +260,9 @@ public final class ChunkMesher {
                     y = world.height(ox + lx, oz + lz) + lift;
                 }
                 int li = push(lx + nx * half, (float) y, lz + nz * half,
-                        0, 1, 0, rgb[0], rgb[1], rgb[2], 0f);
+                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
                 int ri = push(lx - nx * half, (float) y, lz - nz * half,
-                        0, 1, 0, rgb[0], rgb[1], rgb[2], 0f);
+                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
                 if (prevL >= 0) {
                     tri(prevL, li, prevR);
                     tri(prevR, li, ri);
@@ -304,6 +317,9 @@ public final class ChunkMesher {
             int e = f.buildingOffset[b + 1];
             int n = e - s;
             if (n < 3) { continue; }
+            int bcls = f.buildingClass[b];
+            float wallMat = facadeMaterial(bcls, h, b);
+            float roofMat = roofMaterial(bcls, h);
 
             // Base at the lowest ground under the ring, so a building on a
             // slope does not float at one corner and sink at the other.
@@ -344,8 +360,12 @@ public final class ChunkMesher {
                     float cr = rgb[0] * shade * band;
                     float cg = rgb[1] * shade * band;
                     float cb = rgb[2] * shade * band;
-                    // Windows glow a little at the top floors of tall blocks.
-                    float aux = (lod == LOD_HIGH && h > 24 && ff > 0) ? 0.22f : 0f;
+                    // Material in the integer part, night emission in the
+                    // fraction. The emission is masked by the texture's alpha
+                    // in the shader, so only the windows light up and not the
+                    // whole slab - which is what a per-face constant does.
+                    float aux = wallMat;
+                    if (lod == LOD_HIGH && ff > 0) { aux += 0.34f; }
                     int v0 = push(ax, (float) fy0, az, nx, 0, nz, cr, cg, cb, aux);
                     int v1 = push(bx, (float) fy0, bz, nx, 0, nz, cr, cg, cb, aux);
                     int v2 = push(bx, (float) fy1, bz, nx, 0, nz, cr, cg, cb, aux);
@@ -368,12 +388,12 @@ public final class ChunkMesher {
             cz /= n;
             float rr = rgb[0] * 0.72f, rg = rgb[1] * 0.74f, rb = rgb[2] * 0.70f;
             double roofY = y1 + (f.buildingRoof[b] != 0 ? 1.6 : 0.0);
-            int c = push((float) cx, (float) roofY, (float) cz, 0, 1, 0, rr, rg, rb, 0f);
+            int c = push((float) cx, (float) roofY, (float) cz, 0, 1, 0, rr, rg, rb, roofMat);
             int first = -1, prev = -1;
             for (int k = 0; k < n; k++) {
                 int ik = s + k;
                 int v = push(f.buildingXZ[ik * 2], (float) y1, f.buildingXZ[ik * 2 + 1],
-                        0, 1, 0, rr, rg, rb, 0f);
+                        0, 1, 0, rr, rg, rb, roofMat);
                 if (first < 0) { first = v; }
                 if (prev >= 0) { tri(c, prev, v); }
                 prev = v;
@@ -413,6 +433,70 @@ public final class ChunkMesher {
         out[0] = Math.min(1f, out[0] * j * g);
         out[1] = Math.min(1f, out[1] * j * g);
         out[2] = Math.min(1f, out[2] * j * g);
+    }
+
+    /**
+     * Which facade to dress a building in.
+     *
+     * <p>Driven by the OSM class first and the height second, because the
+     * class is real evidence and the height is a reasonable proxy for age
+     * and construction type where the class is vague. Anything above sixty
+     * metres in this city is recent and almost always glazed.
+     */
+    static int facadeMaterial(int cls, float h, int seed) {
+        switch (cls) {
+            case 14: case 15:                      // hut, shed
+                return TextureLibrary.MAT_FACADE_INFORMAL;
+            case 6:                                // retail
+                return TextureLibrary.MAT_FACADE_SHOP;
+            case 4: case 5: case 21:               // commercial, office, tower
+                return h > 24 ? TextureLibrary.MAT_FACADE_OFFICE
+                              : TextureLibrary.MAT_FACADE_SHOP;
+            case 7: case 8: case 16: case 17: case 18:
+                return TextureLibrary.MAT_FACADE_CHAWL;
+            case 9: case 10: case 11: case 12: case 13: case 19:
+                return TextureLibrary.MAT_CONCRETE;
+            default:
+                if (h > 60) { return TextureLibrary.MAT_FACADE_OFFICE; }
+                if (h < 9) {
+                    // Low housing is a mix of older stock and newer infill.
+                    return ((seed * 2654435761L) >>> 11 & 1L) == 0L
+                            ? TextureLibrary.MAT_FACADE_CHAWL
+                            : TextureLibrary.MAT_FACADE_APARTMENT;
+                }
+                return TextureLibrary.MAT_FACADE_APARTMENT;
+        }
+    }
+
+    /** Roofs: sheet over self-built and light industrial, slab over the rest. */
+    static int roofMaterial(int cls, float h) {
+        switch (cls) {
+            case 14: case 15: case 16:
+                return TextureLibrary.MAT_ROOF_TIN;
+            case 3:
+                return h < 8 ? TextureLibrary.MAT_ROOF_TILE
+                             : TextureLibrary.MAT_ROOF_CONCRETE;
+            case 7: case 8:
+                return TextureLibrary.MAT_ROOF_TIN;
+            default:
+                return TextureLibrary.MAT_ROOF_CONCRETE;
+        }
+    }
+
+    /** Ground texture for a land-cover class. */
+    static int coverMaterial(int cover) {
+        switch (cover) {
+            case 1: case 2: return TextureLibrary.MAT_GRASS;      // wetland, mangrove
+            case 3: case 4: return TextureLibrary.MAT_SAND;       // beach, sand
+            case 5: return TextureLibrary.MAT_ROCK;
+            case 6: case 7: case 8: case 9: case 10: case 11: case 21:
+                return TextureLibrary.MAT_GRASS;
+            case 12: case 13: case 14: case 15: case 16: case 17:
+            case 18: case 22: case 23:
+                return TextureLibrary.MAT_CONCRETE;
+            case 19: case 20: return TextureLibrary.MAT_DIRT;
+            default: return TextureLibrary.MAT_DIRT;
+        }
     }
 
     // ----------------------------------------------------------------- buffers

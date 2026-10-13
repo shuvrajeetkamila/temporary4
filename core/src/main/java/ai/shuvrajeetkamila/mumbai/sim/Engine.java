@@ -3,6 +3,7 @@ package ai.shuvrajeetkamila.mumbai.sim;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
+import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
 import ai.shuvrajeetkamila.mumbai.math.Quat;
@@ -14,6 +15,7 @@ import ai.shuvrajeetkamila.mumbai.physics.HelicopterPhysics;
 import ai.shuvrajeetkamila.mumbai.physics.HumanPhysics;
 import ai.shuvrajeetkamila.mumbai.physics.Ocean;
 import ai.shuvrajeetkamila.mumbai.physics.RigidBody;
+import ai.shuvrajeetkamila.mumbai.render.Sky;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.world.WorldStreamer;
@@ -52,6 +54,26 @@ public final class Engine {
     public double wetness;
     public double windX;
     public double windZ;
+
+    /** Sun position and air colour for the current {@link #timeOfDay}. */
+    public final Sky sky = new Sky();
+
+    /**
+     * Hours since midnight. Advances at one game-minute per real second, so
+     * a full day is twenty-four minutes of play - the pace the genre has
+     * used since it had a day at all. Slow enough that the light changes
+     * while you drive somewhere, fast enough to see a sunset if you wait.
+     */
+    public double timeOfDay = 8.4;
+    public static final double SECONDS_PER_GAME_HOUR = 60.0;
+
+    /** How near the player must be to a vehicle to get into it, metres. */
+    public static final double ENTER_RADIUS_M = 4.2;
+
+    /** Index into {@code agents.cars()} of the car being driven, or -1. */
+    private int occupiedAgent = -1;
+    /** True on the frame a vehicle was entered or left; the HUD flashes. */
+    public boolean vehicleChanged;
 
     public double cameraYaw;
     public double cameraPitch = -0.12;
@@ -189,6 +211,10 @@ public final class Engine {
             snapshot();
             fixedStep(FixedStep.STEP, in);
         }
+        timeOfDay += frameSeconds / SECONDS_PER_GAME_HOUR;
+        if (timeOfDay >= 24.0) { timeOfDay -= 24.0; }
+        sky.evaluate(timeOfDay, wetness);
+
         RigidBody b = activeBody();
         double a = clock.alpha();
         renderPos.set(prevPos.x + (b.position.x - prevPos.x) * a,
@@ -221,6 +247,11 @@ public final class Engine {
         // The monsoon raises the sea state as well as wetting the roads.
         ocean.setChoppiness(0.8 + wetness * 1.1);
 
+        if (in.enterExit) {
+            if (profile == ControlProfile.ON_FOOT) { tryEnterVehicle(); }
+            else if (profile == ControlProfile.CAR) { exitVehicle(); }
+        }
+
         switch (profile) {
             case CAR: stepCar(dt, in); break;
             case BOAT: stepBoat(dt, in); break;
@@ -232,6 +263,136 @@ public final class Engine {
         RigidBody b = activeBody();
         agents.update(dt, b.position.x, b.position.z,
                 quality.medRadius * 0.55, quality.medRadius);
+    }
+
+    /**
+     * Gets into the nearest vehicle, if one is close enough.
+     *
+     * <p>Nearest by distance, but only ahead of where the player is facing,
+     * because reaching backwards into a car you have walked past is the kind
+     * of thing that feels broken even though it is more convenient. The
+     * agent that was driving it is removed from traffic and its state -
+     * position, heading, and the speed it was doing - is handed to the
+     * player's rigid body, so taking a moving car does not stop it dead.
+     *
+     * @return true if a vehicle was entered
+     */
+    public boolean tryEnterVehicle() {
+        Agents.Car[] cs = agents.cars();
+        double px = human.position.x, pz = human.position.z;
+        double fx = Math.sin(cameraYaw), fz = -Math.cos(cameraYaw);
+        int best = -1;
+        double bestScore = Double.MAX_VALUE;
+        for (int i = 0; i < cs.length; i++) {
+            Agents.Car c = cs[i];
+            if (!c.active) { continue; }
+            VehicleKind k = kindOf(c);
+            if (!k.enterable) { continue; }
+            double dx = c.x - px, dz = c.z - pz;
+            double d2 = dx * dx + dz * dz;
+            if (d2 > ENTER_RADIUS_M * ENTER_RADIUS_M) { continue; }
+            double d = Math.sqrt(Math.max(1e-9, d2));
+            // Facing bonus: straight ahead counts as closer than off to the
+            // side, so the choice matches where the player is looking.
+            double facing = (dx / d) * fx + (dz / d) * fz;
+            double score = d - facing * 1.6;
+            if (score < bestScore) { bestScore = score; best = i; }
+        }
+        if (best < 0) { return false; }
+
+        Agents.Car c = cs[best];
+        VehicleKind k = kindOf(c);
+        car.configure(k);
+        car.reset();
+        car.position.set(c.x, c.y + k.comHeightM + 0.22, c.z);
+        car.orientation.set(Quat.yaw(c.heading));
+        // Inherit the traffic speed rather than snapping to a standstill.
+        car.velocity.set(Math.sin(c.heading) * c.speed, 0,
+                -Math.cos(c.heading) * c.speed);
+        car.angularVelocity.set(0, 0, 0);
+        c.active = false;
+        occupiedAgent = best;
+        profile = ControlProfile.CAR;
+        vehicleChanged = true;
+        return true;
+    }
+
+    /**
+     * Gets out, placing the player beside the driver's door.
+     *
+     * <p>Left-hand traffic, so the driver sits on the right and steps out to
+     * the right of the vehicle. The car is handed back to the traffic system
+     * stationary rather than deleted, so it is still standing there when you
+     * turn round.
+     */
+    public boolean exitVehicle() {
+        if (profile != ControlProfile.CAR) { return false; }
+        // Refuse at speed. Stepping out of a moving car is a ragdoll feature,
+        // and it is not built yet; pretending otherwise would teleport the
+        // player through the road surface.
+        if (car.groundSpeed() > 3.0) { return false; }
+
+        VehicleKind k = car.kind;
+        double yaw = car.orientation.heading();
+        // Body +X is right, so the driver's side in left-hand traffic.
+        double side = k.widthM * 0.5 + 0.55;
+        double ex = car.position.x + Math.cos(yaw) * side;
+        double ez = car.position.z + Math.sin(yaw) * side;
+        double gy = world.inBounds(ex, ez) ? world.height(ex, ez) : 0;
+
+        human.reset();
+        human.position.set(ex, gy + human.height * 0.5, ez);
+        human.headingRad = yaw;
+        human.velocity.set(0, 0, 0);
+
+        // Park the vehicle back into traffic exactly where it was left.
+        Agents.Car[] cs = agents.cars();
+        int slot = occupiedAgent >= 0 && occupiedAgent < cs.length
+                ? occupiedAgent : agents.freeCarSlot();
+        if (slot >= 0) {
+            Agents.Car c = cs[slot];
+            c.x = car.position.x;
+            c.z = car.position.z;
+            c.y = world.inBounds(c.x, c.z) ? world.height(c.x, c.z) : 0;
+            c.heading = yaw;
+            c.speed = 0;
+            c.parked = true;
+            c.kindOrdinal = k.ordinal();
+            c.active = true;
+        }
+        occupiedAgent = -1;
+        profile = ControlProfile.ON_FOOT;
+        vehicleChanged = true;
+        return true;
+    }
+
+    private static VehicleKind kindOf(Agents.Car c) {
+        VehicleKind[] all = VehicleKind.values();
+        int o = c.kindOrdinal;
+        return (o >= 0 && o < all.length) ? all[o] : VehicleKind.HATCHBACK;
+    }
+
+    /** The vehicle being driven, or null on foot. For the HUD and the mesh. */
+    public VehicleKind drivingKind() {
+        return profile == ControlProfile.CAR ? car.kind : null;
+    }
+
+    /**
+     * Distance to the nearest vehicle the player could get into, or a large
+     * number. The HUD uses it to show the prompt only when it would work.
+     */
+    public double nearestEnterableDistance() {
+        if (profile != ControlProfile.ON_FOOT) { return Double.MAX_VALUE; }
+        Agents.Car[] cs = agents.cars();
+        double px = human.position.x, pz = human.position.z;
+        double best = Double.MAX_VALUE;
+        for (Agents.Car c : cs) {
+            if (!c.active || !kindOf(c).enterable) { continue; }
+            double dx = c.x - px, dz = c.z - pz;
+            double d2 = dx * dx + dz * dz;
+            if (d2 < best) { best = d2; }
+        }
+        return Math.sqrt(best);
     }
 
     private void stepHuman(double dt, InputState in) {
@@ -297,7 +458,17 @@ public final class Engine {
         t.speedKmh = b.groundSpeed() * 3.6;
         t.headingDeg = Math.toDegrees(b.orientation.heading());
         if (t.headingDeg < 0) { t.headingDeg += 360; }
-        t.profile = profile.label;
+        t.profile = profile == ControlProfile.CAR && car.kind != null
+                ? car.kind.label : profile.label;
+        t.timeOfDay = timeOfDay;
+        if (profile == ControlProfile.ON_FOOT) {
+            t.prompt = nearestEnterableDistance() <= ENTER_RADIUS_M
+                    ? "ENTER to get in" : "";
+        } else if (profile == ControlProfile.CAR) {
+            t.prompt = car.groundSpeed() <= 3.0 ? "EXIT to get out" : "";
+        } else {
+            t.prompt = "";
+        }
         t.frameMs = frameSeconds * 1000.0;
         if (fpsFrames > 0 && fpsAccum > 0) {
             t.fps = fpsFrames / fpsAccum;
@@ -372,6 +543,9 @@ public final class Engine {
     }
 
     public Vec3 renderPosition() { return renderPos; }
+
+    /** Interpolated orientation for the current frame. */
+    public Quat renderOrientation() { return renderRot; }
 
     public Quat renderRotation() { return renderRot; }
 

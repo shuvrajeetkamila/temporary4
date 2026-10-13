@@ -45,6 +45,19 @@ public final class HumanPhysics extends RigidBody {
     public boolean swimming;
     public boolean ragdoll;
     public double stamina = 1.0;
+
+    /** Clears transient state when the player is placed somewhere new. */
+    public void reset() {
+        velocity.set(0, 0, 0);
+        angularVelocity.set(0, 0, 0);
+        orientation.identity();
+        ragdoll = false;
+        swimming = false;
+        grounded = true;
+        stamina = 1.0;
+        moveForward = moveRight = 0;
+        wantRun = wantSprint = wantJump = false;
+    }
     public double groundSlope;
     public double waterDepth;
     public double stepPhase;
