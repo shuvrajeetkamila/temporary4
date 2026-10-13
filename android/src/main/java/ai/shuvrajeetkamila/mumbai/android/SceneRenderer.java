@@ -54,6 +54,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private int uSceneAtlas, uSceneMatScale, uSceneNight;
     private int uInstViewProj, uInstCam, uInstSunDir, uInstSunCol, uInstSky;
     private int uInstFogCol, uInstFogDen, uInstWet, uInstAtlas, uInstMatScale, uInstNight;
+    private int uInstSiren;
 
     /** The procedural texture array. One GL_TEXTURE_2D_ARRAY, built once. */
     private int atlas;
@@ -169,6 +170,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uInstAtlas = GLES30.glGetUniformLocation(instProg, "uAtlas");
         uInstMatScale = GLES30.glGetUniformLocation(instProg, "uMatScale");
         uInstNight = GLES30.glGetUniformLocation(instProg, "uNight");
+        uInstSiren = GLES30.glGetUniformLocation(instProg, "uSiren");
 
         atlas = buildAtlas();
 
@@ -426,6 +428,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
                     TextureLibrary.SCALE_M, 0);
             GLES30.glUniform1f(uInstNight, nightFactor);
+            GLES30.glUniform1f(uInstSiren, sirenPhase(e));
             for (int ki = 0; ki < vehCount.length; ki++) {
                 int n = vehCount[ki];
                 if (n <= 0) { continue; }
@@ -890,6 +893,18 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUniform1fv(uInstMatScale, TextureLibrary.MAT_COUNT,
                 TextureLibrary.SCALE_M, 0);
         GLES30.glUniform1f(uInstNight, night);
+        GLES30.glUniform1f(uInstSiren, sirenPhase(e));
+    }
+
+    /**
+     * Where the light bars are in their cycle, or negative when nobody is
+     * responding. Two and a half flashes a second, which is about what a
+     * real bar does, and derived from the simulation clock rather than the
+     * frame counter so it does not speed up on a fast device.
+     */
+    private static float sirenPhase(Engine e) {
+        if (e.wanted.stars() <= 0) { return -1f; }
+        return (float) ((e.clock.simulatedSeconds() * 2.5) % 1.0);
     }
 
     /** Packs every carriage and hull into its per-kind instance buffer. */

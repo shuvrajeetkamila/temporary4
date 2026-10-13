@@ -24,6 +24,13 @@ final class Shaders {
     private static final int MAT_COUNT =
             ai.shuvrajeetkamila.mumbai.render.TextureLibrary.MAT_COUNT;
 
+    /**
+     * Aux value marking an emergency lamp rather than a surface, well clear
+     * of the material indices, which run 0 to MAT_COUNT - 1. A beacon is a
+     * light source: it must not be shaded, textured, or go out at dusk.
+     */
+    static final float BEACON_AUX = 60.0f;
+
     /** Shared header. Keep the two stages in step. */
     private static final String VS_HEAD =
             "#version 300 es\n"
@@ -94,6 +101,8 @@ final class Shaders {
             + "uniform mediump float uMatScale[" + MAT_COUNT + "];\n"
             // 0 in daylight, 1 after dark. Drives window emission.
             + "uniform mediump float uNight;\n"
+            // Beacon phase, 0..1, or negative for "nobody is responding".
+            + "uniform mediump float uSiren;\n"
             + "out mediump vec4 fragColour;\n"
             + "void main() {\n"
             + "  mediump vec3 n = normalize(vNormal);\n"
@@ -102,6 +111,19 @@ final class Shaders {
             + "  mediump float hemi = 0.5 + 0.5 * n.y;\n"
             + "  mediump vec3 ambient = mix(vec3(0.22, 0.20, 0.18), uSkyColour, hemi) * 0.55;\n"
             + "  mediump vec3 albedo = vAlbedo;\n"
+            + "  if (vAux > " + (BEACON_AUX - 0.5f) + ") {\n"
+            // An emergency beacon. Unlit and untextured on purpose: a lamp
+            // is a light source, not a surface, so it must not go dim in
+            // shadow or at dusk. Red lags blue by half a cycle, and the
+            // whole thing is dark unless somebody is actually responding.
+            + "    mediump float off = vAlbedo.b > vAlbedo.r ? 0.0 : 0.5;\n"
+            + "    mediump float on = uSiren < 0.0 ? 0.0\n"
+            + "        : step(0.5, fract(uSiren + off));\n"
+            + "    mediump vec3 lamp = vAlbedo * (0.22 + 2.5 * on);\n"
+            + "    highp float bf = clamp(1.0 - exp(-vDepth * uFogDensity), 0.0, 1.0);\n"
+            + "    fragColour = vec4(mix(lamp, uFogColour, bf), 1.0);\n"
+            + "    return;\n"
+            + "  }\n"
             + "  if (vAux < -0.5) {\n"
             // aux = -1 marks water. Fresnel plus a sky tint, cheap but reads
             // correctly against the land. Untextured by design: the sea gets

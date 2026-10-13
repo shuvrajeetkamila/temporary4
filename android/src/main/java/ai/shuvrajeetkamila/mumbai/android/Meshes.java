@@ -460,9 +460,16 @@ final class Meshes {
         taillamps(hw * 0.66f, h * 0.48f, -hl * 0.99f);
 
         if (k == VehicleKind.POLICE) {
-            // Light bar. Blue and red, emissive, unmistakable in a mirror.
-            box(-0.22f, h * 0.96f, 0, 0.20f, 0.07f, 0.16f, 0.10f, 0.22f, 0.95f, 0.95f);
-            box(0.22f, h * 0.96f, 0, 0.20f, 0.07f, 0.16f, 0.95f, 0.14f, 0.10f, 0.95f);
+            // Light bar. Blue one side, red the other, marked with the
+            // beacon sentinel so the shader flashes them alternately
+            // instead of treating them as two painted boxes that happen to
+            // glow a little after dark.
+            box(-0.22f, h * 0.96f, 0, 0.20f, 0.07f, 0.16f,
+                    0.10f, 0.22f, 0.95f, Shaders.BEACON_AUX);
+            box(0.22f, h * 0.96f, 0, 0.20f, 0.07f, 0.16f,
+                    0.95f, 0.14f, 0.10f, Shaders.BEACON_AUX);
+            // The bar they sit on, so the lamps are not floating.
+            box(0, h * 0.925f, 0, 0.46f, 0.035f, 0.13f, 0.09f, 0.09f, 0.10f, 0);
             // A plain stripe down each flank. No crest, no insignia, no text.
             box(-hw - 0.01f, h * 0.40f, 0, 0.01f, h * 0.09f, hl * 0.80f,
                     k.sr, k.sg, k.sb, 0);
