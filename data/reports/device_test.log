@@ -1,12 +1,12 @@
-run 38401230739  emulator step: success
-files present: ASSET_LICENSES.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.26.apk Mumbai-The-Island-City-v2.0.26.apk.sha256 README.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-full.txt settings.gradle start.txt tools 
+run 38424028372  emulator step: success
+files present: ASSET_LICENSES.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.27.apk Mumbai-The-Island-City-v2.0.27.apk.sha256 README.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-full.txt settings.gradle start.txt tools 
 --- install ---
-emulator pid 2168
+emulator pid 2079
 device appeared
 booted=1 after 15s
 Physical size: 1080x2280
 30
-apk=[Mumbai-The-Island-City-v2.0.26.apk] 14782400 bytes
+apk=[Mumbai-The-Island-City-v2.0.27.apk] 14793820 bytes
 Performing Streamed Install
 Success
 --- am start ---
@@ -14,34 +14,33 @@ Starting: Intent { cmp=ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila
 Status: ok
 LaunchState: COLD
 Activity: ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity
-TotalTime: 1803
-WaitTime: 1805
+TotalTime: 1905
+WaitTime: 1906
 Complete
 --- app log ---
---------- beginning of kernel
 --------- beginning of main
 --------- beginning of system
-10-13 13:02:33.614  2086  2086 I Mumbai  : thermal status 0 (none)
-10-13 13:02:34.114  2086  2131 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-13 13:02:34.860  2086  2131 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
-10-13 13:02:34.978  2086  2131 I MumbaiGL: atlas: 15 layers of 128x128 in 114 ms
-10-13 13:02:35.016  2086  2131 I MumbaiGL: GL ready, programs linked
-10-13 13:02:35.591  2086  2132 I Mumbai  : world loaded in 1984 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
-10-13 13:02:35.591  2086  2132 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
-10-13 13:02:35.629  2086  2131 I MumbaiGL: 1 decode workers started
-10-13 13:02:35.642  2086  2086 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-13 13:02:39.011  2086  2086 I Mumbai  : thermal status 0 (none)
-10-13 13:02:39.033  2086  2398 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-13 13:02:39.068  2086  2398 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
-10-13 13:02:39.184  2086  2398 I MumbaiGL: atlas: 15 layers of 128x128 in 114 ms
-10-13 13:02:39.204  2086  2398 I MumbaiGL: GL ready, programs linked
-10-13 13:02:40.053  2086  2399 I Mumbai  : world loaded in 1102 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
-10-13 13:02:40.053  2086  2399 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
-10-13 13:02:40.056  2086  2086 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-13 13:02:40.135  2086  2398 I MumbaiGL: 1 decode workers started
-10-13 13:02:43.026  2086  2398 I Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=28
+--------- beginning of kernel
+10-13 15:44:19.671  2114  2163 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-13 15:44:20.362  2114  2114 I Mumbai  : thermal status 0 (none)
+10-13 15:44:20.382  2114  2163 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
+10-13 15:44:20.551  2114  2163 I MumbaiGL: atlas: 15 layers of 128x128 in 164 ms
+10-13 15:44:20.671  2114  2163 I MumbaiGL: GL ready, programs linked
+10-13 15:44:21.924  2114  2114 I Mumbai  : thermal status 0 (none)
+10-13 15:44:21.969  2114  2352 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-13 15:44:22.040  2114  2352 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
+10-13 15:44:22.255  2114  2352 I MumbaiGL: atlas: 15 layers of 128x128 in 186 ms
+10-13 15:44:22.288  2114  2352 I MumbaiGL: GL ready, programs linked
+10-13 15:44:22.826  2114  2165 I Mumbai  : world loaded in 3423 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
+10-13 15:44:22.826  2114  2165 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+10-13 15:44:23.030  2114  2114 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-13 15:44:23.968  2114  2353 I Mumbai  : world loaded in 2239 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
+10-13 15:44:23.968  2114  2353 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+10-13 15:44:23.985  2114  2114 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-13 15:44:24.017  2114  2352 I MumbaiGL: 1 decode workers started
+10-13 15:44:27.501  2114  2352 I Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=31
 --- emulator ---
-| GraphWARNING: cannnot unmap ptr 0x7efd10601000 as it is in the protected range from 0x7efc10600000 to 0x7efd10800000
+| GraphWARNING: cannnot unmap ptr 0x7fd759801000 as it is in the protected range from 0x7fd659800000 to 0x7fd759a00000
 pc_memory_init: above 4g size: 40000000
 ics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
 INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
@@ -79,108 +78,101 @@ INFO         |   qemu.wifi=1
 INFO         | Monitoring duration of emulator setup.
 WARNING      | The emulator now requires a signed jwt token for gRPC access! Use the -grpc flag if you really want an open unprotected grpc port
 INFO         | Using security allow list from: /usr/local/lib/android/sdk/emulator/lib/emulator_access.json
-INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2168/jwks/b98eb91b-b2fd-4e29-9c6e-5c2f7e90ecbe/active.jwk
-INFO         | Scanning /run/user/1001/avd/running/2168/jwks/b98eb91b-b2fd-4e29-9c6e-5c2f7e90ecbe for jwk keys.
+INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2079/jwks/43c7c3d7-616c-4953-991d-f8990558d415/active.jwk
+INFO         | Scanning /run/user/1001/avd/running/2079/jwks/43c7c3d7-616c-4953-991d-f8990558d415 for jwk keys.
 INFO         | Started GRPC server at 127.0.0.1:8554, security: Local, auth: +token
-INFO         | Advertising in: /run/user/1001/avd/running/pid_2168.ini
+INFO         | Advertising in: /run/user/1001/avd/running/pid_2079.ini
 INFO         | Setting display: 0 configuration to: 1080x2280, dpi: 440x440 
 INFO         | setDisplayActiveConfig: id:0, 1080x2280
 INFO         | emulatorSetupEnvironment: Environment scene is not required
 USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
-INFO         | Boot completed in 24849 ms
+INFO         | Boot completed in 25103 ms
 INFO         | Increasing screen off timeout, logcat buffer size to 2M.
-INFO         | Wait for emulator (pid 2168) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+INFO         | Wait for emulator (pid 2079) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
 
 USER_INFO    | Snapshots have been disabled by the user, save request is ignored.
 INFO         | Saving snapshot 'default_boot' took 0 ms
 --- crashes/GL ---
-10-13 13:02:30.070  1511  1511 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service LayoutInflater from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.071  1511  1511 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.071  1511  1511 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service WindowManager from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.072  1511  1511 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.073  1511  1511 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.076  1511  1511 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@14f73b2
-10-13 13:02:30.790   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:30.794   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:31.094   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:31.097   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:31.225  1007  1007 E PhoneInterfaceManager: [PhoneIntfMgr] setPreferredNetworkType: CommandException: com.android.internal.telephony.CommandException: MODE_NOT_SUPPORTED
-10-13 13:02:31.306   506   506 W AppWidgetServiceImpl: Failed to read state: java.io.FileNotFoundException: /data/system/users/0/appwidgets.xml: open failed: ENOENT (No such file or directory)
-10-13 13:02:31.463  1801  1833 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
-10-13 13:02:31.464  1801  1833 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
-10-13 13:02:31.465  1801  1833 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
-10-13 13:02:31.616   886   886 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service WallpaperManager from a non-visual Context:android.app.Application@7a6b1bd
-10-13 13:02:31.648   886  1842 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
-10-13 13:02:31.649   886  1842 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
-10-13 13:02:31.649   886  1842 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
-10-13 13:02:31.711   886  1835 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:31.730   886  1835 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:31.988   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.003   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.006   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.071   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.094   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.094   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.097   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.113   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.114   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.116   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.116   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.122   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.124   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.146   886   886 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
-10-13 13:02:32.170   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.225   942  1864 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
-10-13 13:02:32.241   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.245   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.245   506   647 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.247   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.248   506   640 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.319   506   639 W BestClock: java.time.DateTimeException: Missing NTP fix
-10-13 13:02:32.587   506   643 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
-10-13 13:02:32.653   506   647 E ConnectivityService: Exception adding interface: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
-10-13 13:02:32.699   506   647 E ConnectivityService: Exception in networkAddRouteParcel for non-gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
-10-13 13:02:32.699   506   647 E ConnectivityService: Exception in networkAddRouteParcel for gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
-10-13 13:02:33.033   729  2070 E BackupHelper: java.io.FileNotFoundException: /data/user_de/0/com.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
-10-13 13:02:33.033   729  2070 E BackupHelper: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
-10-13 13:02:33.573  2086  2130 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
-10-13 13:02:33.750     0     0 I binder  : undelivered transaction 51598, process died.
-10-13 13:02:33.596  2086  2130 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
-10-13 13:02:33.598  2086  2130 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
-10-13 13:02:33.614  2086  2086 I Mumbai  : thermal status 0 (none)
-10-13 13:02:33.720  2086  2128 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:33.757  2086  2131 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:33.773  2086  2128 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:34.114  2086  2131 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-13 13:02:34.611     0     0 I binder  : undelivered transaction 52590, process died.
-10-13 13:02:34.569   886   920 D ModelWriter: java.lang.Exception
-10-13 13:02:34.860  2086  2131 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
-10-13 13:02:34.978  2086  2131 I MumbaiGL: atlas: 15 layers of 128x128 in 114 ms
-10-13 13:02:34.987   506  1368 W OverlayManager: service 'idmap' died
-10-13 13:02:35.016  2086  2131 I MumbaiGL: GL ready, programs linked
-10-13 13:02:35.591  2086  2132 I Mumbai  : world loaded in 1984 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
-10-13 13:02:35.591  2086  2132 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
-10-13 13:02:35.629  2086  2131 I MumbaiGL: 1 decode workers started
-10-13 13:02:35.642  2086  2086 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-13 13:02:36.069  1405  2321 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
-10-13 13:02:36.082  1405  2321 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
-10-13 13:02:36.293  1405  2321 W ModernMediaScanner: android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
-10-13 13:02:37.477   886   920 D ModelWriter: java.lang.Exception
-10-13 13:02:38.994  2086  2398 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:39.011  2086  2086 I Mumbai  : thermal status 0 (none)
-10-13 13:02:39.033  2086  2398 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-13 13:02:39.068  2086  2398 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
-10-13 13:02:39.184  2086  2398 I MumbaiGL: atlas: 15 layers of 128x128 in 114 ms
-10-13 13:02:39.204  2086  2398 I MumbaiGL: GL ready, programs linked
-10-13 13:02:39.292   709  1382 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-13 13:02:40.053  2086  2399 I Mumbai  : world loaded in 1102 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
-10-13 13:02:40.053  2086  2399 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
-10-13 13:02:40.056  2086  2086 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-13 13:02:40.135  2086  2398 I MumbaiGL: 1 decode workers started
-10-13 13:02:41.125  1405  2327 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/Android
-10-13 13:02:41.127  1405  2327 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/Android/media
-10-13 13:02:41.217  1405  2321 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
-10-13 13:02:41.228  1405  2321 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
-10-13 13:02:43.026  2086  2398 I Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=28
+10-13 15:44:15.998  1648  1648 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service LayoutInflater from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:15.999  1648  1648 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:15.999  1648  1648 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service WindowManager from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:16.000  1648  1648 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:16.001  1648  1648 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:16.004  1648  1648 E ViewConfiguration: java.lang.IllegalArgumentException: Tried to access UI constants from a non-visual Context:com.android.documentsui.DocumentsApplication@ba347e9
+10-13 15:44:16.374   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.403   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.404   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.465  1006  1006 E PhoneInterfaceManager: [PhoneIntfMgr] setPreferredNetworkType: CommandException: com.android.internal.telephony.CommandException: MODE_NOT_SUPPORTED
+10-13 15:44:16.479   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.503   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.510   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.510   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.519   510   644 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.537   930  1769 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-13 15:44:16.542   510   644 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.543   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.543   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.543   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.579   510   510 W AppWidgetServiceImpl: Failed to read state: java.io.FileNotFoundException: /data/system/users/0/appwidgets.xml: open failed: ENOENT (No such file or directory)
+10-13 15:44:16.601   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.601   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.602   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.606   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.609   510   645 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.808     0     0 I binder  : undelivered transaction 41339, process died.
+10-13 15:44:16.709   510   652 W BestClock: java.time.DateTimeException: Missing NTP fix
+10-13 15:44:16.760  1806  1880 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-13 15:44:16.761  1806  1880 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-13 15:44:16.776   900   900 E ContextImpl: java.lang.IllegalAccessException: Tried to access visual service WallpaperManager from a non-visual Context:android.app.Application@cd4385d
+10-13 15:44:16.810  1806  1880 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-13 15:44:16.830   900  1882 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-13 15:44:16.831   900  1882 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-13 15:44:16.831   900  1882 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-13 15:44:16.866   900  1882 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:16.935   900  1882 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:17.809   900   900 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-13 15:44:17.939   510   648 W UnsafeUtil: platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-13 15:44:18.181   510   652 E ConnectivityService: Exception adding interface: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-13 15:44:18.216   510   652 E ConnectivityService: Exception in networkAddRouteParcel for non-gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-13 15:44:18.218   510   652 E ConnectivityService: Exception in networkAddRouteParcel for gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-13 15:44:18.264   735  2028 E BackupHelper: java.io.FileNotFoundException: /data/user_de/0/com.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
+10-13 15:44:18.264   735  2028 E BackupHelper: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-13 15:44:18.542     0     0 I binder  : undelivered transaction 51051, process died.
+10-13 15:44:19.263  2114  2146 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-13 15:44:19.264  2114  2146 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-13 15:44:19.268  2114  2146 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-13 15:44:19.546  2114  2144 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:19.592  2114  2163 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:19.665  2114  2163 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:19.671  2114  2163 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-13 15:44:19.677   510   626 W OverlayManager: service 'idmap' died
+10-13 15:44:20.175   900   970 D ModelWriter: java.lang.Exception
+10-13 15:44:20.358   712  1418 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:20.362  2114  2114 I Mumbai  : thermal status 0 (none)
+10-13 15:44:20.382  2114  2163 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
+10-13 15:44:20.551  2114  2163 I MumbaiGL: atlas: 15 layers of 128x128 in 164 ms
+10-13 15:44:20.671  2114  2163 I MumbaiGL: GL ready, programs linked
+10-13 15:44:21.924  2114  2114 I Mumbai  : thermal status 0 (none)
+10-13 15:44:21.950  2114  2352 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-13 15:44:21.969  2114  2352 I MumbaiGL: GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-13 15:44:22.040  2114  2352 I MumbaiGL: MUMBAI_SHADERS_OK programs=5/5
+10-13 15:44:22.155  1472  2261 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-13 15:44:22.158  1472  2261 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-13 15:44:22.255  2114  2352 I MumbaiGL: atlas: 15 layers of 128x128 in 186 ms
+10-13 15:44:22.288  2114  2352 I MumbaiGL: GL ready, programs linked
+10-13 15:44:22.826  2114  2165 I Mumbai  : world loaded in 3423 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
+10-13 15:44:22.826  2114  2165 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+10-13 15:44:23.030  2114  2114 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-13 15:44:23.384   900   970 D ModelWriter: java.lang.Exception
+10-13 15:44:23.968  2114  2353 I Mumbai  : world loaded in 2239 ms: 3869 chunks, 1283 places, build 2abf2fa1570887a378d34f0369f6e472
+10-13 15:44:23.968  2114  2353 I Mumbai  : MUMBAI_WORLD_READY chunks=3869 places=1283 extentX=52540 extentZ=72540
+10-13 15:44:23.985  2114  2114 I Mumbai  : MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-13 15:44:24.017  2114  2352 I MumbaiGL: 1 decode workers started
+10-13 15:44:24.681  1472  2261 W ModernMediaScanner: android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-13 15:44:27.501  2114  2352 I Mumbai  : MUMBAI_RENDER_OK frames=30 quality=LOW resident=58 draws=31
+10-13 15:44:27.872  1472  2384 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/Android
+10-13 15:44:27.877  1472  2384 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/Android/media
+10-13 15:44:27.883  1472  2261 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-13 15:44:27.884  1472  2261 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
