@@ -11,6 +11,8 @@ import android.view.View;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.game.MapView;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
+import ai.shuvrajeetkamila.mumbai.game.Missions;
+import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 /**
@@ -53,6 +55,13 @@ final class MapOverlay extends View {
     private final Paint label = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint title = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint scaleBar = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint craftBoat = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint craftHeli = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint craftPlane = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint stopNext = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint stopLater = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint route = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final double[] stopBuf = new double[32];
     private final RectF rect = new RectF();
     private final android.graphics.Path tri = new android.graphics.Path();
 
@@ -67,6 +76,7 @@ final class MapOverlay extends View {
     private volatile double playerX;
     private volatile double playerZ;
     private volatile double playerHeading;
+    private volatile Missions missions;
 
     // ---- gesture state --------------------------------------------------
 
@@ -123,14 +133,26 @@ final class MapOverlay extends View {
         title.setTextSize(14 * d);
         scaleBar.setColor(Color.WHITE);
         scaleBar.setStrokeWidth(2 * d);
+
+        // One colour per thing you can board, so the map answers "where is
+        // the nearest helicopter" without a legend lookup.
+        craftBoat.setColor(Color.rgb(96, 206, 232));
+        craftHeli.setColor(Color.rgb(236, 142, 74));
+        craftPlane.setColor(Color.rgb(222, 222, 232));
+        stopNext.setColor(Color.rgb(255, 212, 64));
+        stopLater.setColor(Color.argb(170, 214, 176, 72));
+        route.setColor(Color.argb(140, 255, 212, 64));
+        route.setStyle(Paint.Style.STROKE);
+        route.setStrokeWidth(2.0f * d);
     }
 
     /** Pushed from the render thread every few frames. */
-    void update(MapView v, Minimap m, WorldData w,
+    void update(MapView v, Minimap m, WorldData w, Missions jobs,
                 double px, double pz, double heading) {
         this.view = v;
         this.minimap = m;
         this.world = w;
+        this.missions = jobs;
         this.playerX = px;
         this.playerZ = pz;
         this.playerHeading = heading;
@@ -154,6 +176,8 @@ final class MapOverlay extends View {
         canvas.drawRect(0, 0, w, h, sea);
         drawLand(canvas, v, w, h);
         drawRoads(canvas, v, w, h, d);
+        drawCraft(canvas, v, w, h, d);
+        drawJob(canvas, v, w, h, d);
         drawPlayer(canvas, v, w, h, d);
         drawTarget(canvas, v, w, h, d);
         drawChrome(canvas, v, w, h, d);
@@ -233,6 +257,69 @@ final class MapOverlay extends View {
                 count++;
             }
             if (count > 0) { canvas.drawLines(lineBuf, 0, count * 4, p); }
+        }
+    }
+
+    /**
+     * Every boat, helicopter and aeroplane on the island, as a small
+     * coloured mark. Drawn at every zoom: the point of the full map is to
+     * answer "where do I find one of those", and hiding them when zoomed
+     * out defeats it. There are a hundred-odd, which is nothing to draw.
+     */
+    private void drawCraft(Canvas canvas, MapView v, int w, int h, float d) {
+        WorldData wd = world;
+        if (wd == null) { return; }
+        CraftSpawns cs = wd.craft();
+        float r = 4.0f * d;
+        for (int i = 0; i < cs.size(); i++) {
+            CraftSpawns.Spawn sp = cs.get(i);
+            if (sp.taken) { continue; }
+            if (!v.isVisible(sp.x, sp.z, w, h, 12)) { continue; }
+            float sx = (float) v.screenX(sp.x, sp.z, w, h);
+            float sy = (float) v.screenY(sp.x, sp.z, w, h);
+            switch (sp.kind) {
+                case CraftSpawns.HELI:
+                    // A cross, which is what a helipad is painted as.
+                    canvas.drawRect(sx - r, sy - r * 0.34f,
+                            sx + r, sy + r * 0.34f, craftHeli);
+                    canvas.drawRect(sx - r * 0.34f, sy - r,
+                            sx + r * 0.34f, sy + r, craftHeli);
+                    break;
+                case CraftSpawns.PLANE:
+                    canvas.drawRect(sx - r, sy - r * 0.28f,
+                            sx + r, sy + r * 0.28f, craftPlane);
+                    canvas.drawRect(sx - r * 0.28f, sy - r * 0.5f,
+                            sx + r * 0.28f, sy + r, craftPlane);
+                    break;
+                default:
+                    canvas.drawCircle(sx, sy, r * 0.8f, craftBoat);
+                    break;
+            }
+        }
+    }
+
+    /**
+     * The job in hand: its remaining stops and the line between them.
+     *
+     * <p>This could not be done from the radar's blips, which are already
+     * rotated into heading-up local space and clipped to 320 m. The
+     * positions come straight out of the mission instead.
+     */
+    private void drawJob(Canvas canvas, MapView v, int w, int h, float d) {
+        Missions m = missions;
+        if (m == null) { return; }
+        int n = m.remainingStops(stopBuf);
+        if (n <= 0) { return; }
+        float px = (float) v.screenX(playerX, playerZ, w, h);
+        float py = (float) v.screenY(playerX, playerZ, w, h);
+        for (int i = 0; i < n; i++) {
+            float sx = (float) v.screenX(stopBuf[i * 2], stopBuf[i * 2 + 1], w, h);
+            float sy = (float) v.screenY(stopBuf[i * 2], stopBuf[i * 2 + 1], w, h);
+            canvas.drawLine(px, py, sx, sy, route);
+            canvas.drawCircle(sx, sy, (i == 0 ? 7f : 5f) * d,
+                    i == 0 ? stopNext : stopLater);
+            px = sx;
+            py = sy;
         }
     }
 

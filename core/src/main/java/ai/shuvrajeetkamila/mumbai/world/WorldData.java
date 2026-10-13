@@ -146,6 +146,7 @@ public final class WorldData {
     public final boolean selfTest;
 
     private final Places places;
+    private final CraftSpawns craft;
 
     public static final int COVER_WATER = 0;
 
@@ -220,6 +221,15 @@ public final class WorldData {
         }
 
         places = Places.parse(network.readString("places"));
+        // Tolerate a world compiled before craft moorings existed, the same
+        // way transit is tolerated, rather than refusing to open it.
+        CraftSpawns cs;
+        try {
+            cs = CraftSpawns.parse(network.readString("craft"));
+        } catch (IOException | RuntimeException ignored) {
+            cs = CraftSpawns.empty();
+        }
+        craft = cs;
     }
 
     /** Load the four packaged files through whatever asset source the host has. */
@@ -238,6 +248,9 @@ public final class WorldData {
     public long builtUnixSeconds() { return builtUnix; }
 
     public Places places() { return places; }
+
+    /** Where the boats, helicopters and aeroplanes are parked. */
+    public CraftSpawns craft() { return craft; }
 
     public String roadName(int index) {
         return index >= 0 && index < roadNames.length ? roadNames[index] : "";

@@ -106,6 +106,15 @@ public final class HelicopterPhysics extends RigidBody {
         rotorRpm = nominalRotorRpm;
     }
 
+    /** Back to a cold machine sitting on its skids, rotor at idle speed. */
+    public void reset() {
+        velocity.zero();
+        angularVelocity.zero();
+        orientation.identity();
+        clearAccumulators();
+        rotorRpm = nominalRotorRpm;
+    }
+
     public double discArea() { return Math.PI * rotorRadius * rotorRadius; }
 
     /** Rotor solidity: blade area over disc area. */

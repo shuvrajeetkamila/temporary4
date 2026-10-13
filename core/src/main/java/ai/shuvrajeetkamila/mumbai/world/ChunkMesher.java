@@ -33,7 +33,16 @@ import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
 public final class ChunkMesher {
 
     /** Floats per vertex. */
-    public static final int STRIDE = 10;
+    public static final int STRIDE = 11;
+
+    /**
+     * Side of the cell used to gather dropped footprints into one block of
+     * urban mass, metres. Eight by eight of these cover a chunk.
+     */
+    private static final double MASS_CELL_M = 128.0;
+
+    /** Height of the parapet wall added around a flat roof up close, metres. */
+    private static final double PARAPET_M = 0.95;
 
     /** Level of detail. 0 is full, 2 is a distant silhouette. */
     public static final int LOD_HIGH = 0;
@@ -46,6 +55,8 @@ public final class ChunkMesher {
     private int vCount;
     private int[] idx = new int[1 << 16];
     private int iCount;
+    /** Chunk origin of the mesh being built, for world-space ground lookups. */
+    private double lastOx, lastOz;
 
     public ChunkMesher(WorldData world) {
         this.world = world;
@@ -83,6 +94,8 @@ public final class ChunkMesher {
         double ox = f.originX;
         double oz = f.originZ;
         double size = world.chunkM;
+        lastOx = ox;
+        lastOz = oz;
 
         terrain(ox, oz, size, lod);
         if (lod <= LOD_MED) {
@@ -308,11 +321,19 @@ public final class ChunkMesher {
     private void buildings(ChunkFeatures f, double ox, double oz, int lod) {
         double minArea = lod == LOD_HIGH ? 0 : (lod == LOD_MED ? 220 : 2600);
         double minHeight = lod == LOD_HIGH ? 0 : (lod == LOD_MED ? 9 : 34);
+        double cells = Math.max(1, Math.ceil(world.chunkM / MASS_CELL_M));
+        int mn = (int) cells;
+        BlockMass mass = lod == LOD_HIGH ? null : new BlockMass(mn, world.chunkM / mn);
         float[] rgb = new float[3];
         for (int b = 0; b < f.buildingCount(); b++) {
             float h = f.buildingHeight[b];
-            if (h < minHeight) { continue; }
-            if (minArea > 0 && f.buildingArea(b) < minArea) { continue; }
+            if (h < minHeight || (minArea > 0 && f.buildingArea(b) < minArea)) {
+                // Too small to draw as itself at this range, but a suburb of
+                // chawls is not empty ground. Fold it into the cell's block
+                // mass and re-emit the lot as one box further down.
+                if (mass != null) { mass.add(f, b, h); }
+                continue;
+            }
             int s = f.buildingOffset[b];
             int e = f.buildingOffset[b + 1];
             int n = e - s;
@@ -334,10 +355,24 @@ public final class ChunkMesher {
             double y1 = base + f.buildingMinHeight[b] + h;
 
             buildingColour(f.buildingClass[b], b, h, rgb);
+
+            // Ground floors in this city are shops, and after dark they are
+            // the brightest thing at street level. Give the bottom storey its
+            // own material instead of running the residential tile down to
+            // the pavement.
+            boolean pitched = f.buildingRoof[b] != 0;
+            double shopTop = y0;
+            boolean shops = lod == LOD_HIGH && h >= 6.0 && shopfront(bcls);
+            if (shops) { shopTop = Math.min(y0 + 4.2, y1 - 2.0); }
             int floors = 1;
             if (lod == LOD_HIGH) {
-                floors = Math.max(1, Math.min(14, (int) (h / 9.0)));
+                floors = Math.max(1, Math.min(14, (int) ((y1 - shopTop) / 9.0)));
             }
+            // A parapet only makes sense on a flat roof, and only where the
+            // player is close enough to see the lip at all.
+            boolean parapet = lod == LOD_HIGH && !pitched && h > 6.5
+                    && f.buildingArea(b) > 90;
+            double capY = y1 + (parapet ? PARAPET_M : 0.0);
 
             // Walls.
             for (int k = 0; k < n; k++) {
@@ -351,27 +386,36 @@ public final class ChunkMesher {
                 float nx = (float) (ez / el);
                 float nz = (float) (-ex / el);
                 // Faces catch the light differently; a flat albedo makes a city
-                // of boxes look like a single grey mass.
-                float shade = 0.84f + 0.16f * Math.abs(nx);
+                // of boxes look like a single grey mass. Four distinguishable
+                // steps rather than two, so a corner reads as a corner.
+                float shade = 0.82f + 0.11f * Math.abs(nx) + (nz > 0 ? 0.07f : 0f);
+                if (shops) {
+                    float cr = rgb[0] * shade * 0.94f;
+                    float cg = rgb[1] * shade * 0.92f;
+                    float cb = rgb[2] * shade * 0.88f;
+                    quad(ax, az, bx, bz, y0, shopTop, nx, nz, cr, cg, cb,
+                            TextureLibrary.MAT_FACADE_SHOP + 0.62f, y0);
+                }
                 for (int ff = 0; ff < floors; ff++) {
-                    double fy0 = y0 + (y1 - y0) * ff / (double) floors;
-                    double fy1 = y0 + (y1 - y0) * (ff + 1) / (double) floors;
-                    float band = (ff % 2 == 0) ? 1.0f : 0.93f;
-                    float cr = rgb[0] * shade * band;
-                    float cg = rgb[1] * shade * band;
-                    float cb = rgb[2] * shade * band;
+                    double fy0 = shopTop + (y1 - shopTop) * ff / (double) floors;
+                    double fy1 = shopTop + (y1 - shopTop) * (ff + 1) / (double) floors;
+                    float cr = rgb[0] * shade;
+                    float cg = rgb[1] * shade;
+                    float cb = rgb[2] * shade;
                     // Material in the integer part, night emission in the
                     // fraction. The emission is masked by the texture's alpha
                     // in the shader, so only the windows light up and not the
                     // whole slab - which is what a per-face constant does.
                     float aux = wallMat;
-                    if (lod == LOD_HIGH && ff > 0) { aux += 0.34f; }
-                    int v0 = push(ax, (float) fy0, az, nx, 0, nz, cr, cg, cb, aux);
-                    int v1 = push(bx, (float) fy0, bz, nx, 0, nz, cr, cg, cb, aux);
-                    int v2 = push(bx, (float) fy1, bz, nx, 0, nz, cr, cg, cb, aux);
-                    int v3 = push(ax, (float) fy1, az, nx, 0, nz, cr, cg, cb, aux);
-                    tri(v0, v1, v2);
-                    tri(v0, v2, v3);
+                    if (lod == LOD_HIGH) { aux += 0.34f; }
+                    quad(ax, az, bx, bz, fy0, fy1, nx, nz, cr, cg, cb, aux, y0);
+                }
+                if (parapet) {
+                    float cr = rgb[0] * shade * 0.80f;
+                    float cg = rgb[1] * shade * 0.80f;
+                    float cb = rgb[2] * shade * 0.78f;
+                    quad(ax, az, bx, bz, y1, capY, nx, nz, cr, cg, cb,
+                            (float) TextureLibrary.MAT_CONCRETE, y0);
                 }
             }
 
@@ -387,7 +431,7 @@ public final class ChunkMesher {
             cx /= n;
             cz /= n;
             float rr = rgb[0] * 0.72f, rg = rgb[1] * 0.74f, rb = rgb[2] * 0.70f;
-            double roofY = y1 + (f.buildingRoof[b] != 0 ? 1.6 : 0.0);
+            double roofY = y1 + (pitched ? 1.6 : 0.0);
             int c = push((float) cx, (float) roofY, (float) cz, 0, 1, 0, rr, rg, rb, roofMat);
             int first = -1, prev = -1;
             for (int k = 0; k < n; k++) {
@@ -399,6 +443,185 @@ public final class ChunkMesher {
                 prev = v;
             }
             if (first >= 0 && prev >= 0) { tri(c, prev, first); }
+
+            if (parapet) { roofClutter(f, b, cx, cz, y1, h, roofMat); }
+        }
+        if (mass != null) { mass.emit(this); }
+    }
+
+    /** One wall panel, with the vertical texture coordinate taken from base. */
+    private void quad(float ax, float az, float bx, float bz,
+                      double y0, double y1, float nx, float nz,
+                      float r, float g, float b, float aux, double base) {
+        float v0h = (float) (y0 - base);
+        float v1h = (float) (y1 - base);
+        int v0 = push(ax, (float) y0, az, nx, 0, nz, r, g, b, aux, v0h);
+        int v1 = push(bx, (float) y0, bz, nx, 0, nz, r, g, b, aux, v0h);
+        int v2 = push(bx, (float) y1, bz, nx, 0, nz, r, g, b, aux, v1h);
+        int v3 = push(ax, (float) y1, az, nx, 0, nz, r, g, b, aux, v1h);
+        tri(v0, v1, v2);
+        tri(v0, v2, v3);
+    }
+
+    /**
+     * What stands on a Mumbai roof: the stair and lift head, and the black
+     * plastic water tanks that every building carries. Two small boxes, and
+     * only up close, but they are what stops a skyline being a row of cut
+     * blocks.
+     */
+    private void roofClutter(ChunkFeatures f, int b, double cx, double cz,
+                             double y1, float h, float roofMat) {
+        int s = f.buildingOffset[b];
+        int e = f.buildingOffset[b + 1];
+        float lo0 = Float.MAX_VALUE, hi0 = -Float.MAX_VALUE;
+        float lo1 = Float.MAX_VALUE, hi1 = -Float.MAX_VALUE;
+        for (int k = s; k < e; k++) {
+            float px = f.buildingXZ[k * 2], pz = f.buildingXZ[k * 2 + 1];
+            if (px < lo0) { lo0 = px; }
+            if (px > hi0) { hi0 = px; }
+            if (pz < lo1) { lo1 = pz; }
+            if (pz > hi1) { hi1 = pz; }
+        }
+        double halfX = (hi0 - lo0) * 0.5, halfZ = (hi1 - lo1) * 0.5;
+        if (halfX < 3.0 || halfZ < 3.0) { return; }
+        // Deterministic per building, so a roof does not reshuffle its tanks
+        // every time the chunk is re-meshed at a different level of detail.
+        int r = (int) ((b * 2654435761L) >>> 13) & 1023;
+        double sx = Math.min(3.2, halfX * 0.42);
+        double sz = Math.min(2.8, halfZ * 0.42);
+        double ox = (r % 7 - 3) / 3.0 * (halfX - sx) * 0.55;
+        double oz = ((r / 7) % 7 - 3) / 3.0 * (halfZ - sz) * 0.55;
+        // Stair and lift head.
+        prism(cx + ox, cz + oz, sx, sz, y1, y1 + 2.9, 0.58f, 0.57f, 0.54f, roofMat);
+        if (h > 14.0) {
+            double tx = cx - ox * 0.8, tz = cz - oz * 0.8;
+            double t = Math.min(1.25, Math.min(halfX, halfZ) * 0.22);
+            prism(tx, tz, t, t, y1 + 0.5, y1 + 2.3, 0.10f, 0.10f, 0.11f,
+                    (float) TextureLibrary.MAT_CONCRETE);
+        }
+    }
+
+    /** An axis-aligned box: four walls and a lid. */
+    private void prism(double cx, double cz, double hx, double hz,
+                       double y0, double y1,
+                       float r, float g, float b, float mat) {
+        float x0 = (float) (cx - hx), x1 = (float) (cx + hx);
+        float z0 = (float) (cz - hz), z1 = (float) (cz + hz);
+        quad(x0, z0, x1, z0, y0, y1, 0, -1, r, g, b, mat, y0);
+        quad(x1, z0, x1, z1, y0, y1, 1, 0, r * 0.96f, g * 0.96f, b * 0.96f, mat, y0);
+        quad(x1, z1, x0, z1, y0, y1, 0, 1, r * 0.92f, g * 0.92f, b * 0.92f, mat, y0);
+        quad(x0, z1, x0, z0, y0, y1, -1, 0, r * 0.96f, g * 0.96f, b * 0.96f, mat, y0);
+        int a = push(x0, (float) y1, z0, 0, 1, 0, r, g, b, mat);
+        int c = push(x1, (float) y1, z0, 0, 1, 0, r, g, b, mat);
+        int d = push(x1, (float) y1, z1, 0, 1, 0, r, g, b, mat);
+        int ee = push(x0, (float) y1, z1, 0, 1, 0, r, g, b, mat);
+        tri(a, c, d);
+        tri(a, d, ee);
+    }
+
+    /** Which building classes have a shop on the ground floor. */
+    private static boolean shopfront(int cls) {
+        switch (cls) {
+            case 14: case 15: case 16:        // hut, shed, garage
+            case 11: case 12:                 // hospital, religious
+            case 7: case 8:                   // industrial, warehouse
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Footprints too small to draw individually at range, gathered per cell
+     * and re-emitted as one box of the same plan area and the same
+     * area-weighted height.
+     *
+     * <p>The alternative - what this replaced - was to drop them, which meant
+     * that from a kilometre away Dharavi, Govandi and most of the suburbs
+     * were bare ground with a few towers standing in it. Folding them into a
+     * block costs ten triangles a cell instead of ten thousand and keeps the
+     * mass, the height and the colour of the real low-rise city.
+     */
+    private static final class BlockMass {
+        private final int n;
+        private final double cell;
+        private final double[] area, areaH, sx, sz;
+        private final float[] cr, cg, cb;
+
+        BlockMass(int n, double cell) {
+            this.n = n;
+            this.cell = cell;
+            int c = n * n;
+            area = new double[c];
+            areaH = new double[c];
+            sx = new double[c];
+            sz = new double[c];
+            cr = new float[c];
+            cg = new float[c];
+            cb = new float[c];
+        }
+
+        void add(ChunkFeatures f, int b, float h) {
+            double a = f.buildingArea(b);
+            if (a <= 0) { return; }
+            int s = f.buildingOffset[b];
+            int e = f.buildingOffset[b + 1];
+            if (e - s < 3) { return; }
+            double cx = 0, cz = 0;
+            for (int k = s; k < e; k++) {
+                cx += f.buildingXZ[k * 2];
+                cz += f.buildingXZ[k * 2 + 1];
+            }
+            cx /= (e - s);
+            cz /= (e - s);
+            int i = (int) (cx / cell);
+            int j = (int) (cz / cell);
+            if (i < 0 || j < 0 || i >= n || j >= n) { return; }
+            int c = j * n + i;
+            float[] rgb = new float[3];
+            buildingColour(f.buildingClass[b], b, h, rgb);
+            area[c] += a;
+            areaH[c] += a * h;
+            sx[c] += a * cx;
+            sz[c] += a * cz;
+            cr[c] += (float) (a * rgb[0]);
+            cg[c] += (float) (a * rgb[1]);
+            cb[c] += (float) (a * rgb[2]);
+        }
+
+        void emit(ChunkMesher m) {
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < n; i++) {
+                    int c = j * n + i;
+                    double a = area[c];
+                    // Below this the cell holds a shed or two and a box there
+                    // would be worse than nothing.
+                    if (a < 240) { continue; }
+                    double h = areaH[c] / a;
+                    double cx = sx[c] / a, cz = sz[c] / a;
+                    // Same plan area as the footprints it stands for, but
+                    // never wider than the cell that gathered them.
+                    double half = Math.min(Math.sqrt(a) * 0.5, cell * 0.44);
+                    cx = clamp(cx, i * cell + half, (i + 1) * cell - half);
+                    cz = clamp(cz, j * cell + half, (j + 1) * cell - half);
+                    double base = Double.MAX_VALUE;
+                    for (int k = 0; k < 4; k++) {
+                        double px = cx + ((k & 1) == 0 ? -half : half);
+                        double pz = cz + ((k & 2) == 0 ? -half : half);
+                        double wx = m.lastOx + px, wz = m.lastOz + pz;
+                        double g = m.world.isLand(wx, wz) ? m.world.height(wx, wz) : 0.0;
+                        if (g < base) { base = g; }
+                    }
+                    float rr = (float) (cr[c] / a), rg = (float) (cg[c] / a),
+                            rb = (float) (cb[c] / a);
+                    m.prism(cx, cz, half, half, base - 0.4, base + h,
+                            rr, rg, rb, (float) TextureLibrary.MAT_FACADE_CHAWL);
+                }
+            }
+        }
+
+        private static double clamp(double v, double lo, double hi) {
+            return hi < lo ? (lo + hi) * 0.5 : (v < lo ? lo : (v > hi ? hi : v));
         }
     }
 
@@ -503,6 +726,19 @@ public final class ChunkMesher {
 
     private int push(float x, float y, float z, float nx, float ny, float nz,
                      float r, float g, float b, float aux) {
+        // Default vertical texture coordinate is the world height, which is
+        // what the shader used before the channel existed.
+        return push(x, y, z, nx, ny, nz, r, g, b, aux, y);
+    }
+
+    /**
+     * @param texV vertical texture coordinate in metres. For a building wall
+     *             this is the height above that building's own base, so the
+     *             bottom row of windows starts at the pavement instead of
+     *             wherever a multiple of the tile height happens to fall.
+     */
+    private int push(float x, float y, float z, float nx, float ny, float nz,
+                     float r, float g, float b, float aux, float texV) {
         if ((vCount + 1) * STRIDE > verts.length) {
             float[] n = new float[verts.length * 2];
             System.arraycopy(verts, 0, n, 0, verts.length);
@@ -512,7 +748,7 @@ public final class ChunkMesher {
         verts[o] = x; verts[o + 1] = y; verts[o + 2] = z;
         verts[o + 3] = nx; verts[o + 4] = ny; verts[o + 5] = nz;
         verts[o + 6] = r; verts[o + 7] = g; verts[o + 8] = b;
-        verts[o + 9] = aux;
+        verts[o + 9] = aux; verts[o + 10] = texV;
         return vCount++;
     }
 

@@ -264,7 +264,8 @@ public final class MainActivity extends Activity
             double pz = b.position.z;
             double hdg = b.orientation.heading();
             ai.shuvrajeetkamila.mumbai.world.WorldData wd = e.world;
-            ui.post(() -> mapOverlay.update(mv, m, wd, px, pz, hdg));
+            ai.shuvrajeetkamila.mumbai.game.Missions jobs = e.missions;
+            ui.post(() -> mapOverlay.update(mv, m, wd, jobs, px, pz, hdg));
         }
         if (frameNumber == 30) {
             Log.i(TAG, "MUMBAI_RENDER_OK frames=30 quality=" + e.quality

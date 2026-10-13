@@ -1,11 +1,11 @@
 {
- "seconds": 52.3,
- "total_bytes": 14647199,
+ "seconds": 50.2,
+ "total_bytes": 14648963,
  "files": {
   "terrain.mwl": 3058655,
   "chunks.mwl": 7866293,
-  "network.mwl": 3718695,
-  "manifest.mwl": 3556
+  "network.mwl": 3720325,
+  "manifest.mwl": 3690
  },
  "manifest": {
   "format": "MWL2",
@@ -110,6 +110,26 @@
    }
   },
   "places": 1283,
+  "craft": {
+   "kept": 89,
+   "by_kind": {
+    "BOAT": 56,
+    "PLANE": 6,
+    "HELI": 27
+   },
+   "rejected": {
+    "BOAT:dry": 16,
+    "BOAT:moved_inshore": 79,
+    "BOAT:ashore": 71,
+    "BOAT:outside": 1,
+    "HELI:steep": 12,
+    "BOAT:no_landing": 53,
+    "HELI:shoreline": 1,
+    "BOAT:crowded": 54,
+    "HELI:crowded": 26,
+    "BOAT:final_check": 1
+   }
+  },
   "checkpoints": [
    {
     "group": "vasai_creek",

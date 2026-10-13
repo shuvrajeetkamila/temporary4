@@ -25,6 +25,7 @@ aggregate, so nobody has to guess how much of the skyline is measured.
 """
 
 import argparse
+import collections
 import hashlib
 import json
 import math
@@ -249,6 +250,194 @@ def synth_layers():
 # --------------------------------------------------------------------------
 # Rasters
 # --------------------------------------------------------------------------
+
+def build_craft(craft, landmask, dtm, rstats):
+    """
+    Decide which of the extracted spawn points a craft can actually sit on.
+
+    <p>The extractor emits candidates from tags alone; only the compiler owns
+    the land mask, so only the compiler can say whether a pier end is over
+    water or a helipad is over a tidal flat. A boat that spawns on land, or
+    an aeroplane that spawns in the sea, is worse than no boat at all.
+    """
+    nx, nz = int(rstats["nx"]), int(rstats["nz"])
+    minx, minz = float(rstats["min_x"]), float(rstats["min_z"])
+
+    def cell(x, z):
+        # floor, not truncation, and exactly the arithmetic WorldData.cellX
+        # uses. A mooring that the compiler thinks is afloat and the game
+        # thinks is ashore is a boat spawned in a wall.
+        i = int(math.floor((x - minx) / GRID_M))
+        j = int(math.floor((z - minz) / GRID_M))
+        if i < 0 or j < 0 or i >= nx or j >= nz:
+            return None
+        return i, j
+
+    def water_fraction(x, z, r):
+        """How much of a disc of radius r metres is water."""
+        c = cell(x, z)
+        if c is None:
+            return 0.0
+        i, j = c
+        k = max(1, int(r / GRID_M))
+        i0, i1 = max(0, i - k), min(nx, i + k + 1)
+        j0, j1 = max(0, j - k), min(nz, j + k + 1)
+        patch = landmask[j0:j1, i0:i1]
+        if patch.size == 0:
+            return 0.0
+        return 1.0 - float((patch > 0).mean())
+
+    def land_within(x, z, r):
+        """Is there anywhere to step ashore within r metres."""
+        c = cell(x, z)
+        if c is None:
+            return False
+        i, j = c
+        k = max(1, int(r / GRID_M))
+        i0, i1 = max(0, i - k), min(nx, i + k + 1)
+        j0, j1 = max(0, j - k), min(nz, j + k + 1)
+        patch = landmask[j0:j1, i0:i1]
+        return bool(patch.size and (patch > 0).any())
+
+    def nearest_land(x, z, max_m):
+        """Cell centre of the closest land, or None. Ring search on the grid."""
+        c = cell(x, z)
+        if c is None:
+            return None
+        i, j = c
+        for k in range(1, int(max_m / GRID_M) + 1):
+            i0, i1 = max(0, i - k), min(nx, i + k + 1)
+            j0, j1 = max(0, j - k), min(nz, j + k + 1)
+            patch = landmask[j0:j1, i0:i1] > 0
+            if not patch.any():
+                continue
+            jj, ii = np.nonzero(patch)
+            ii = ii + i0
+            jj = jj + j0
+            d2 = (ii - i) ** 2 + (jj - j) ** 2
+            m = int(np.argmin(d2))
+            return (minx + (ii[m] + 0.5) * GRID_M,
+                    minz + (jj[m] + 0.5) * GRID_M)
+        return None
+
+    def slide_to_shore(x, z, reach):
+        """
+        Walk a mooring in towards the nearest land until it is close enough
+        to step off, without letting it touch the bottom.
+
+        A pier end is often two hundred metres off the beach, and the game
+        has no walkable deck over open water, so a boat left out there is a
+        boat nobody can ever get out of. Rather than throw the mooring
+        away - which cost two thirds of them - bring her alongside.
+        """
+        tgt = nearest_land(x, z, 600.0)
+        if tgt is None:
+            return None
+        dx, dz = tgt[0] - x, tgt[1] - z
+        d = math.hypot(dx, dz)
+        if d < 1e-6:
+            return None
+        ux, uz = dx / d, dz / d
+        best = None
+        t = 0.0
+        while t <= d:
+            px, pz = x + ux * t, z + uz * t
+            c = cell(px, pz)
+            if c is None:
+                break
+            i, j = c
+            if landmask[j, i] > 0:
+                break
+            if land_within(px, pz, reach) and water_fraction(px, pz, 45.0) >= 0.40:
+                best = (px, pz)
+            t += 4.0
+        return best
+
+    out, drop = [], collections.Counter()
+    for c in craft:
+        x, z, kind = float(c["x"]), float(c["z"]), c["kind"]
+        cc = cell(x, z)
+        if cc is None:
+            drop[kind + ":outside"] += 1
+            continue
+        i, j = cc
+        land = bool(landmask[j, i] > 0)
+        if kind == "BOAT":
+            # Afloat, which is not the same as "mostly surrounded by water":
+            # a pier end tagged a metre inside the shoreline passes the
+            # neighbourhood test and still beaches the boat.
+            if land:
+                drop["BOAT:ashore"] += 1
+                continue
+            # Open water around her, not a puddle: a mooring in a one-cell
+            # creek strands the boat on her first metre of travel.
+            if water_fraction(x, z, 45.0) < 0.55:
+                drop["BOAT:dry"] += 1
+                continue
+            # And somewhere to step off onto. A launch moored at the far end
+            # of a long jetty is a launch you can never get out of, because
+            # the game has no walkable pier deck over open water.
+            if not land_within(x, z, 26.0):
+                moved = slide_to_shore(x, z, 26.0)
+                if moved is None:
+                    drop["BOAT:no_landing"] += 1
+                    continue
+                x, z = moved
+                drop["BOAT:moved_inshore"] += 1
+            y = 0.0
+        else:
+            if not land:
+                drop[kind + ":wet"] += 1
+                continue
+            # Aircraft want somewhere flat and open. A "helipad" on a roof is
+            # mapped at the roof, and the game has no way up there, so reject
+            # anything whose ground is not level with its surroundings.
+            k = 3
+            i0, i1 = max(0, i - k), min(nx, i + k + 1)
+            j0, j1 = max(0, j - k), min(nz, j + k + 1)
+            patch = dtm[j0:j1, i0:i1].astype(np.float64) / 10.0
+            if patch.size and float(patch.max() - patch.min()) > 6.0:
+                drop[kind + ":steep"] += 1
+                continue
+            if water_fraction(x, z, 30.0) > 0.25:
+                drop[kind + ":shoreline"] += 1
+                continue
+            y = float(dtm[j, i]) / 10.0
+        out.append({"x": round(x, 1), "z": round(z, 1), "y": round(y, 2),
+                    "h": round(float(c["h"]), 4), "kind": kind,
+                    "name": c.get("name", "")})
+
+    # Thin out: two boats five metres apart is a pile-up, not a marina.
+    sep = {"BOAT": 70.0, "HELI": 60.0, "PLANE": 220.0}
+    kept = []
+    for c in out:
+        s2 = sep.get(c["kind"], 60.0) ** 2
+        if any(o["kind"] == c["kind"]
+               and (o["x"] - c["x"]) ** 2 + (o["z"] - c["z"]) ** 2 < s2
+               for o in kept):
+            drop[c["kind"] + ":crowded"] += 1
+            continue
+        kept.append(c)
+
+    checked = []
+    for c in kept:
+        if c["kind"] == "BOAT":
+            cc = cell(c["x"], c["z"])
+            if cc is None or landmask[cc[1], cc[0]] > 0:
+                drop["BOAT:final_check"] += 1
+                continue
+        checked.append(c)
+    kept = checked
+
+    counts = collections.Counter(c["kind"] for c in kept)
+    _log(f"  craft spawns kept {len(kept)}: " +
+         ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    if drop:
+        _log("  craft rejected: " +
+             ", ".join(f"{k}={v}" for k, v in sorted(drop.items())))
+    return kept, {"kept": len(kept), "by_kind": dict(counts),
+                  "rejected": dict(drop)}
+
 
 def build_rasters(lay, dem):
     from rasterio.features import rasterize
@@ -853,6 +1042,7 @@ def main():
     t0 = time.time()
     os.makedirs(args.out, exist_ok=True)
     poi = []
+    craft_raw = []
     if args.selftest:
         lay, dem, names, poi = synth_layers()
     else:
@@ -863,11 +1053,16 @@ def main():
             names = json.load(fh)
         with open(os.path.join(args.layers, "poi.json"), encoding="utf-8") as fh:
             poi = json.load(fh)
+        cpath = os.path.join(args.layers, "craft.json")
+        if os.path.exists(cpath):
+            with open(cpath, encoding="utf-8") as fh:
+                craft_raw = json.load(fh)
 
     landmask, cover, dtm, canopy, rstats = build_rasters(lay, dem)
     blob, index, name_list, cmeta = build_chunks(lay, canopy, dtm, landmask,
                                                  rstats, names)
     nxy, ea, eattr, gmeta = build_road_graph(lay, names)
+    craft, craft_meta = build_craft(craft_raw, landmask, dtm, rstats)
     tpts, toff, tcls, tmeta = build_transit(lay)
 
     nx, nz = rstats["nx"], rstats["nz"]
@@ -903,6 +1098,7 @@ def main():
     w.add("gattr", wf.KIND_VECTOR, eattr.astype("<f4").tobytes())
     places = [p for p in poi]
     w.add("places", wf.KIND_JSON, json.dumps(places).encode())
+    w.add("craft", wf.KIND_JSON, json.dumps(craft).encode())
     w.add("gmeta", wf.KIND_JSON, json.dumps(gmeta).encode())
     w.add("tpts", wf.KIND_VECTOR, tpts.tobytes())
     w.add("toff", wf.KIND_VECTOR, toff.tobytes())
@@ -931,6 +1127,7 @@ def main():
         "raster": rstats, "chunks": cmeta, "graph": gmeta,
         "transit": tmeta,
         "places": len(places),
+        "craft": craft_meta,
         "checkpoints": [{"group": g, "key": k, "label": l, "lat": la, "lon": lo,
                          "expect": e} for (g, k, l, la, lo, e) in aoi.CHECKPOINTS],
         "sources": prov,

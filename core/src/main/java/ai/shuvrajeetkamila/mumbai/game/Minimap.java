@@ -60,12 +60,15 @@ public final class Minimap {
      * @param heading bearing to place at the top of the map, radians
      */
     /** Blips to draw, three doubles each: x, y in map space, then kind. */
-    public double[] blips = new double[24];
+    public double[] blips = new double[96];
     public int blipCount;
 
     /** Blip kinds, matching the colours the HUD gives them. */
     public static final int BLIP_STOP = 0;
     public static final int BLIP_NEXT = 1;
+    public static final int BLIP_BOAT = 2;
+    public static final int BLIP_HELI = 3;
+    public static final int BLIP_PLANE = 4;
 
     /**
      * World offset to radar space, X component. Metres in, metres out.
@@ -233,6 +236,17 @@ public final class Minimap {
     /** Places a blip, converting world metres into heading-up map space. */
     public void addBlip(double wx, double wz, double px, double pz,
                         double heading, int kind) {
+        addBlip(wx, wz, px, pz, heading, kind, true);
+    }
+
+    /**
+     * @param clampToRim keep an out-of-range blip on the edge of the radar
+     *                   pointing the way. Right for a job you have to get
+     *                   to, wrong for scenery: a boat pinned to the rim
+     *                   reads as a boat you could walk to.
+     */
+    public void addBlip(double wx, double wz, double px, double pz,
+                        double heading, int kind, boolean clampToRim) {
         if (blipCount * 3 + 3 > blips.length) { return; }
         double cosH = Math.cos(-heading), sinH = Math.sin(-heading);
         double dx = wx - px, dz = wz - pz;
@@ -241,6 +255,7 @@ public final class Minimap {
         // Clamp to the rim so an off-map target still points the way.
         double d = Math.hypot(mx, my);
         if (d > RANGE_M) {
+            if (!clampToRim) { return; }
             mx = mx / d * RANGE_M;
             my = my / d * RANGE_M;
         }

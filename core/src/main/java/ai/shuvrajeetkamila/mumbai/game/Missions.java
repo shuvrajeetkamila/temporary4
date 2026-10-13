@@ -443,6 +443,29 @@ public final class Missions {
     }
 
     /**
+     * The stops still to come, in world metres, as x,z pairs.
+     *
+     * <p>The radar's own blips are no use to the full-screen map: they are
+     * already rotated into heading-up local space and clipped to the radar's
+     * range. This hands over the raw positions so the map can place them
+     * itself, which is why the route finally shows up on it.
+     *
+     * @return how many pairs were written
+     */
+    public int remainingStops(double[] out) {
+        if (active == null) { return 0; }
+        int n = 0;
+        for (int i = active.stage; i < active.stops.size(); i++) {
+            if (n * 2 + 2 > out.length) { break; }
+            Stop s = active.stops.get(i);
+            out[n * 2] = s.x;
+            out[n * 2 + 1] = s.z;
+            n++;
+        }
+        return n;
+    }
+
+    /**
      * World position and height of the marker to draw, or null.
      * Returns {@code {x, y, z}} with y already on the ground.
      */

@@ -83,6 +83,22 @@ public final class AeroplanePhysics extends RigidBody {
         inertia.set(4200, 6800, 2600);
     }
 
+    /** Parked: engine idling, gear down, flaps up, nothing moving. */
+    public void reset() {
+        velocity.zero();
+        angularVelocity.zero();
+        orientation.identity();
+        clearAccumulators();
+        throttle = 0;
+        engineRpm = 0;
+        gearDown = true;
+        flapSetting = 0;
+        elevator = 0;
+        aileron = 0;
+        rudderInput = 0;
+        brakes = 0;
+    }
+
     public double flapDeg() {
         return flapDetents[MathUtil.clampi(flapSetting, 0, flapDetents.length - 1)];
     }

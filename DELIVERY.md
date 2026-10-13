@@ -92,6 +92,16 @@ This matters more than anything above.
   keeps it original, but it also means it sounds synthesised: engines,
   sirens, horns, rain, wind and collisions are there, and music, voices
   and footsteps are not.
+- **Boats, helicopters and aeroplanes are now things you can walk up to
+  and get into.** Until this build all three flight and seakeeping models
+  existed, were tested, and were unreachable: the only way into one was a
+  debug button that swapped your body in place. The compiler now derives
+  89 moorings from the map - 56 boats at piers and ferry wharves, 27
+  helicopters on marked pads, 6 aeroplanes on the runways at Chhatrapati
+  Shivaji Maharaj and Juhu - and they are drawn, blipped on the radar,
+  marked on the full-screen map, and boarded with the same ENTER you use
+  on a car. Every one of the 89 is covered by a test that walks up to it
+  and gets in.
 - Paid work (fares, deliveries, street races), money, checkpoints,
   reactive traffic, fleeing pedestrians, the radar, the full-screen
   map with tap-to-teleport, the wanted level,
@@ -108,6 +118,21 @@ This matters more than anything above.
 - The control mapping and all five locomotion modes are covered by
   tests that assert direction, not just magnitude. Nine faults found and
   fixed in that audit are listed in the README.
+- **Boats cannot be left anywhere except near the shore.** There is no
+  walkable pier deck over open water, so a mooring two hundred metres off
+  the beach would be a boat you could never get out of. The compiler
+  therefore walks every mooring in towards the nearest land until it is
+  within thirty metres of somewhere to stand - 79 of them were moved -
+  and drops the 53 it could not bring alongside. Out at sea the game
+  refuses the request and says so rather than drowning you.
+- **Rooftop helipads are still rejected**, for the same reason: there is
+  no way up onto a roof. The 27 helicopters are on ground-level pads.
+- **The scooter's lean is kinematic.** The rider is modelled as a control
+  loop that commands the lean the corner asks for, at
+  `tan(lean) = a_lat / g`, with a feed-forward term for the overturning
+  moment. She is not modelled as a mass that countersteers, and the
+  machine will not low-side: its grip is capped at `tan(40 deg)`, which
+  is the most lean the rider will use.
 - Being arrested costs a quarter of your money and clears the wanted
   level. There is no hospital or police-station cycle, because that needs
   interiors and a save system and neither exists here.

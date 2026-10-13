@@ -46,6 +46,7 @@ final class Shaders {
             + "layout(location = 1) in vec3 aNormal;\n"
             + "layout(location = 2) in vec3 aAlbedo;\n"
             + "layout(location = 3) in float aAux;\n"
+            + "layout(location = 5) in float aTexV;\n"
             + "uniform highp mat4 uViewProj;\n"
             + "uniform highp vec3 uChunkOrigin;\n"
             + "uniform highp vec3 uCamera;\n"
@@ -54,6 +55,7 @@ final class Shaders {
             + "out mediump vec3 vNormal;\n"
             + "out mediump vec3 vAlbedo;\n"
             + "out highp float vAux;\n"
+            + "out highp float vTexV;\n"
             + "out highp float vDepth;\n"
             + "void main() {\n"
             // Chunk-local float plus a double-derived origin passed as a
@@ -64,6 +66,7 @@ final class Shaders {
             + "  vNormal = aNormal;\n"
             + "  vAlbedo = aAlbedo;\n"
             + "  vAux = aAux;\n"
+            + "  vTexV = aTexV;\n"
             + "  vDepth = length(world - uCamera);\n"
             + "  gl_Position = uViewProj * vec4(world, 1.0);\n"
             + "}\n";
@@ -77,6 +80,7 @@ final class Shaders {
             // can be held as 13.99, floor() returns 13, and the building is
             // dressed in the wrong texture.
             + "in highp float vAux;\n"
+            + "in highp float vTexV;\n"
             + "in highp float vDepth;\n"
             + "uniform mediump vec3 uSunDir;\n"
             + "uniform mediump vec3 uSunColour;\n"
@@ -126,7 +130,7 @@ final class Shaders {
             + "  } else {\n"
             // Tangential distance around the facade, and height. Negated so
             // the tile's first row renders at the top of the wall.
-            + "    uv = vec2(vWorld.x * n.z - vWorld.z * n.x, -vWorld.y) / scale;\n"
+            + "    uv = vec2(vWorld.x * n.z - vWorld.z * n.x, -vTexV) / scale;\n"
             + "  }\n"
             + "  mediump vec4 tex = texture(uAtlas, vec3(uv, matF));\n"
             + "  albedo *= tex.rgb;\n"
@@ -160,10 +164,18 @@ final class Shaders {
             + "out mediump vec3 vNormal;\n"
             + "out mediump vec3 vAlbedo;\n"
             + "out highp float vAux;\n"
+            + "out highp float vTexV;\n"
             + "out highp float vDepth;\n"
             + "void main() {\n"
+            // aInstance.w is a compass heading, not a rotation angle:
+            // zero is north, which is -Z, while a rotation of zero
+            // leaves the nose on +Z. The rotation wanted is therefore
+            // (pi - heading), and sin(pi-h), cos(pi-h) is just sin h,
+            // -cos h. Without the negation every instanced body in the
+            // world - traffic, trains, ferries - was drawn mirrored
+            // north to south against the direction it was moving.
             + "  highp float s = sin(aInstance.w);\n"
-            + "  highp float c = cos(aInstance.w);\n"
+            + "  highp float c = -cos(aInstance.w);\n"
             + "  highp vec3 p = vec3(aPos.x * c + aPos.z * s, aPos.y,\n"
             + "                      -aPos.x * s + aPos.z * c);\n"
             + "  highp vec3 world = p + aInstance.xyz;\n"
@@ -172,6 +184,7 @@ final class Shaders {
             + "                 -aNormal.x * s + aNormal.z * c);\n"
             + "  vAlbedo = aAlbedo;\n"
             + "  vAux = aAux;\n"
+            + "  vTexV = world.y;\n"
             + "  vDepth = length(world - uCamera);\n"
             + "  gl_Position = uViewProj * vec4(world, 1.0);\n"
             + "}\n";

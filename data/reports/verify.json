@@ -1,6 +1,6 @@
 {
- "passed": 135,
- "total": 135,
+ "passed": 145,
+ "total": 145,
  "failed": 0,
  "gates": [
   {
@@ -812,6 +812,66 @@
    "name": "at least 10% of heights come from OSM tags",
    "status": "PASS",
    "detail": "27,945 of 195,743 = 14.3%"
+  },
+  {
+   "group": "craft",
+   "name": "the world ships craft moorings",
+   "status": "PASS",
+   "detail": "89"
+  },
+  {
+   "group": "craft",
+   "name": "boats are moored",
+   "status": "PASS",
+   "detail": "56"
+  },
+  {
+   "group": "craft",
+   "name": "helicopters are parked",
+   "status": "PASS",
+   "detail": "27"
+  },
+  {
+   "group": "craft",
+   "name": "aeroplanes are parked",
+   "status": "PASS",
+   "detail": "6"
+  },
+  {
+   "group": "craft",
+   "name": "every boat is in water",
+   "status": "PASS",
+   "detail": "56 of 56"
+  },
+  {
+   "group": "craft",
+   "name": "every aircraft is on land",
+   "status": "PASS",
+   "detail": "33 of 33"
+  },
+  {
+   "group": "craft",
+   "name": "every boat can be stepped off onto land",
+   "status": "PASS",
+   "detail": "56 of 56"
+  },
+  {
+   "group": "craft",
+   "name": "no aeroplane is parked on a 400 m strip",
+   "status": "PASS",
+   "detail": "shortest 402 m"
+  },
+  {
+   "group": "craft",
+   "name": "an international-length runway is in the world",
+   "status": "PASS",
+   "detail": "longest 2824 m"
+  },
+  {
+   "group": "craft",
+   "name": "craft are spread across the island",
+   "status": "PASS",
+   "detail": "50.0 km north to south"
   }
  ]
 }

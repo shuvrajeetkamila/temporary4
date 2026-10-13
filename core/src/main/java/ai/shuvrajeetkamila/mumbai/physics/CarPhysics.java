@@ -279,9 +279,13 @@ public final class CarPhysics extends RigidBody {
         // 95 km/h and a bus for nearly 100.
         double topGear = g[g.length - 1];
         double vTop = k.topSpeedKph() / 3.6;
+        // The ceiling has to leave room for a small wheel. A scooter on
+        // 250 mm rims needs 12:1 to reach 85 km/h at its limiter, and
+        // clamping it to 9 geared the machine for 63 km/h and then made it
+        // crawl there in half a minute.
         finalDrive = MathUtil.clamp(
                 k.redlineRpm * (Math.PI / 30.0) * k.wheelRadiusM()
-                        / Math.max(1e-6, vTop * topGear), 2.2, 9.0);
+                        / Math.max(1e-6, vTop * topGear), 2.2, 14.0);
         gear = 2;
         idleRpm = MathUtil.clamp(k.redlineRpm * 0.137, 550, 1500);
         engineRpm = idleRpm;
@@ -290,7 +294,12 @@ public final class CarPhysics extends RigidBody {
         // could never transmit its own torque: the clutch slipped for ever
         // and the bus would not pull away.
         clutchCapacity = 1.60 * peakTorqueNm;
-        engineInertia = MathUtil.clamp(0.10 + peakTorqueNm * 0.00082, 0.04, 1.6);
+        // Crank, flywheel and clutch, and it has to scale with the engine
+        // rather than sit on a car-sized floor. The old 0.10 minimum gave a
+        // 125 cc scooter a saloon's flywheel; reflected through its 35:1
+        // first gear that was 132 kg m2 against the machine's own 8.9, so
+        // nine tenths of a very small engine went into spinning itself up.
+        engineInertia = MathUtil.clamp(0.004 + peakTorqueNm * 0.00112, 0.012, 1.4);
 
         // A bus cannot crank its wheels to a saloon's angle, and a
         // rickshaw turns inside anything on the road.
@@ -386,6 +395,63 @@ public final class CarPhysics extends RigidBody {
         return base * (1.0 - 0.32 * MathUtil.clamp(wetness, 0, 1));
     }
 
+    /** How far over a rider will go before she runs out of nerve and tyre. */
+    private static final double MAX_LEAN = Math.toRadians(40);
+
+    /**
+     * A rider leans; a car body rolls. They are not the same thing.
+     *
+     * <p>Both of a two-wheeler's axles sit on the centreline here, which is
+     * the honest way to model a single track - but it also means the
+     * suspension supplies no roll stiffness whatever. Left to itself the
+     * scooter flopped twenty-seven degrees to the <em>outside</em> of the
+     * first corner, tilting its contact patch until it was cornering at a
+     * quarter of a gravity: less than a loaded double-decker, and nothing
+     * like a machine that spends its life filtering through traffic.
+     *
+     * <p>What actually holds a two-wheeler up is the rider. She leans in
+     * until the resultant of weight and cornering force runs straight down
+     * through the tyres, which is at {@code tan(lean) = a_lat / g}. So that
+     * is what this is: a control loop with a rider's bandwidth, commanding
+     * the lean the corner asks for and nothing more. Below walking pace she
+     * gives up and puts a foot down, so the target fades out rather than
+     * leaving a parked scooter lying on its side.
+     */
+    private void leanWithTheRider() {
+        orientation.forward(tmp1);                // the roll axis, nose to tail
+        double v = groundSpeed();
+        // The lateral acceleration actually being pulled. Yaw rate is
+        // negative in a right-hand turn in this frame, and a right-hand
+        // turn wants the right side down, so the sign flips once here.
+        double want = Math.atan2(-v * angularVelocity.y, MathUtil.G);
+        want = MathUtil.clamp(want, -MAX_LEAN, MAX_LEAN)
+                * MathUtil.remap(v, 0.8, 3.2, 0.0, 1.0);
+        double err = MathUtil.wrapPi(want - orientation.roll());
+        double rate = angularVelocity.dot(tmp1);
+
+        // Angular acceleration first, torque second. The integrator divides
+        // torque by a diagonal inertia in world axes, so the inertia about
+        // a tilted roll axis is 1 / sum(n^2 / I) - without that the same
+        // gains would behave like a scooter heading north and like a bus
+        // heading east.
+        double wn = 2 * Math.PI * 1.5;
+        double accel = wn * wn * err - 2 * 0.95 * wn * rate;
+        double invEff = tmp1.x * tmp1.x / inertia.x
+                + tmp1.y * tmp1.y / inertia.y
+                + tmp1.z * tmp1.z / inertia.z;
+        // Feed the known disturbance forward. The cornering force acts at
+        // the road and the mass is up at the saddle, so there is a steady
+        // overturning moment the whole time the corner lasts; a plain PD
+        // can only answer it with a standing error, which pinned the lean
+        // at 26 degrees when the corner was asking for 44. The rider knows
+        // perfectly well how hard she is cornering.
+        double ff = mass * (-v * angularVelocity.y) * comHeight;
+        double tq = accel / Math.max(1e-9, invEff) + ff;
+        double limit = mass * MathUtil.G * wheelbase;
+        tq = MathUtil.clamp(tq, -limit, limit);
+        addTorque(tmp1.x * tq, tmp1.y * tq, tmp1.z * tq);
+    }
+
     /** One fixed-step update. {@code ground} supplies height and normal. */
     public void step(double dt, GroundProbe ground, double wetness) {
         clearAccumulators();
@@ -427,6 +493,9 @@ public final class CarPhysics extends RigidBody {
             tmp1.set(velocity).normalizeSelf().scaleSelf(-q * dragArea);
             addForce(tmp1);
         }
+
+        // --- the rider leans --------------------------------------------------
+        if (kind != null && kind.isTwoWheeler()) { leanWithTheRider(); }
 
         // --- yaw damping ------------------------------------------------------
         // A real car's tyres resist yaw rate through their own slip; the four
@@ -514,6 +583,15 @@ public final class CarPhysics extends RigidBody {
         boolean unpaved = ground.isUnpaved(w.contact.x, w.contact.z);
         w.surfaceGrip = surfaceGrip(unpaved, wetness);
         double mu = 1.18 * w.surfaceGrip;
+        if (kind != null && kind.isTwoWheeler()) {
+            // A leaning machine cannot use more grip than its lean angle
+            // supports: pull harder than tan(lean) and the resultant walks
+            // outside the contact patch and you are on the floor. With the
+            // rider's limit at forty degrees that caps her at about 0.84 g,
+            // which is also roughly what two narrow contact patches can do.
+            // Without it the scooter out-cornered every car in the game.
+            mu = Math.min(mu, Math.tan(MAX_LEAN) * 0.99);
+        }
 
         double fLong = tyreCurve(w.slipRatio, 0.14, 0.26) * mu * normalF;
         double fLat = tyreCurve(w.slipAngle / Math.toRadians(9.0), 1.0, 0.22)

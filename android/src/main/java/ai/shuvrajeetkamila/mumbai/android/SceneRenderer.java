@@ -10,6 +10,8 @@ import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.math.Vec3;
 import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
+import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
+import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.sim.Transit;
 import ai.shuvrajeetkamila.mumbai.world.ChunkMesher;
@@ -77,6 +79,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private VehicleGpu markerGpu;
     /** One VAO per transit body: suburban, metro, monorail, vessel. */
     private final VehicleGpu[] transitGpu = new VehicleGpu[4];
+    /** Boats, helicopters and aeroplanes: moored ones and the one flown. */
+    private final VehicleGpu[] craftGpu = new VehicleGpu[Meshes.CRAFT_COUNT];
+    private final int[] craftCount = new int[Meshes.CRAFT_COUNT];
+    private FloatBuffer[] craftScratch;
+    private static final int MAX_CRAFT = 48;
+    private final Vec3 craftCam = new Vec3();
     private final FloatBuffer[] transitScratch = new FloatBuffer[4];
     private final int[] transitCount = new int[4];
     /** Carriages of one kind that can be on screen at once. */
@@ -430,6 +438,23 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             }
         }
 
+        // --- moored boats, parked helicopters and aeroplanes -------------------
+        int craftN = uploadCraft(e, ox, oy, oz);
+        if (craftN > 0) {
+            if (instances <= 0) { setupInstanced(e, viewProj, ox, oy, oz,
+                    sunDir, sun, sky, fog, fogDensity, nightFactor); }
+            for (int k = 0; k < craftGpu.length; k++) {
+                int n = craftCount[k];
+                if (n <= 0) { continue; }
+                VehicleGpu g = craftGpu[k];
+                GLES30.glBindVertexArray(g.vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
+                        GLES30.GL_UNSIGNED_INT, 0, n);
+                drawn++;
+                tris += (long) (g.indexCount / 3) * n;
+            }
+        }
+
         // --- trains, metros and vessels ----------------------------------------
         int carriages = uploadTransit(e, ox, oy, oz);
         if (carriages > 0) {
@@ -609,6 +634,11 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glEnableVertexAttribArray(2);
         GLES30.glVertexAttribPointer(3, 1, GLES30.GL_FLOAT, false, stride, 36);
         GLES30.glEnableVertexAttribArray(3);
+        // Height up the wall, so a facade's windows start at the pavement
+        // instead of at whatever multiple of the tile height the ground
+        // happens to sit on. Attribute 4 belongs to instancing.
+        GLES30.glVertexAttribPointer(5, 1, GLES30.GL_FLOAT, false, stride, 40);
+        GLES30.glEnableVertexAttribArray(5);
         GLES30.glBindVertexArray(0);
         return g;
     }
@@ -705,6 +735,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
         markerGpu = buildInstancedGpu(Meshes.markerVertices(),
                 Meshes.markerIndices());
+        craftScratch = new FloatBuffer[Meshes.CRAFT_COUNT];
+        for (int i = 0; i < craftGpu.length; i++) {
+            craftGpu[i] = buildInstancedGpu(Meshes.craftVertices(i),
+                    Meshes.craftIndices(i), MAX_CRAFT);
+            craftScratch[i] = GLUtil.floats(MAX_CRAFT * 4);
+        }
         for (int i = 0; i < transitGpu.length; i++) {
             transitGpu[i] = buildInstancedGpu(Meshes.transitVertices(i),
                     Meshes.transitIndices(i), MAX_CARRIAGES);
@@ -948,6 +984,84 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16, vehScratch[ki]);
         }
         return total;
+    }
+
+    /**
+     * Moored craft near the camera, plus the one the player is aboard.
+     *
+     * <p>Only the ones within a couple of kilometres are considered: there
+     * are a hundred-odd on the island and walking the whole list every
+     * frame to reject ninety of them is work the frustum would do anyway.
+     */
+    private int uploadCraft(Engine e, double ox, double oy, double oz) {
+        for (int i = 0; i < craftCount.length; i++) {
+            craftCount[i] = 0;
+            craftScratch[i].position(0);
+        }
+        CraftSpawns cs = e.world.craft();
+        e.cameraPosition(craftCam);
+        double range = 2200.0;
+        int total = 0;
+        for (int i = 0; i < cs.size(); i++) {
+            CraftSpawns.Spawn sp = cs.get(i);
+            if (sp.taken) { continue; }
+            double dx = sp.x - craftCam.x, dz = sp.z - craftCam.z;
+            if (dx * dx + dz * dz > range * range) { continue; }
+            int slot = craftSlot(sp.kind);
+            if (craftCount[slot] >= MAX_CRAFT) { continue; }
+            float x = (float) (sp.x - ox);
+            float z = (float) (sp.z - oz);
+            float y = (float) sp.y;
+            if (!frustum.sphereVisible(x, y + 2.0f, z, 8.0f)) { continue; }
+            craftScratch[slot].put(x).put(y).put(z).put((float) sp.heading);
+            craftCount[slot]++;
+            total++;
+        }
+        // The one being flown, from the physics body so it interpolates.
+        int mine = craftSlotFor(e.profile);
+        if (mine >= 0 && craftCount[mine] < MAX_CRAFT) {
+            Vec3 rp = e.renderPosition();
+            float x = (float) (rp.x - ox);
+            float z = (float) (rp.z - oz);
+            float y = (float) (rp.y - CRAFT_MESH_DROP[mine]);
+            craftScratch[mine].put(x).put(y).put(z)
+                    .put((float) e.renderOrientation().heading());
+            craftCount[mine]++;
+            total++;
+        }
+        if (total == 0) { return 0; }
+        for (int i = 0; i < craftCount.length; i++) {
+            int n = craftCount[i];
+            if (n <= 0) { continue; }
+            craftScratch[i].position(0);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, craftGpu[i].instVbo);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16, craftScratch[i]);
+        }
+        return total;
+    }
+
+    /**
+     * Distance from each body origin down to where the mesh's own origin
+     * sits: the waterline on the boat, the bottom of the skids and the
+     * wheels on the aircraft.
+     */
+    private static final float[] CRAFT_MESH_DROP = {0.45f, 1.35f, 1.15f};
+
+    private static int craftSlot(int kind) {
+        switch (kind) {
+            case CraftSpawns.HELI: return Meshes.CRAFT_HELI;
+            case CraftSpawns.PLANE: return Meshes.CRAFT_PLANE;
+            default: return Meshes.CRAFT_BOAT;
+        }
+    }
+
+    private static int craftSlotFor(ControlProfile p) {
+        switch (p) {
+            case BOAT: return Meshes.CRAFT_BOAT;
+            case HELICOPTER: return Meshes.CRAFT_HELI;
+            case AEROPLANE: return Meshes.CRAFT_PLANE;
+            default: return -1;
+        }
     }
 
     void shutdown() {

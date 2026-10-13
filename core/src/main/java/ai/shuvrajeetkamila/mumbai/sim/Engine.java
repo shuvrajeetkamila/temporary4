@@ -23,6 +23,7 @@ import ai.shuvrajeetkamila.mumbai.physics.Ocean;
 import ai.shuvrajeetkamila.mumbai.physics.RigidBody;
 import ai.shuvrajeetkamila.mumbai.render.Sky;
 import ai.shuvrajeetkamila.mumbai.render.Weather;
+import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.world.WorldStreamer;
@@ -117,6 +118,15 @@ public final class Engine {
 
     /** Index into {@code agents.cars()} of the car being driven, or -1. */
     private int occupiedAgent = -1;
+    /** Index into {@code world.craft()} of the craft being flown, or -1. */
+    private int occupiedCraft = -1;
+
+    /**
+     * Ground clearance of each craft's body origin when it is parked,
+     * metres: keel below the waterline for the boat, skids and undercarriage
+     * for the aircraft.
+     */
+    private static final double[] CRAFT_REST_Y = {0.45, 1.35, 1.15};
     /** True on the frame a vehicle was entered or left; the HUD flashes. */
     public boolean vehicleChanged;
 
@@ -306,6 +316,7 @@ public final class Engine {
             double hdg = b.orientation.heading();
             minimap.update(b.position.x, b.position.z, hdg);
             missions.blip(b.position.x, b.position.z, hdg);
+            craftBlips(b.position.x, b.position.z, hdg);
             telemetryTimer = 0;
         }
         in.clearEdges();
@@ -323,7 +334,7 @@ public final class Engine {
         if (in.attack) { swingBaton(); }
         if (in.enterExit) {
             if (profile == ControlProfile.ON_FOOT) { tryEnterVehicle(); }
-            else if (profile == ControlProfile.CAR) { exitVehicle(); }
+            else { exitVehicle(); }
         }
 
         switch (profile) {
@@ -517,6 +528,20 @@ public final class Engine {
             double score = d - facing * 1.6;
             if (score < bestScore) { bestScore = score; best = i; }
         }
+        // Boats, helicopters and aeroplanes are moored on the same terms:
+        // close enough to touch, and scored by how directly they are being
+        // looked at, so standing between a taxi and a launch gives you the
+        // one you are facing.
+        int craftI = world.craft().nearest(px, pz, ENTER_RADIUS_M + 3.0, fx, fz, 1.6);
+        if (craftI >= 0) {
+            CraftSpawns.Spawn sp = world.craft().get(craftI);
+            double dx = sp.x - px, dz = sp.z - pz;
+            double d = Math.sqrt(Math.max(1e-9, dx * dx + dz * dz));
+            double score = d - ((dx / d) * fx + (dz / d) * fz) * 1.6;
+            if (best < 0 || score < bestScore) {
+                return boardCraft(craftI);
+            }
+        }
         if (best < 0) { return false; }
 
         Agents.Car c = cs[best];
@@ -545,7 +570,7 @@ public final class Engine {
      * turn round.
      */
     public boolean exitVehicle() {
-        if (profile != ControlProfile.CAR) { return false; }
+        if (profile != ControlProfile.CAR) { return leaveCraft(); }
         // Refuse at speed. Stepping out of a moving car is a ragdoll feature,
         // and it is not built yet; pretending otherwise would teleport the
         // player through the road surface.
@@ -611,7 +636,161 @@ public final class Engine {
             double d2 = dx * dx + dz * dz;
             if (d2 < best) { best = d2; }
         }
-        return Math.sqrt(best);
+        double d = Math.sqrt(best);
+        // A moored craft is a little more forgiving than a car door: you are
+        // standing on a pier reaching down at it, not opening it.
+        double c = world.craft().nearestDistance(px, pz) - 3.0;
+        return Math.min(d, Math.max(0, c));
+    }
+
+    /**
+     * What the prompt should offer, or null. Naming it matters: "Press E"
+     * over a 2800 m runway should say what is about to happen.
+     */
+    public String nearestEnterableLabel() {
+        if (profile != ControlProfile.ON_FOOT) { return null; }
+        double px = human.position.x, pz = human.position.z;
+        double fx = Math.sin(cameraYaw), fz = -Math.cos(cameraYaw);
+        int ci = world.craft().nearest(px, pz, ENTER_RADIUS_M + 3.0, fx, fz, 1.6);
+        if (ci >= 0) {
+            CraftSpawns.Spawn sp = world.craft().get(ci);
+            return sp.name.isEmpty() ? sp.label() : sp.label() + " - " + sp.name;
+        }
+        Agents.Car[] cs = agents.cars();
+        double bd = ENTER_RADIUS_M * ENTER_RADIUS_M;
+        VehicleKind bk = null;
+        for (Agents.Car c : cs) {
+            if (!c.active || !kindOf(c).enterable) { continue; }
+            double dx = c.x - px, dz = c.z - pz;
+            double d2 = dx * dx + dz * dz;
+            if (d2 < bd) { bd = d2; bk = kindOf(c); }
+        }
+        return bk == null ? null : bk.label;
+    }
+
+    /**
+     * Get aboard a moored craft.
+     *
+     * <p>The body is placed on the mooring rather than on the player, so a
+     * launch stays in the water and an aeroplane stays on the centreline
+     * instead of being dragged onto the pier by whoever walked up to it.
+     */
+    public boolean boardCraft(int index) {
+        CraftSpawns cf = world.craft();
+        if (index < 0 || index >= cf.size()) { return false; }
+        CraftSpawns.Spawn sp = cf.get(index);
+        if (sp.taken) { return false; }
+        ControlProfile p;
+        switch (sp.kind) {
+            case CraftSpawns.BOAT: p = ControlProfile.BOAT; break;
+            case CraftSpawns.HELI: p = ControlProfile.HELICOPTER; break;
+            default: p = ControlProfile.AEROPLANE; break;
+        }
+        RigidBody b;
+        switch (p) {
+            case BOAT: boat.reset(); b = boat; break;
+            case HELICOPTER: heli.reset(); b = heli; break;
+            default: plane.reset(); b = plane; break;
+        }
+        double surface = sp.kind == CraftSpawns.BOAT
+                ? 0.0 : groundHeight(sp.x, sp.z);
+        b.position.set(sp.x, surface + CRAFT_REST_Y[sp.kind], sp.z);
+        b.orientation.set(Quat.yaw(sp.heading));
+        b.velocity.zero();
+        b.angularVelocity.zero();
+        sp.taken = true;
+        occupiedCraft = index;
+        profile = p;
+        cameraYaw = sp.heading;
+        vehicleChanged = true;
+        snapshot();
+        snapshot();
+        return true;
+    }
+
+    /**
+     * Step off a boat or out of an aircraft.
+     *
+     * <p>Refused in the air and refused at speed, for the same reason
+     * stepping out of a moving car is refused: there is no ragdoll yet, and
+     * pretending otherwise drops the player through the world. Leaving a
+     * boat puts the player on the nearest dry land within a short walk, or
+     * refuses if there is none - swimming to shore from the middle of the
+     * harbour is a worse outcome than being told no.
+     */
+    public boolean leaveCraft() {
+        if (occupiedCraft < 0) { return false; }
+        RigidBody b = activeBody();
+        if (b.velocity.length() > 2.5) { return false; }
+        CraftSpawns.Spawn sp = world.craft().get(occupiedCraft);
+        double bx = b.position.x, bz = b.position.z;
+        if (sp.kind != CraftSpawns.BOAT) {
+            double agl = b.position.y - groundHeight(bx, bz);
+            if (agl > CRAFT_REST_Y[sp.kind] + 1.2) { return false; }
+        }
+        // A boat gets a longer reach than an aircraft: she is moored off a
+        // jetty, and the compiler has already guaranteed dry land inside
+        // this distance of every mooring it kept.
+        double[] spot = dryLandNear(bx, bz, sp.kind == CraftSpawns.BOAT ? 30.0 : 8.0);
+        if (spot == null) { return false; }
+
+        // Leave it where it was left, so it is still there to come back to.
+        sp.x = bx;
+        sp.z = bz;
+        sp.y = b.position.y - CRAFT_REST_Y[sp.kind];
+        sp.heading = b.orientation.heading();
+        sp.taken = false;
+        occupiedCraft = -1;
+
+        human.reset();
+        human.position.set(spot[0], spot[1] + human.height * 0.5, spot[2]);
+        human.headingRad = b.orientation.heading();
+        human.velocity.set(0, 0, 0);
+        profile = ControlProfile.ON_FOOT;
+        vehicleChanged = true;
+        snapshot();
+        snapshot();
+        return true;
+    }
+
+    /**
+     * Mark the boats, helicopters and aeroplanes within radar range.
+     *
+     * <p>Not clamped to the rim, unlike a job marker: one of these on the
+     * edge of the radar would say "there is a helicopter here" about a
+     * machine four kilometres away. The full-screen map is where you go to
+     * find a distant one.
+     */
+    private void craftBlips(double px, double pz, double heading) {
+        CraftSpawns cf = world.craft();
+        double r = Minimap.RANGE_M;
+        for (int i = 0; i < cf.size(); i++) {
+            CraftSpawns.Spawn sp = cf.get(i);
+            if (sp.taken) { continue; }
+            double dx = sp.x - px, dz = sp.z - pz;
+            if (dx * dx + dz * dz > r * r) { continue; }
+            int kind = sp.kind == CraftSpawns.BOAT ? Minimap.BLIP_BOAT
+                    : sp.kind == CraftSpawns.HELI ? Minimap.BLIP_HELI
+                    : Minimap.BLIP_PLANE;
+            minimap.addBlip(sp.x, sp.z, px, pz, heading, kind, false);
+        }
+    }
+
+    /**
+     * Somewhere to stand within {@code maxM} of a point: {x, groundY, z}, or
+     * null. Searched as rings outward so the player steps off the near side.
+     */
+    private double[] dryLandNear(double x, double z, double maxM) {
+        for (double r = 2.0; r <= maxM + 1e-9; r += 2.0) {
+            for (int a = 0; a < 16; a++) {
+                double th = a * Math.PI / 8.0;
+                double px = x + Math.cos(th) * r;
+                double pz = z + Math.sin(th) * r;
+                if (!world.inBounds(px, pz) || !world.isLand(px, pz)) { continue; }
+                return new double[]{px, world.height(px, pz), pz};
+            }
+        }
+        return null;
     }
 
     private void stepHuman(double dt, InputState in) {
@@ -681,10 +860,24 @@ public final class Engine {
                 ? car.kind.label : profile.label;
         t.timeOfDay = timeOfDay;
         if (profile == ControlProfile.ON_FOOT) {
-            t.prompt = nearestEnterableDistance() <= ENTER_RADIUS_M
-                    ? "ENTER to get in" : "";
+            String what = nearestEnterableDistance() <= ENTER_RADIUS_M
+                    ? nearestEnterableLabel() : null;
+            t.prompt = what == null ? "" : "ENTER - " + what;
         } else if (profile == ControlProfile.CAR) {
             t.prompt = car.groundSpeed() <= 3.0 ? "EXIT to get out" : "";
+        } else if (occupiedCraft >= 0) {
+            // Say why it is refusing rather than silently doing nothing,
+            // which is what an empty prompt in a hovering helicopter reads
+            // as.
+            RigidBody cb = activeBody();
+            CraftSpawns.Spawn sp = world.craft().get(occupiedCraft);
+            boolean slow = cb.velocity.length() <= 2.5;
+            boolean down = sp.kind == CraftSpawns.BOAT
+                    || cb.position.y - groundHeight(cb.position.x, cb.position.z)
+                       <= CRAFT_REST_Y[sp.kind] + 1.2;
+            t.prompt = !down ? "Land before getting out"
+                    : !slow ? "Too fast to get out"
+                    : "EXIT to get out";
         } else {
             t.prompt = "";
         }

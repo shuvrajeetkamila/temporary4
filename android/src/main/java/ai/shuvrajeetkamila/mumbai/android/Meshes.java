@@ -46,6 +46,10 @@ final class Meshes {
         V.add(nx); V.add(ny); V.add(nz);
         V.add(r); V.add(g); V.add(b);
         V.add(aux);
+        // Vertical texture coordinate. Props are small and the instanced
+        // shader derives its own, but the slot has to be there or every
+        // vertex after the first is read at the wrong offset.
+        V.add(y);
         return index;
     }
 
@@ -214,6 +218,159 @@ final class Meshes {
         }
         markerV = packVertices();
         markerI = packIndices();
+    }
+
+    // ----------------------------------------------------------------- craft
+
+    /** Mesh slots for the things the player can board that are not cars. */
+    static final int CRAFT_BOAT = 0, CRAFT_HELI = 1, CRAFT_PLANE = 2;
+    static final int CRAFT_COUNT = 3;
+
+    private static final float[][] CR_V = new float[CRAFT_COUNT][];
+    private static final int[][] CR_I = new int[CRAFT_COUNT][];
+
+    static float[] craftVertices(int slot) { buildCraft(slot); return CR_V[slot]; }
+
+    static int[] craftIndices(int slot) { buildCraft(slot); return CR_I[slot]; }
+
+    private static void buildCraft(int slot) {
+        if (CR_V[slot] != null) { return; }
+        reset();
+        switch (slot) {
+            case CRAFT_HELI: helicopter(); break;
+            case CRAFT_PLANE: aeroplane(); break;
+            default: launch(); break;
+        }
+        CR_V[slot] = packVertices();
+        CR_I[slot] = packIndices();
+    }
+
+    /**
+     * A harbour launch: the open wooden passenger boat that works the
+     * Gateway, Ferry Wharf and the creek crossings. Nine metres and change,
+     * which is what BoatPhysics.ferry() is solving for.
+     *
+     * <p>Origin at the waterline, bow towards +Z, which is the forward
+     * direction the physics uses.
+     */
+    private static void launch() {
+        float hl = 4.7f, hw = 1.55f;
+        // Hull: a shallow box with the forefoot cut back, so the bow has a
+        // shape rather than being a brick.
+        box(0, -0.25f, -0.4f, hw, 0.70f, hl * 0.86f, 0.30f, 0.26f, 0.22f, 0);
+        box(0, -0.18f, hl * 0.80f, hw * 0.55f, 0.58f, hl * 0.22f,
+                0.30f, 0.26f, 0.22f, 0);
+        // Gunwale and a painted strake, the way these boats actually look.
+        box(0, 0.30f, 0, hw + 0.04f, 0.14f, hl * 0.92f, 0.78f, 0.24f, 0.16f, 0);
+        // Thwarts.
+        for (int i = -2; i <= 2; i++) {
+            box(0, 0.26f, i * 1.5f, hw * 0.92f, 0.06f, 0.18f,
+                    0.62f, 0.50f, 0.34f, 0);
+        }
+        // Canopy on four posts, which is the silhouette you recognise.
+        for (int sx = -1; sx <= 1; sx += 2) {
+            for (int sz = -1; sz <= 1; sz += 2) {
+                box(sx * hw * 0.82f, 0.95f, sz * hl * 0.52f, 0.06f, 0.65f, 0.06f,
+                        0.42f, 0.38f, 0.32f, 0);
+            }
+        }
+        box(0, 1.66f, 0, hw * 0.95f, 0.06f, hl * 0.60f, 0.86f, 0.84f, 0.78f, 0);
+        // Helm and an outboard well aft.
+        box(0, 0.72f, -hl * 0.62f, 0.45f, 0.42f, 0.30f, 0.50f, 0.46f, 0.40f, 0);
+        box(0, 0.10f, -hl * 0.94f, 0.26f, 0.46f, 0.30f, 0.14f, 0.14f, 0.16f, 0);
+        // Navigation lights, emissive so she is visible on the water at night.
+        box(-hw, 0.46f, hl * 0.74f, 0.07f, 0.07f, 0.07f, 0.90f, 0.12f, 0.10f, 0.95f);
+        box(hw, 0.46f, hl * 0.74f, 0.07f, 0.07f, 0.07f, 0.12f, 0.85f, 0.22f, 0.95f);
+    }
+
+    /**
+     * A light utility helicopter: cabin, tail boom, skids, main and tail
+     * rotor discs. The main rotor is drawn as four blades at rest rather
+     * than a blurred disc, because a parked machine is what you mostly see
+     * and the spinning one is only ever a few frames old.
+     *
+     * <p>Rotor radius 5.35 m, matching HelicopterPhysics.
+     */
+    private static void helicopter() {
+        float r = 5.35f;
+        // Cabin.
+        box(0, 1.55f, 0.55f, 1.05f, 0.95f, 1.85f, 0.86f, 0.84f, 0.80f, 0);
+        // Glazed nose, emissive only very weakly: it is glass, not a lamp.
+        box(0, 1.45f, 2.45f, 0.82f, 0.72f, 0.65f, 0.30f, 0.42f, 0.52f, 0.10f);
+        // Tail boom and fin.
+        box(0, 1.85f, -3.30f, 0.26f, 0.26f, 2.10f, 0.80f, 0.78f, 0.74f, 0);
+        box(0, 2.45f, -5.10f, 0.08f, 0.62f, 0.55f, 0.74f, 0.20f, 0.16f, 0);
+        box(0, 1.90f, -5.25f, 0.55f, 0.06f, 0.40f, 0.80f, 0.78f, 0.74f, 0);
+        // Skids.
+        for (int sx = -1; sx <= 1; sx += 2) {
+            box(sx * 1.05f, 0.12f, 0.40f, 0.07f, 0.12f, 2.05f, 0.24f, 0.24f, 0.26f, 0);
+            box(sx * 0.62f, 0.62f, 1.25f, 0.06f, 0.50f, 0.06f, 0.24f, 0.24f, 0.26f, 0);
+            box(sx * 0.62f, 0.62f, -0.55f, 0.06f, 0.50f, 0.06f, 0.24f, 0.24f, 0.26f, 0);
+        }
+        // Mast and head.
+        box(0, 2.75f, 0.40f, 0.14f, 0.45f, 0.14f, 0.40f, 0.40f, 0.42f, 0);
+        // Four main blades.
+        for (int i = 0; i < 4; i++) {
+            double a = i * Math.PI / 2.0 + 0.3;
+            float ux = (float) Math.cos(a), uz = (float) Math.sin(a);
+            bladeAt(0.40f, 3.18f, ux, uz, r, 0.19f);
+        }
+        // Tail rotor: two blades in the vertical plane.
+        for (int i = -1; i <= 1; i += 2) {
+            box(0.30f, 1.90f + i * 0.52f, -5.25f, 0.03f, 0.52f, 0.11f,
+                    0.26f, 0.26f, 0.28f, 0);
+        }
+        // Anti-collision beacon.
+        box(0, 2.58f, -1.20f, 0.09f, 0.09f, 0.09f, 0.90f, 0.14f, 0.10f, 0.95f);
+    }
+
+    /** One rotor blade laid out along a unit direction in the XZ plane. */
+    private static void bladeAt(float cz, float y, float ux, float uz,
+                                float len, float chord) {
+        float half = len * 0.5f;
+        float mx = ux * half, mz = cz + uz * half;
+        // Axis-aligned bounding box of the blade. Honest at this size: a
+        // blade is a thin plank and the renderer has no per-prop rotation.
+        float hx = Math.max(chord, Math.abs(ux) * half);
+        float hz = Math.max(chord, Math.abs(uz) * half);
+        box(mx, y, mz, hx, 0.045f, hz, 0.22f, 0.22f, 0.24f, 0);
+    }
+
+    /**
+     * A single-engine light aeroplane, high wing, fixed undercarriage:
+     * 11.4 m span to match AeroplanePhysics, nose at +Z.
+     */
+    private static void aeroplane() {
+        float span = 11.4f;
+        // Fuselage in two boxes so the tail tapers.
+        box(0, 1.35f, 0.45f, 0.58f, 0.62f, 2.30f, 0.90f, 0.90f, 0.92f, 0);
+        box(0, 1.42f, -2.60f, 0.34f, 0.40f, 2.40f, 0.90f, 0.90f, 0.92f, 0);
+        // Cabin glass.
+        box(0, 1.98f, 1.00f, 0.52f, 0.34f, 1.10f, 0.32f, 0.44f, 0.54f, 0.12f);
+        // High wing with a blue cheat line, and struts down to the belly.
+        box(0, 2.18f, 0.35f, span * 0.5f, 0.11f, 0.78f, 0.93f, 0.93f, 0.95f, 0);
+        box(0, 2.06f, 0.35f, span * 0.5f, 0.03f, 0.22f, 0.16f, 0.34f, 0.62f, 0);
+        for (int sx = -1; sx <= 1; sx += 2) {
+            box(sx * 1.85f, 1.60f, 0.35f, 0.05f, 0.55f, 0.08f,
+                    0.70f, 0.70f, 0.72f, 0);
+        }
+        // Tailplane and fin.
+        box(0, 1.55f, -4.75f, 1.85f, 0.08f, 0.52f, 0.93f, 0.93f, 0.95f, 0);
+        box(0, 2.25f, -4.70f, 0.07f, 0.78f, 0.60f, 0.16f, 0.34f, 0.62f, 0);
+        // Cowling, spinner, and a two-blade propeller at rest.
+        box(0, 1.35f, 2.95f, 0.50f, 0.50f, 0.42f, 0.88f, 0.88f, 0.90f, 0);
+        box(0, 1.35f, 3.42f, 0.16f, 0.16f, 0.10f, 0.30f, 0.30f, 0.32f, 0);
+        box(0, 1.35f, 3.46f, 0.09f, 0.92f, 0.03f, 0.22f, 0.22f, 0.24f, 0);
+        // Undercarriage: two mains and a nosewheel.
+        for (int sx = -1; sx <= 1; sx += 2) {
+            box(sx * 1.25f, 0.70f, 0.30f, 0.05f, 0.42f, 0.05f, 0.60f, 0.60f, 0.62f, 0);
+            box(sx * 1.25f, 0.28f, 0.30f, 0.11f, 0.28f, 0.28f, 0.08f, 0.08f, 0.09f, 0);
+        }
+        box(0, 0.70f, 2.70f, 0.05f, 0.42f, 0.05f, 0.60f, 0.60f, 0.62f, 0);
+        box(0, 0.26f, 2.70f, 0.09f, 0.26f, 0.26f, 0.08f, 0.08f, 0.09f, 0);
+        // Navigation lights.
+        box(-span * 0.5f, 2.18f, 0.35f, 0.08f, 0.07f, 0.07f, 0.90f, 0.12f, 0.10f, 0.95f);
+        box(span * 0.5f, 2.18f, 0.35f, 0.08f, 0.07f, 0.07f, 0.12f, 0.85f, 0.22f, 0.95f);
     }
 
     /** Per-kind cache. Built on first use, on the GL thread, once. */

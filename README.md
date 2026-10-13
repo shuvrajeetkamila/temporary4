@@ -353,20 +353,84 @@ vehicle's own weight, that nothing moves with the throttle shut, that
 drive force does not change sign during steady acceleration, and that
 the helicopter cannot climb on energy its engine does not have.
 
-Two-wheelers remain the weakest part. A scooter is modelled as a narrow
-four-wheeler, so it does not lean, and it corners at about 0.2 g when
-the real thing does far better. Autorotation is survivable and has a
-best-glide collective, but the descent is about twice as steep as a real
-one.
+Autorotation is survivable and has a best-glide collective, but the
+descent is about twice as steep as a real one.
+
+### A third pass: the world as you actually meet it
+
+The second pass checked the models in isolation. This one walked around
+the city and looked at it, which found four things no unit test was
+asking about.
+
+**Every vehicle in the game was drawn facing the wrong way.** The frame
+has X east, Z south and a heading measured clockwise from north, so a
+body's nose at local +Z points *south* when it is not rotated at all.
+`Quat.yaw` fed a compass heading straight into a rotation about world up,
+and the instanced vertex shader did the same, so both produced a body
+mirrored about the east–west axis: a taxi driving north was drawn facing
+south, and only something travelling due east or due west came out right.
+Everything that turns a heading into an orientation went through those
+two places, so everything inherited it — the traffic, the trains, the
+metro, the ferries, the car you got into, and the heading you kept when
+you teleported. One sign in each.
+
+**The low-rise city was being deleted rather than simplified.** Levels of
+detail dropped any building under 220 m² or 9 m at medium range and under
+2600 m² or 34 m at long range, which is most of Mumbai. From a kilometre
+up, Dharavi, Govandi and the suburbs were bare ground with a few towers
+standing in it. Small buildings are now accumulated into 128 m block
+masses and drawn as impostors with the right height and the right colour,
+so the city still reads as a city from the air while costing a fraction
+of the triangles. Up close, flat roofs get parapets and roof clutter —
+tanks, stairwell heads, hoardings — and the ground floor of anything on a
+retail street gets a shopfront band.
+
+**Facade textures were addressed by absolute world height**, so the
+bottom row of windows was sliced wherever a multiple of the 6.2 m tile
+happened to fall relative to the pavement. The vertex now carries its own
+height-above-base in an eleventh channel.
+
+**And the boats, helicopters and aeroplanes could not be reached.** All
+three models were finished and tested and there was no way into one.
+Moorings are now derived from the map — piers, ferry wharves, marked
+helipads, runways — placed, drawn, blipped, and boarded with the same
+button as a car.
+
+The scooter got its own pass. Modelled single-track, with both axles on
+the centreline, it had no roll stiffness at all: it flopped twenty-seven
+degrees to the *outside* of a corner, tilted its own contact patch, and
+pulled 0.25 g, less than a loaded double-decker. What holds a two-wheeler
+up is the rider, so the rider is now modelled — a control loop commanding
+`tan(lean) = a_lat / g` with the overturning moment fed forward — and the
+grip is capped at `tan(40°)`, because a machine that pulls more lateral
+g than its lean supports is a machine on its side. It leans into corners
+now, at 0.6–0.8 g.
+
+While measuring it, two more: the final drive was clamped at 9:1, which
+is not enough reduction for a 250 mm wheel, so the scooter was geared for
+63 km/h instead of 85; and engine inertia had a 0.10 kg·m² floor, a
+saloon's flywheel, which reflected through a scooter's first gear came to
+132 kg·m² against the machine's own 8.9. Nine tenths of a very small
+engine was going into spinning itself up. It now reaches 85 km/h and
+0–60 in 11.7 s.
+
+| | top | 0–60 | 0–100 | 100–0 | peak lateral |
+|---|---|---|---|---|---|
+| Kaali-peeli | 135 km/h | 6.8 s | 13.2 s | 44 m | 0.90 g |
+| Autorickshaw | 65 km/h | 15.7 s | — | — | 0.82 g |
+| Double-decker | 74 km/h | 11.1 s | — | — | 0.92 g |
+| Scooter | 85 km/h | 11.7 s | — | — | 0.62 g |
+| Sedan | 198 km/h | 6.0 s | 11.4 s | 44 m | 0.90 g |
 
 ## Verification
 
 Nothing is published unless all of this passes first:
 
-- **123** world gates in `tools/verify_world.py`, including 51 geographic
+- **145** world gates in `tools/verify_world.py`, including 51 geographic
   checkpoints, run against the compiled files with an independently derived
-  projection.
-- **111** core tests in `core/src/test`, including the same 51 checkpoints
+  projection. The craft gates re-read the land mask themselves, so a bug in
+  the mooring code cannot certify its own output.
+- **342** core tests in `core/src/test`, including the same 51 checkpoints
   read back through the game's own loader.
 - The built APK is then inspected rather than trusted: badging, signature,
   and a check that all four world files really are inside the zip.

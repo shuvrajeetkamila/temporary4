@@ -34,6 +34,9 @@ final class Hud extends View {
     private final Paint arrow = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint blipNext = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint blipLater = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint blipBoat = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint blipHeli = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint blipPlane = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint money = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint objective = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint banner = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -93,6 +96,9 @@ final class Hud extends View {
         blipNext.setColor(0xFFFFC421);
         blipNext.setStyle(Paint.Style.FILL);
         blipLater.setColor(0x99FFC421);
+        blipBoat.setColor(Color.rgb(96, 206, 232));
+        blipHeli.setColor(Color.rgb(236, 142, 74));
+        blipPlane.setColor(Color.rgb(226, 226, 236));
         blipLater.setStyle(Paint.Style.FILL);
 
         money.setColor(0xFF7CE08A);
@@ -173,9 +179,28 @@ final class Hud extends View {
             int o = i * 3;
             float bx = cx + (float) m.blips[o] * scale;
             float by = cy - (float) m.blips[o + 1] * scale;
-            boolean next = (int) m.blips[o + 2] == Minimap.BLIP_NEXT;
-            canvas.drawCircle(bx, by, (next ? 5f : 3.5f) * d,
-                    next ? blipNext : blipLater);
+            int kind = (int) m.blips[o + 2];
+            switch (kind) {
+                case Minimap.BLIP_NEXT:
+                    canvas.drawCircle(bx, by, 5f * d, blipNext);
+                    break;
+                case Minimap.BLIP_BOAT:
+                    canvas.drawCircle(bx, by, 3f * d, blipBoat);
+                    break;
+                case Minimap.BLIP_HELI:
+                    canvas.drawRect(bx - 3.6f * d, by - 1.2f * d,
+                            bx + 3.6f * d, by + 1.2f * d, blipHeli);
+                    canvas.drawRect(bx - 1.2f * d, by - 3.6f * d,
+                            bx + 1.2f * d, by + 3.6f * d, blipHeli);
+                    break;
+                case Minimap.BLIP_PLANE:
+                    canvas.drawRect(bx - 4f * d, by - 1.1f * d,
+                            bx + 4f * d, by + 1.1f * d, blipPlane);
+                    break;
+                default:
+                    canvas.drawCircle(bx, by, 3.5f * d, blipLater);
+                    break;
+            }
         }
         canvas.restoreToCount(saved);
 

@@ -113,6 +113,14 @@ public final class BoatPhysics extends RigidBody {
      * for the saturating model is the full displacement spread over
      * {@code 1.7 * draft}.
      */
+    /** Lying still at her mooring. */
+    public void reset() {
+        velocity.zero();
+        angularVelocity.zero();
+        orientation.identity();
+        clearAccumulators();
+    }
+
     public void recomputeHeaveDamping() {
         double volume = 0;
         for (double v : sampleVolume) { volume += v; }

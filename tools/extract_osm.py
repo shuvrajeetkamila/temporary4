@@ -21,6 +21,7 @@ makes Salsette an island in this game rather than a guess.
 import argparse
 import collections
 import json
+import math
 import os
 import re
 import sys
@@ -62,6 +63,11 @@ ROAD_CLASSES = [
     ("pier",          22, 1,  6.0,  10, "foot"),
     ("ferry",         23, 1,  0.0,  30, "water"),
 ]
+# A runway has to be long enough to be worth parking an aeroplane on.
+MIN_RUNWAY_M = 400.0
+# How far along the runway the aeroplane is held, as a fraction of its length.
+RUNWAY_HOLD_FRAC = 0.06
+
 ROAD_ID = {k: i for k, (i, *_rest) in
            ((c[0], (c[1], c[2], c[3], c[4], c[5])) for c in ROAD_CLASSES)}
 ROAD_META = {c[0]: {"id": c[1], "lanes": c[2], "width": c[3], "speed": c[4], "kind": c[5]}
@@ -168,6 +174,7 @@ class Layers:
         self.coast = []            # list of (N,2) float64 arrays, OSM direction
         self.water_xy, self.water_off, self.water_attr = [], [0], []
         self.poi = []              # (x, z, kind, name)
+        self.craft = []            # (x, z, heading, kind, name)
         self.stats = collections.Counter()
 
     def add_line(self, pts, attr, name=""):
@@ -280,10 +287,42 @@ def build_handler(L):
                         if key == "runway":
                             seg = np.asarray(pts)
                             d = float(np.hypot(*(seg[-1] - seg[0])))
+                            name = f"{t.get('ref', t.get('name', 'runway'))}"
                             L.poi.append((float(seg[:, 0].mean()),
                                           float(seg[:, 1].mean()), "runway",
-                                          f"{t.get('ref', t.get('name', 'runway'))}"
-                                          f" {d:.0f}m"))
+                                          f"{name} {d:.0f}m"))
+                            # A runway long enough to get an aeroplane off
+                            # becomes a place one is parked: held near the
+                            # threshold and lined up with the centreline.
+                            if d >= MIN_RUNWAY_M:
+                                ax, az = seg[0]
+                                bx, bz = seg[-1]
+                                hx, hz = bx - ax, bz - az
+                                # Heading convention: X east, Z south, so
+                                # heading = atan2(x, -z).
+                                head = math.atan2(hx, -hz)
+                                tx = ax + hx * RUNWAY_HOLD_FRAC
+                                tz = az + hz * RUNWAY_HOLD_FRAC
+                                L.craft.append((float(tx), float(tz), head,
+                                                "PLANE", f"{name} {d:.0f} m"))
+                        elif key == "helipad":
+                            seg = np.asarray(pts)
+                            L.craft.append((float(seg[:, 0].mean()),
+                                            float(seg[:, 1].mean()), 0.0,
+                                            "HELI",
+                                            t.get("name", "") or "Helipad"))
+                        elif key == "pier":
+                            # Both ends. The compiler keeps whichever one is
+                            # standing in water; it owns the land mask.
+                            seg = np.asarray(pts)
+                            nm = t.get("name", "") or "Pier"
+                            for i, j in ((0, 1), (-1, -2)):
+                                hx = float(seg[i][0] - seg[j][0])
+                                hz = float(seg[i][1] - seg[j][1])
+                                L.craft.append((float(seg[i][0]),
+                                                float(seg[i][1]),
+                                                math.atan2(hx, -hz),
+                                                "BOAT", nm))
                     return
 
                 if w.is_closed() and len(w.nodes) >= 4:
@@ -448,6 +487,9 @@ def build_handler(L):
                 kind = "aerodrome"
             elif t.get("amenity") == "ferry_terminal":
                 kind = "ferry_terminal"
+                fx, fz = aoi.to_xz(n.location.lat, n.location.lon)
+                L.craft.append((fx, fz, 0.0, "BOAT",
+                                t.get("name", "") or "Ferry wharf"))
             elif t.get("natural") == "peak":
                 kind = "peak"
             if kind and t.get("name"):
@@ -624,6 +666,10 @@ def main():
     with open(os.path.join(args.out, "poi.json"), "w", encoding="utf-8") as fh:
         json.dump([{"x": round(x, 1), "z": round(z, 1), "kind": k, "name": n}
                    for (x, z, k, n) in L.poi], fh)
+    with open(os.path.join(args.out, "craft.json"), "w", encoding="utf-8") as fh:
+        json.dump([{"x": round(x, 1), "z": round(z, 1), "h": round(hd, 4),
+                    "kind": k, "name": n}
+                   for (x, z, hd, k, n) in L.craft], fh)
     with open(os.path.join(args.out, "road_names.json"), "w", encoding="utf-8") as fh:
         json.dump(L.road_name, fh)
 

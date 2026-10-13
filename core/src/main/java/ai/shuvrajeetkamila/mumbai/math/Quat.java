@@ -39,9 +39,25 @@ public final class Quat {
         return new Quat(Math.cos(h), ax * s, ay * s, az * s);
     }
 
-    /** Heading about world up, in radians clockwise from north. */
+    /**
+     * An orientation whose {@link #heading()} is the angle given: radians
+     * clockwise from north, in the world frame where X is east, Z is south
+     * and a body's nose is its local +Z.
+     *
+     * <p>Note the {@code PI -}. A rotation of {@code a} about world up
+     * carries the nose from +Z to {@code (sin a, 0, cos a)}, so the
+     * identity orientation faces +Z, which in this frame is <em>south</em>
+     * and reads as a heading of 180 degrees. Feeding a compass heading
+     * straight into {@link #axisAngle} therefore produced a body mirrored
+     * about the east-west axis: a car driving north was drawn and oriented
+     * facing south, and only a vehicle heading due east or due west came
+     * out right. Everything that turns a heading into an orientation went
+     * through here, so everything inherited it - entering a car reversed
+     * it, teleporting mirrored it, and the traffic, trains and ferries were
+     * all drawn backwards.
+     */
     public static Quat yaw(double headingRad) {
-        return axisAngle(0, 1, 0, headingRad);
+        return axisAngle(0, 1, 0, Math.PI - headingRad);
     }
 
     public Quat normalizeSelf() {

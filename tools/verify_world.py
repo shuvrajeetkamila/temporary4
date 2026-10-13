@@ -18,6 +18,7 @@ independently prove it contains real geometry.
 """
 
 import argparse
+import collections
 import json
 import math
 import os
@@ -389,6 +390,78 @@ def main():
     g.check("heights", "at least 10% of heights come from OSM tags",
             tagged / total >= 0.10,
             f"{tagged:,} of {total:,} = {100 * tagged / total:.1f}%")
+
+    # ----------------------------------------------------------------- craft
+    # Independent of the compiler: this re-reads the land mask and checks
+    # each mooring itself, so a bug in build_craft cannot certify its own
+    # output. A boat on a roundabout or an aeroplane in the harbour is the
+    # kind of thing nobody notices until they walk up to it.
+    try:
+        craft = json.loads(net.raw("craft").decode())
+    except KeyError:
+        craft = None
+    g.check("craft", "the world ships craft moorings", craft is not None,
+            "section absent" if craft is None else f"{len(craft)}")
+    if craft is not None:
+        kinds = collections.Counter(c["kind"] for c in craft)
+        g.check("craft", "boats are moored", kinds["BOAT"] >= 20,
+                f"{kinds['BOAT']}")
+        g.check("craft", "helicopters are parked", kinds["HELI"] >= 5,
+                f"{kinds['HELI']}")
+        g.check("craft", "aeroplanes are parked", kinds["PLANE"] >= 2,
+                f"{kinds['PLANE']}")
+
+        def at(x, z):
+            i = int(math.floor((x - minx) / grid))
+            j = int(math.floor((z - minz) / grid))
+            if i < 0 or j < 0 or i >= nx or j >= nz:
+                return None
+            return bool(mask[j, i])
+
+        afloat = sum(1 for c in craft
+                     if c["kind"] == "BOAT" and at(c["x"], c["z"]) is False)
+        ashore = sum(1 for c in craft
+                     if c["kind"] != "BOAT" and at(c["x"], c["z"]) is True)
+        g.check("craft", "every boat is in water", afloat == kinds["BOAT"],
+                f"{afloat} of {kinds['BOAT']}")
+        g.check("craft", "every aircraft is on land",
+                ashore == kinds["HELI"] + kinds["PLANE"],
+                f"{ashore} of {kinds['HELI'] + kinds['PLANE']}")
+
+        reachable = 0
+        for c in craft:
+            if c["kind"] != "BOAT":
+                continue
+            k = max(1, int(28.0 / grid))
+            i = int(math.floor((c["x"] - minx) / grid))
+            j = int(math.floor((c["z"] - minz) / grid))
+            patch = mask[max(0, j - k):min(nz, j + k + 1),
+                          max(0, i - k):min(nx, i + k + 1)]
+            if patch.size and patch.any():
+                reachable += 1
+        g.check("craft", "every boat can be stepped off onto land",
+                reachable == kinds["BOAT"], f"{reachable} of {kinds['BOAT']}")
+
+        runways = [c for c in craft if c["kind"] == "PLANE"]
+        lengths = []
+        for c in runways:
+            bits = str(c.get("name", "")).split(" ")
+            try:
+                lengths.append(float(bits[-2]))
+            except (ValueError, IndexError):
+                lengths.append(0.0)
+        g.check("craft", "no aeroplane is parked on a 400 m strip",
+                all(v >= 400 for v in lengths),
+                f"shortest {min(lengths) if lengths else 0:.0f} m")
+        g.check("craft", "an international-length runway is in the world",
+                any(v >= 2500 for v in lengths),
+                f"longest {max(lengths) if lengths else 0:.0f} m")
+
+        zs = [c["z"] for c in craft]
+        g.check("craft", "craft are spread across the island",
+                len(zs) > 1 and max(zs) - min(zs) > 20000,
+                f"{(max(zs) - min(zs)) / 1000:.1f} km north to south"
+                if zs else "none")
 
     ok = g.report()
     os.makedirs(os.path.dirname(args.report), exist_ok=True)
