@@ -583,6 +583,26 @@ def build_chunks(lay, canopy, dtm, landmask, raster_stats, names):
 # Road graph for traffic and navigation
 # --------------------------------------------------------------------------
 
+def _clip_runs(chain, x0, z0, x1, z1):
+    """Maximal runs of a polyline that lie inside a rectangle.
+
+    Splits rather than trims: a line that leaves the area and comes back
+    becomes two routes, which is right, because the part outside is not
+    in the compiled world and a service cannot run through it.
+    """
+    runs, cur = [], []
+    for p in chain:
+        if x0 <= p[0] <= x1 and z0 <= p[1] <= z1:
+            cur.append(p)
+        else:
+            if len(cur) >= 2:
+                runs.append(cur)
+            cur = []
+    if len(cur) >= 2:
+        runs.append(cur)
+    return runs
+
+
 def build_transit(lay):
     """Stitched rail, metro, monorail and ferry routes.
 
@@ -614,6 +634,8 @@ def build_transit(lay):
 
     def key(pt):
         return (int(round(pt[0])), int(round(pt[1])))
+
+    bx0, bz0, bx1, bz1 = aoi.aoi_bounds_xz()
 
     lines, classes = [], []
     for cls in sorted(frags):
@@ -651,20 +673,28 @@ def build_transit(lay):
                         chain.extend(reversed(seg[:-1]))
                 chain.reverse()
 
-            length = sum(math.hypot(chain[j + 1][0] - chain[j][0],
-                                    chain[j + 1][1] - chain[j][1])
-                         for j in range(len(chain) - 1))
-            # Short stubs are sidings and crossovers; nothing runs on them.
-            if length < 600.0:
-                continue
-            # 0.8 m rather than the 2 m used for roads: a train visibly cuts
-            # the corner on a chunky polyline, and at 1733 km the whole
-            # network still costs well under a megabyte.
-            simple = simplify(np.asarray(chain, dtype="f8"), 0.8)
-            if len(simple) < 2:
-                continue
-            lines.append(np.asarray(simple, dtype="<f4"))
-            classes.append(cls)
+            # Clip to the AOI. OSM keeps whole ways that cross the
+            # boundary, so a line out of Virar or across to the mainland
+            # carries nodes up to a couple of kilometres past the edge of
+            # the compiled world, and a train running out there would be
+            # gliding over nothing. Split into the runs that are inside
+            # rather than discarding the whole route.
+            for piece in _clip_runs(chain, bx0, bz0, bx1, bz1):
+                length = sum(math.hypot(piece[j + 1][0] - piece[j][0],
+                                        piece[j + 1][1] - piece[j][1])
+                             for j in range(len(piece) - 1))
+                # Short stubs are sidings and crossovers; nothing runs on
+                # them.
+                if length < 600.0:
+                    continue
+                # 0.8 m rather than the 2 m used for roads: a train
+                # visibly cuts the corner on a chunky polyline, and the
+                # whole network still costs a tenth of a megabyte.
+                simple = simplify(np.asarray(piece, dtype="f8"), 0.8)
+                if len(simple) < 2:
+                    continue
+                lines.append(np.asarray(simple, dtype="<f4"))
+                classes.append(cls)
 
     if lines:
         pts = np.concatenate(lines, axis=0)
