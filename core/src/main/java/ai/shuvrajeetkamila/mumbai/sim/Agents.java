@@ -2,6 +2,7 @@ package ai.shuvrajeetkamila.mumbai.sim;
 
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.game.Wanted;
+import ai.shuvrajeetkamila.mumbai.math.MathUtil;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 import java.util.Random;
@@ -241,19 +242,34 @@ public final class Agents {
     }
 
     /** Pick a drivable edge whose start node is within radius of the point. */
+    /**
+     * A random road edge within {@code radius} of a point, or -1.
+     *
+     * <p>The distance test at the end is not a detail. The spatial index
+     * is on a 256 m grid, so asking for edges within 300 m used to hand
+     * back anything in the surrounding five-by-five block - a 1.6 km
+     * square, eighteen times the area actually asked for. Traffic spread
+     * itself over all of it and the street the player was standing in
+     * stayed empty however much the radius was tightened.
+     */
     private int pickEdgeNear(double x, double z, double radius) {
         int rings = Math.max(1, (int) Math.ceil(radius / CELL));
         long cx = (long) Math.floor(x / CELL);
         long cz = (long) Math.floor(z / CELL);
-        int tries = 0;
-        while (tries < 24) {
-            tries++;
+        double r2 = radius * radius;
+        for (int tries = 0; tries < 40; tries++) {
             long gx = cx + rng.nextInt(rings * 2 + 1) - rings;
             long gz = cz + rng.nextInt(rings * 2 + 1) - rings;
             int[] arr = edgeGrid.get((gx << 32) ^ (gz & 0xFFFFFFFFL));
-            if (arr != null && arr.length > 0) {
-                return arr[rng.nextInt(arr.length)];
-            }
+            if (arr == null || arr.length == 0) { continue; }
+            int e = arr[rng.nextInt(arr.length)];
+            int a = world.graphEdge[e * 2];
+            int b = world.graphEdge[e * 2 + 1];
+            double mx = (world.graphNodeXZ[a * 2] + world.graphNodeXZ[b * 2]) * 0.5;
+            double mz = (world.graphNodeXZ[a * 2 + 1]
+                    + world.graphNodeXZ[b * 2 + 1]) * 0.5;
+            double dx = mx - x, dz = mz - z;
+            if (dx * dx + dz * dz <= r2) { return e; }
         }
         return -1;
     }
@@ -340,6 +356,20 @@ public final class Agents {
         }
     }
 
+    /**
+     * How much of the car budget stands at the kerb rather than driving.
+     *
+     * <p>Traffic alone is not a city you can play in. The whole first move
+     * of this kind of game - walk up to something, get in, drive off -
+     * needs there to be something standing still to walk up to, and until
+     * this existed the only way into a car was to step in front of moving
+     * traffic and hope.
+     */
+    private static final double PARKED_SHARE = 0.42;
+
+    /** Kerb clearance beyond the running lane, metres. */
+    private static final double PARK_OFFSET = 2.35;
+
     private void spawnCar(Car c, double px, double pz, double radius) {
         int e = pickEdgeNear(px, pz, radius);
         if (e < 0) { return; }
@@ -347,7 +377,10 @@ public final class Agents {
         c.t = rng.nextDouble();
         c.forward = rng.nextBoolean();
         c.colour = rng.nextInt(10);
-        c.parked = false;
+        // Nothing parks on a motorway, and nothing parks on a slip road
+        // either: both would put a stationary car in a live lane with no
+        // kerb to stand on.
+        c.parked = world.edgeClass(e) > 1 && rng.nextDouble() < PARKED_SHARE;
         placeOnEdge(c);
         // Weighted by the real mix of the city's traffic, and filtered by
         // where each type is actually licensed to go: no autorickshaw turns
@@ -370,7 +403,21 @@ public final class Agents {
             default: pace = 0.85; break;
         }
         c.targetSpeed = limit / 3.6 * pace * (0.86 + rng.nextDouble() * 0.26);
-        c.speed = c.targetSpeed;
+        c.speed = c.parked ? 0 : c.targetSpeed;
+        if (c.parked) {
+            // A parked car is not a bus or a tempo waiting at a stop; those
+            // are the two things you cannot get into, and leaving them
+            // standing empty at the kerb would be a tease.
+            if (!kind.enterable) {
+                c.kindOrdinal = VehicleKind.HATCHBACK.ordinal();
+                c.body = c.kindOrdinal;
+            }
+            // Some of them face the other way. A street where every car
+            // points the same way looks like a car park, not a street.
+            if (rng.nextDouble() < 0.34) {
+                c.heading = MathUtil.wrapPi(c.heading + Math.PI);
+            }
+        }
         // Do not pop a car into existence right in front of the player.
         double dx = c.x - px, dz = c.z - pz;
         if (dx * dx + dz * dz < 45 * 45) { return; }
@@ -391,9 +438,12 @@ public final class Agents {
         dx /= len; dz /= len;
         if (!c.forward) { dx = -dx; dz = -dz; }
         // Left of travel in an X-east, Z-south frame is (dz, -dx). Indian
-        // traffic drives on the left, so that is where the car belongs.
-        c.x = x + dz * LANE_OFFSET;
-        c.z = z - dx * LANE_OFFSET;
+        // traffic drives on the left, so that is where the car belongs -
+        // and a parked car belongs further left again, against the kerb,
+        // out of the lane the moving traffic is using.
+        double off = LANE_OFFSET + (c.parked ? PARK_OFFSET : 0);
+        c.x = x + dz * off;
+        c.z = z - dx * off;
         c.y = world.height(c.x, c.z);
         c.heading = Math.atan2(dx, -dz);
     }

@@ -102,6 +102,10 @@ This matters more than anything above.
   marked on the full-screen map, and boarded with the same ENTER you use
   on a car. Every one of the 89 is covered by a test that walks up to it
   and gets in.
+- **Traffic density is a budget spent near the player**, not a simulation
+  of the whole city. Cars and pedestrians are populated within 300 m and
+  given up past 620 m; beyond that the streets are empty, because you
+  cannot see them. About two fifths of the cars are parked at the kerb.
 - Paid work (fares, deliveries, street races), money, checkpoints,
   reactive traffic, fleeing pedestrians, the radar, the full-screen
   map with tap-to-teleport, the wanted level,

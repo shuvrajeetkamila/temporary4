@@ -102,9 +102,27 @@ public final class HumanPhysics extends RigidBody {
         double pen = groundY - feet;
         grounded = !swimming && pen > -0.06;
         if (grounded) {
+            // The contact is compliant for the first finger's width - legs,
+            // shoes, the top of the soil - and rigid after that. A rigid
+            // constraint is not a stiffer spring: feeding the full overlap
+            // into the spring made the ground a catapult, and a one metre
+            // overlap threw the player eight metres into the air. Twelve
+            // metres threw her four hundred and she never came down.
+            double soft = Math.min(pen, CONTACT_DEPTH);
             double k = mass * 180.0;
             double c = mass * 16.0;
-            double n = Math.max(0, pen * k - velocity.y * c);
+            double n = Math.max(0, soft * k - velocity.y * c);
+
+            // Once past the compliant depth the ground may lift you clear,
+            // at a walking pace, and no faster. Shallow contact is left
+            // exactly as it was: the spring is already bounded there, and
+            // this must not change how it feels to walk over a kerb.
+            if (pen > CONTACT_DEPTH) {
+                double cap = mass
+                        * ((EXTRACT_SPEED - velocity.y) / dt + MathUtil.G);
+                n = Math.min(n, Math.max(0, cap));
+            }
+
             addForce(0, n, 0);
             airborneTime = 0;
         } else {
@@ -231,6 +249,12 @@ public final class HumanPhysics extends RigidBody {
         orientation.identity();
         angularVelocity.zero();
     }
+
+    /** How far the ground gives before it is rigid, metres. */
+    private static final double CONTACT_DEPTH = 0.22;
+
+    /** How fast the ground pushes a buried body clear, m/s. */
+    private static final double EXTRACT_SPEED = 1.2;
 
     /** What the ground is doing here. */
     public interface Terrain {

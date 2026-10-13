@@ -430,6 +430,50 @@ engine was going into spinning itself up. It now reaches 85 km/h and
 | Scooter | 85 km/h | 11.7 s | — | — | 0.62 g |
 | Sedan | 198 km/h | 6.0 s | 11.4 s | 44 m | 0.90 g |
 
+### A fourth pass: playing it rather than testing it
+
+The third pass looked at the world. This one ran a scripted play session -
+spawn, look around, walk to something, get in, drive, take a job - and
+printed what the player would actually have seen. Three more faults, and
+one of them was the most important bug in the game.
+
+**There was no traffic.** Not "too little": the expected number of cars
+within a block of the player was *less than one*. Traffic was populated
+across the chunk-streaming radius, which is 1760 m at full detail, so a
+budget of 140 cars worked out at fourteen per square kilometre. Standing
+on Marine Drive at midday, the nearest vehicle was 194 m away. Nothing in
+the suite caught it because every traffic test places its own cars; the
+spawner itself was never asked what it produced. Agents now have their
+own radius - 300 m out, 620 m gone - and the spatial index actually
+honours it. It was quantised to 256 m cells and handed back anything in
+the surrounding five-by-five block, an area eighteen times what was
+asked for, so tightening the radius alone changed nothing. Fourteen cars
+within 120 m now, against zero.
+
+**Nothing was ever parked.** The first move of this kind of game is to
+walk up to a car and get in, and every car in the world was moving. About
+two fifths of the budget now stands at the kerb, offset clear of the
+running lane, never on a motorway, never a bus or a tempo you cannot get
+into, and about a third of them facing the other way so a street does not
+look like a car park. There is one within 50 m of the spawn.
+
+**And the ground was a catapult.** Contact was a spring fed the whole
+overlap, so the deeper you were the harder it pushed: one metre of
+penetration threw the player eight metres in the air, three metres threw
+her thirty-five, twelve metres threw her four hundred and she was still
+climbing twelve seconds later. Anything that can bury a body - a hard
+landing resolved in a single step, a teleport onto a slope, a wall - was
+a trampoline. The contact is now compliant for the first 22 cm and rigid
+after that, and the force is capped at what will arrest a fall and lift a
+buried body clear at walking pace. Standing height and the feel of a kerb
+are unchanged to the centimetre; the four hundred metre launch is one
+centimetre of overshoot. The car was checked for the same fault and never
+had it: its suspension travel is bounded.
+
+Also confirmed working, and now covered: walking up to a parked car,
+boarding it and driving away; and a taxi fare from being offered to being
+paid.
+
 ## Verification
 
 Nothing is published unless all of this passes first:
@@ -438,7 +482,7 @@ Nothing is published unless all of this passes first:
   checkpoints, run against the compiled files with an independently derived
   projection. The craft gates re-read the land mask themselves, so a bug in
   the mooring code cannot certify its own output.
-- **342** core tests in `core/src/test`, including the same 51 checkpoints
+- **365** core tests in `core/src/test`, including the same 51 checkpoints
   read back through the game's own loader.
 - The built APK is then inspected rather than trusted: badging, signature,
   and a check that all four world files really are inside the zip.

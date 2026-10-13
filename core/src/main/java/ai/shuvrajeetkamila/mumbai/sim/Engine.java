@@ -105,6 +105,25 @@ public final class Engine {
     public final Weather weather = new Weather();
 
     /**
+     * How far out traffic and pedestrians are populated, metres.
+     *
+     * <p>Deliberately much smaller than the streaming radius. Density is
+     * what makes a street feel alive, and density is the cap divided by
+     * the area it is spread over; at 300 m a hundred and forty cars is
+     * nearly five hundred per square kilometre and about twenty of them
+     * are within a block of you.
+     */
+    public static final double AGENT_SPAWN_M = 300.0;
+
+    /**
+     * Where they are given up, metres. Comfortably outside the spawn ring
+     * so nothing spawns and is immediately thrown away, and close enough
+     * that cars driving away free their slot for the street you are
+     * actually standing in.
+     */
+    public static final double AGENT_DESPAWN_M = 620.0;
+
+    /**
      * Hours since midnight. Advances at one game-minute per real second, so
      * a full day is twenty-four minutes of play - the pace the genre has
      * used since it had a day at all. Slow enough that the light changes
@@ -346,8 +365,15 @@ public final class Engine {
         }
 
         RigidBody b = activeBody();
+        // Traffic lives in its own radius, not the streaming radius. Spread
+        // across the chunk-streaming distance the car budget vanished: 140
+        // cars uniformly over a 1760 m disc is fourteen per square
+        // kilometre, so the expected number within 120 m of the player was
+        // less than one, and the busiest road in Mumbai was empty. The
+        // number of cars is a budget for what is *around* you; spend it
+        // there and let the far field be empty, because you cannot see it.
         agents.update(dt, b.position.x, b.position.z, b.velocity.x, b.velocity.z,
-                quality.medRadius * 0.55, quality.medRadius);
+                AGENT_SPAWN_M, AGENT_DESPAWN_M);
         missions.update(dt, b.position.x, b.position.z,
                 Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
         transit.update(dt, b.position.x, b.position.z, quality.medRadius);
