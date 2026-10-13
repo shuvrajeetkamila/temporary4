@@ -81,7 +81,11 @@ public final class Transit {
         for (int r = 0; r < n; r++) {
             routeLength[r] = world.transitLength(r);
             // A service needs room for the whole train plus somewhere to go.
-            if (routeLength[r] > 900 && world.transitPointCount(r) >= 2) {
+            // Long enough for the longest consist to sit clear of both
+            // ends, whichever way round it is.
+            double need = 2 * (RAIL_CARS * (CAR_LEN + CAR_GAP)) + 40;
+            if (routeLength[r] > Math.max(900, need)
+                    && world.transitPointCount(r) >= 2) {
                 ok[m++] = r;
             }
         }
@@ -146,11 +150,15 @@ public final class Transit {
             sv.carriages = carriagesFor(cls);
             sv.dir = rng.nextBoolean() ? 1 : -1;
             sv.dwell = 0;
-            // Start far enough along that the whole train is on the route.
+            // Start somewhere the whole consist fits whichever way it is
+            // pointing: running forwards it occupies [s - trainLen, s],
+            // backwards [s, s + trainLen], so the safe band for either is
+            // trainLen in from both ends.
             double trainLen = sv.carriages * (CAR_LEN + CAR_GAP);
-            double room = routeLength[r] - trainLen - 10;
-            if (room <= 10) { continue; }
-            sv.s = trainLen + rng.nextDouble() * room;
+            double lo = trainLen + 2.0;
+            double hi = routeLength[r] - trainLen - 2.0;
+            if (hi <= lo) { continue; }
+            sv.s = lo + rng.nextDouble() * (hi - lo);
             sv.targetSpeed = cruiseFor(cls);
             sv.speed = sv.targetSpeed * (0.4 + rng.nextDouble() * 0.6);
             sv.active = true;
@@ -197,15 +205,24 @@ public final class Transit {
 
         double len = routeLength[sv.route];
         double trainLen = sv.carriages * (CAR_LEN + CAR_GAP);
-        // Reverse at the ends. The nose must stay on the route and there
-        // must be room behind it for the carriages.
+
+        // Reversing at a terminus swaps which end of the consist leads.
+        // The train does not move: the nose jumps to the far end of it.
+        //
+        // This matters because carriages are placed at s - back * dir, so
+        // running forwards they occupy [s - trainLen, s] and running
+        // backwards they occupy [s, s + trainLen]. Without the jump, a
+        // train that reversed at the far end kept its nose at the
+        // terminus and asked for carriage positions beyond the end of the
+        // line, where pointAt clamps - so the whole rake collapsed onto
+        // the last point and the carriages sat 6 m apart instead of 21.
         if (sv.dir > 0 && sv.s >= len - 2.0) {
-            sv.s = len - 2.0;
+            sv.s = len - 2.0 - trainLen;
             sv.dir = -1;
             sv.dwell = TURNAROUND_S;
             sv.speed = 0;
-        } else if (sv.dir < 0 && sv.s <= trainLen + 2.0) {
-            sv.s = trainLen + 2.0;
+        } else if (sv.dir < 0 && sv.s <= 2.0) {
+            sv.s = 2.0 + trainLen;
             sv.dir = 1;
             sv.dwell = TURNAROUND_S;
             sv.speed = 0;

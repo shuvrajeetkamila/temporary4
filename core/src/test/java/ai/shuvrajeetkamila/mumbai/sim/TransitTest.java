@@ -278,6 +278,63 @@ final class TransitTest {
         assertTrue(maxS <= len + 1e-6,
                 "the service ran " + (maxS - len) + " m past the end of the line");
         assertTrue(minS >= 0, "the service ran off the start of the line");
+
+        // The consist must still be properly spaced after reversing. This
+        // is the regression: carriages are placed at s - back * dir, so
+        // running backwards they occupy arc lengths AHEAD of the nose. A
+        // reversal that left the nose at the terminus asked pointAt for
+        // positions past the end of the line, where it clamps, and the
+        // whole rake collapsed onto the last point - 6 m between
+        // carriages instead of 21. It only showed up in CI because it
+        // needs a service that has actually turned round.
+        assertEquals(-1, s.dir, "expected to be running in reverse here");
+        float[] poses = new float[64];
+        int n = t.carriagePoses(s, poses, 0, 0, 0, 0);
+        assertEquals(s.carriages, n);
+        double spacing = Transit.CAR_LEN + Transit.CAR_GAP;
+        for (int c = 1; c < n; c++) {
+            double gap = Math.hypot(poses[c * 4] - poses[(c - 1) * 4],
+                    poses[c * 4 + 2] - poses[(c - 1) * 4 + 2]);
+            assertTrue(gap > spacing * 0.80,
+                    "after reversing, carriage " + c + " sits " + gap
+                            + " m from the one ahead, expected about " + spacing);
+        }
+    }
+
+    @Test
+    @DisplayName("no carriage is ever placed off the end of its line")
+    void consistStaysOnTheLine() {
+        WorldData w = WorldFixture.world();
+        Assumptions.assumeTrue(w != null, "needs a compiled world");
+        Assumptions.assumeTrue(w.transitCount() > 0, "no transit network");
+        Engine e = new Engine(w);
+        double px = e.human.position.x, pz = e.human.position.z;
+
+        float[] poses = new float[64];
+        int checked = 0;
+        for (int i = 0; i < 300 * 60; i++) {
+            e.transit.update(DT, px, pz, 5000);
+            if (i % 240 != 0) { continue; }
+            for (Transit.Service s : e.transit.services()) {
+                if (!s.active || s.carriages < 2) { continue; }
+                double len = w.transitLength(s.route);
+                double trainLen = s.carriages * (Transit.CAR_LEN + Transit.CAR_GAP);
+                double tail = s.s - trainLen * s.dir;
+                assertTrue(s.s >= -1e-6 && s.s <= len + 1e-6,
+                        "the nose is at " + s.s + " on a " + len + " m line");
+                assertTrue(tail >= -1e-6 && tail <= len + 1e-6,
+                        "the tail is at " + tail + " on a " + len + " m line");
+                int n = e.transit.carriagePoses(s, poses, 0, 0, 0, 0);
+                for (int c = 1; c < n; c++) {
+                    double gap = Math.hypot(poses[c * 4] - poses[(c - 1) * 4],
+                            poses[c * 4 + 2] - poses[(c - 1) * 4 + 2]);
+                    assertTrue(gap > (Transit.CAR_LEN + Transit.CAR_GAP) * 0.80,
+                            "carriages bunched to " + gap + " m apart");
+                }
+                checked++;
+            }
+        }
+        Assumptions.assumeTrue(checked > 0, "no multi-carriage service ran");
     }
 
     @Test
