@@ -87,12 +87,17 @@ This matters more than anything above.
   so they are not navigable water in this build.
 - Navi Mumbai, east of Thane Creek, is distant low-detail context, as the
   brief allows.
-- There is **no audio**. None at all.
+- **Audio is entirely synthesised** - every sound is computed sample by
+  sample at runtime and there is not one recording in the package. That
+  keeps it original, but it also means it sounds synthesised: engines,
+  sirens, horns, rain, wind and collisions are there, and music, voices
+  and footsteps are not.
 - Paid work (fares, deliveries, street races), money, checkpoints,
   reactive traffic, fleeing pedestrians, the radar, the wanted level,
   police pursuit, the baton, the monsoon, and trains, metro, monorail and
-  harbour vessels are all in. **There is no siren light or sound on the
-  police car** - pursuit units are identifiable by the police body only.
+  harbour vessels are all in. Police cars now **sound** like police cars;
+  **there is still no flashing siren light** on them, so at a distance
+  they are identified by ear and by the police body.
   There is no on-foot police officer: the response is vehicles and arrest.
 - **Transit has no stations or timetable.** Services run between the ends
   of their line with a dwell at each terminus; they do not stop at

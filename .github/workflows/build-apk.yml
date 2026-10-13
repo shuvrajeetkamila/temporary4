@@ -423,11 +423,16 @@ jobs:
           # mismatch between stages shows up nowhere else.
           grep -q 'MUMBAI_SHADERS_OK programs=5/5' logcat-full.txt || {
             echo "FAIL: not every shader program linked"; STATUS=1; }
+          # The audio device must actually open. The emulator has a real
+          # AudioTrack implementation, so this catches a bad format or
+          # buffer size that no unit test can see.
+          grep -q 'MUMBAI_AUDIO_OK' logcat-full.txt || {
+            echo "FAIL: the audio output never started"; STATUS=1; }
           if grep -q 'FATAL EXCEPTION' logcat-full.txt; then
             echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
           adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
             || { echo "FAIL: the process is not running"; STATUS=1; }
-          grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK|MUMBAI_SHADERS_OK' logcat-full.txt || true
+          grep -E 'MUMBAI_WORLD_READY|MUMBAI_RENDER_OK|MUMBAI_SHADERS_OK|MUMBAI_AUDIO_OK' logcat-full.txt || true
           echo "device_test status $STATUS"
           adb emu kill || true
           exit $STATUS

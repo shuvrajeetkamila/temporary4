@@ -165,6 +165,62 @@ that turns round.
 The metro is drawn 12 m below the street, the monorail 8.5 m above it,
 and vessels sit at sea level whatever the terrain underneath says.
 
+### Sound, from nothing
+
+There are no audio files in this project. Every sound is generated a
+sample at a time while you play, for the same reason the artwork is
+procedural: it is original, it is unencumbered, and nobody has to ship a
+licence with it.
+
+That constraint turns out to be an advantage. The engine note is not a
+loop picked to be nearly the right pitch; it is built from the firing
+frequency implied by the crankshaft speed the physics is already
+solving for. A four-stroke fires twice per revolution per pair of
+cylinders, so `rpm / 60 x cylinders / 2` is the note you actually hear.
+The consequence is that the sound cannot drift out of step with the
+simulation - revs climb through a gear and drop across a shift without
+anything being arranged to make that happen - and a rickshaw's single
+cylinder sits two octaves under a taxi's four for free.
+
+The waveforms are summed sine partials rather than naive ramps, with the
+partial count falling as pitch rises so nothing ever folds back over
+Nyquist. A sawtooth computed the obvious way aliases into a kazoo at
+high revs; `Synth.partialsFor` is what prevents that.
+
+Around you, the mixer carries twelve positional voices, which is far
+fewer than a busy junction has cars, so `AudioDirector` chooses. The
+rule is priority first and distance second: a siren outranks a horn, a
+horn outranks an engine, and within a class the nearest wins. A police
+car 200 m back therefore keeps its voice while thirty-nine closer cars
+lose theirs, which is correct - knowing the law is behind you matters
+more than a parked tempo idling at your elbow. Sources are panned with a
+constant-power law, attenuated by inverse distance rather than inverse
+square, and faded to silence at their cull radius so nothing clicks out.
+Doppler is real but clamped, because the textbook formula goes to
+infinity as closing speed approaches Mach 1 and a physics glitch should
+not produce a shriek.
+
+Rain is filtered noise whose level and brightness follow the same
+`Weather.rain` the shader uses, slightly decorrelated between the ears
+so it sits around you. Wind grows with the square of speed, like drag.
+Collisions get a short low thump scaled by impact speed.
+
+The whole mix passes through a soft clipper. Its shape is not arbitrary:
+`v - v^3/6.75` has zero gradient exactly where it reaches 1.0, so it
+meets the rail tangentially and never overshoots. An earlier divisor
+peaked at 1.067, which then clamped in the integer conversion and
+produced precisely the hard edge the clipper exists to avoid - a test
+caught it.
+
+All of this is pure Java with no Android types, so it is tested by
+rendering buffers and measuring them: Goertzel for pitch, RMS for level,
+a monotonicity sweep for the clipper, and a four-thousand-buffer run
+that fails if the render path allocates, because an audio thread that
+makes garbage eventually meets the collector mid-buffer and you hear it.
+Only `AudioOutput` touches `AudioTrack`, on its own thread, and every
+failure there is swallowed - a phone with a busy audio device should
+still be playable in silence.
+
 ### Controls, and an audit of them
 
 Every control is mapped in one place, `app/ControlMapping`, which lives

@@ -46,6 +46,8 @@ public final class MainActivity extends Activity
 
     private final InputState input = new InputState();
     private volatile Engine engine;
+    /** The audio pump. Created once the world (and so the mixer) exists. */
+    private AudioOutput audioOut;
     private volatile String loadError;
 
     private PowerManager powerManager;
@@ -109,6 +111,13 @@ public final class MainActivity extends Activity
             // and a good test of the streamer because the sea is right there.
             e.spawnAt(18.9430, 72.8230, ControlProfile.ON_FOOT);
             engine = e;
+            // Sound can only start once there is a mixer to pull from.
+            // It is started on the UI thread so start/stop stay ordered
+            // against the lifecycle callbacks.
+            ui.post(() -> {
+                audioOut = new AudioOutput(e.audio);
+                audioOut.start();
+            });
             long ms = (System.nanoTime() - t0) / 1_000_000;
             Log.i(TAG, "world loaded in " + ms + " ms: "
                     + world.chunkCount() + " chunks, "
@@ -251,17 +260,22 @@ public final class MainActivity extends Activity
         super.onResume();
         goFullscreen();
         surface.onResume();
+        if (audioOut != null) { audioOut.start(); }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         surface.onPause();
+        // Hand the output device back while backgrounded, so the game is
+        // not still droning over whatever the player switched to.
+        if (audioOut != null) { audioOut.stop(); }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (audioOut != null) { audioOut.stop(); }
         if (renderer != null) { renderer.shutdown(); }
         if (powerManager != null && thermalListener != null
                 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

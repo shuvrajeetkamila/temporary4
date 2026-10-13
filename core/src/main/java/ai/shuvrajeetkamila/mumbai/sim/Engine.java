@@ -3,6 +3,8 @@ package ai.shuvrajeetkamila.mumbai.sim;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
+import ai.shuvrajeetkamila.mumbai.audio.AudioDirector;
+import ai.shuvrajeetkamila.mumbai.audio.AudioMixer;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
 import ai.shuvrajeetkamila.mumbai.game.Missions;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
@@ -53,6 +55,14 @@ public final class Engine {
 
     /** How much trouble you are in. */
     public final Wanted wanted = new Wanted();
+
+    /**
+     * Everything you can hear. The mixer is read by the audio thread and
+     * written here; the director chooses which of the cars around you get
+     * one of its handful of voices.
+     */
+    public final AudioMixer audio = new AudioMixer();
+    private final AudioDirector audioDirector = new AudioDirector();
 
     /** Radius police are called in at, metres. Beyond the spawn suppression. */
     public static final double POLICE_SPAWN_M = 220.0;
@@ -311,7 +321,73 @@ public final class Engine {
         missions.update(dt, b.position.x, b.position.z,
                 Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
         transit.update(dt, b.position.x, b.position.z, quality.medRadius);
+        // Before updateWanted, which clears the collision counters the
+        // impact sound is triggered from.
+        updateAudio(b, in);
         updateWanted(dt, b);
+    }
+
+    /**
+     * Points the mixer at whatever the player is currently in and at the
+     * traffic around them.
+     *
+     * <p>The engine note comes from the crankshaft speed the physics is
+     * already solving for, not from a timer, so it rises through a gear
+     * and drops across a shift without anything extra being arranged.
+     */
+    private void updateAudio(RigidBody b, InputState in) {
+        double speed = Math.hypot(b.velocity.x, b.velocity.z);
+
+        switch (profile) {
+            case CAR:
+                audio.playerRpm = car.engineRpm;
+                audio.playerCylinders = AudioDirector.cylindersFor(drivingKind());
+                audio.playerLoad = Math.min(1.0, in.throttle);
+                break;
+            case HELICOPTER:
+                // Twice the blade count puts the mixer's firing frequency
+                // exactly on blade pass, which is the thump you hear.
+                audio.playerRpm = heli.rotorRpm;
+                audio.playerCylinders = 8;
+                audio.playerLoad = Math.min(1.0, 0.45 + in.throttle * 0.55);
+                break;
+            case AEROPLANE:
+                audio.playerRpm = plane.engineRpm;
+                audio.playerCylinders = 4;
+                audio.playerLoad = Math.min(1.0, in.throttle);
+                break;
+            case BOAT:
+                // No crank model on the boat, so infer one from thrust.
+                audio.playerRpm = 700 + Math.min(1.0, in.throttle) * 2600;
+                audio.playerCylinders = 6;
+                audio.playerLoad = Math.min(1.0, in.throttle);
+                break;
+            default:
+                audio.playerRpm = 0;
+                audio.playerLoad = 0;
+                break;
+        }
+
+        audio.rainLevel = weather.rain;
+        // Wind is the only cue that you are going fast in an open cockpit,
+        // and on foot there should not be any.
+        audio.windLevel = profile == ControlProfile.ON_FOOT
+                ? 0 : AudioDirector.windFor(speed);
+
+        if (agents.carsHit > 0 || agents.pedsHit > 0) {
+            audio.impactPending = Math.min(1.0,
+                    0.25 + Math.min(speed, 30.0) / 30.0 * 0.75);
+        }
+
+        audioDirector.update(audio, agents.cars(),
+                b.position.x, b.position.z, b.velocity.x, b.velocity.z,
+                headingOf(b), wanted.stars());
+    }
+
+    /** Listener facing, from the body's orientation. */
+    private static double headingOf(RigidBody b) {
+        Vec3 f = b.orientation.forward(new Vec3());
+        return Math.atan2(f.x, -f.z);
     }
 
     /**
