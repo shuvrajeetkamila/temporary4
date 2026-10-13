@@ -118,6 +118,16 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         seaProg = GLUtil.link(Shaders.SEA_VS, Shaders.SEA_FS);
         skyProg = GLUtil.link(Shaders.SKY_VS, Shaders.SKY_FS);
         rainProg = GLUtil.link(Shaders.SKY_VS, Shaders.RAIN_FS);
+        // GLUtil.link throws on failure, so reaching here means every
+        // program compiled and linked on this driver. Logged explicitly so
+        // CI can assert it rather than infer it from the app not crashing:
+        // a shader that fails only on a real driver is the most likely
+        // silent breakage in the whole renderer, and precision mismatches
+        // between stages do not show up anywhere else.
+        int[] progs = {sceneProg, instProg, seaProg, skyProg, rainProg};
+        int linked = 0;
+        for (int p : progs) { if (p != 0) { linked++; } }
+        Log.i(GLUtil.TAG, "MUMBAI_SHADERS_OK programs=" + linked + "/" + progs.length);
 
         uSceneViewProj = GLES30.glGetUniformLocation(sceneProg, "uViewProj");
         uSceneOrigin = GLES30.glGetUniformLocation(sceneProg, "uChunkOrigin");
