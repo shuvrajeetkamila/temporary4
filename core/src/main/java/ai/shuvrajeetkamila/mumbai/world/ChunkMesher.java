@@ -132,6 +132,7 @@ public final class ChunkMesher {
         int n = lod == LOD_HIGH ? 32 : (lod == LOD_MED ? 16 : 8);
         double step = size / n;
         int base = vCount;
+        double minH = Double.MAX_VALUE;
         float[] rgb = new float[3];
         for (int j = 0; j <= n; j++) {
             for (int i = 0; i <= n; i++) {
@@ -148,6 +149,7 @@ public final class ChunkMesher {
                 if (!land) {
                     nrm[0] = 0; nrm[1] = 1; nrm[2] = 0;
                 }
+                if (h < minH) { minH = h; }
                 push((float) lx, (float) h, (float) lz,
                         (float) nrm[0], (float) nrm[1], (float) nrm[2],
                         rgb[0], rgb[1], rgb[2],
@@ -162,6 +164,101 @@ public final class ChunkMesher {
                 triN(a + 1, a + row, a + row + 1);
             }
         }
+        skirt(base, n, step, minH - SKIRT_MARGIN_M);
+    }
+
+    /** How far below a chunk's lowest ground its skirt hangs, metres. */
+    public static final double SKIRT_MARGIN_M = 2.0;
+
+    /**
+     * A curtain hung around the edge of a chunk.
+     *
+     * <p>The terrain is meshed at 32, 16 or 8 subdivisions depending on
+     * how far away the chunk is, which means two neighbouring chunks at
+     * different detail levels do not share vertices along the edge
+     * between them. One follows the ground every 32 m and the other cuts
+     * a straight line across 128 m, and the ground tears open between
+     * them. Measured across this world the tear reaches <b>137 m</b> on
+     * the steep ground at Malabar Hill and the Powai slopes, is 15 m at
+     * the 99.9th percentile and a few metres almost everywhere else -
+     * and through it you see whatever is behind the terrain, which is
+     * the sea. That is one of the two ways this game drew water on dry
+     * land.
+     *
+     * <p>Stitching the edges instead would mean each chunk knowing its
+     * neighbours' detail levels at the moment it is meshed, which it
+     * cannot: they are streamed independently and change constantly.
+     * A skirt needs no such agreement. It hangs from every edge vertex
+     * down past the lowest ground in the chunk, so whatever the
+     * neighbour does with its edge, there is geometry behind the gap. It
+     * costs four strips of quads and is invisible unless it is doing its
+     * job.
+     */
+    private void skirt(int base, int n, double step, double bottom) {
+        int row = n + 1;
+        for (int side = 0; side < 4; side++) {
+            for (int k = 0; k < n; k++) {
+                // Two vertices along this edge of the grid, in order.
+                int i0, j0, i1, j1;
+                switch (side) {
+                    case 0:  i0 = k;     j0 = 0; i1 = k + 1; j1 = 0;     break;
+                    case 1:  i0 = n;     j0 = k; i1 = n;     j1 = k + 1; break;
+                    case 2:  i0 = k + 1; j0 = n; i1 = k;     j1 = n;     break;
+                    default: i0 = 0;     j0 = k + 1; i1 = 0; j1 = k;     break;
+                }
+                int va = base + j0 * row + i0;
+                int vb = base + j1 * row + i1;
+                int sa = vCount;
+                copyDown(va, bottom);
+                copyDown(vb, bottom);
+                // Outward and horizontal, which is what a vertical wall
+                // is. Giving it the ground's upward normal would leave
+                // triN with nothing to decide the winding from.
+                float nx = side == 1 ? 1 : (side == 3 ? -1 : 0);
+                float nz = side == 2 ? 1 : (side == 0 ? -1 : 0);
+                setNormal(sa, nx, 0, nz);
+                setNormal(sa + 1, nx, 0, nz);
+                int ta = vCount;
+                copyOf(va, nx, nz);
+                copyOf(vb, nx, nz);
+                triN(ta, sa, ta + 1);
+                triN(ta + 1, sa, sa + 1);
+            }
+        }
+    }
+
+    /**
+     * Duplicates a vertex at a lower height, keeping its colour.
+     *
+     * <p>The texture coordinate is carried over from the vertex above
+     * rather than taken from the new height. A skirt hangs below the
+     * lowest ground in the chunk, which at the coast is below zero, and
+     * the vertical texture coordinate is a height above a base: it must
+     * never go negative, both because the shader would read the facade
+     * atlas backwards and because it is the one channel that says where
+     * the bottom of a wall is.
+     */
+    private void copyDown(int v, double y) {
+        int o = v * STRIDE;
+        push(verts[o], (float) y, verts[o + 2],
+                verts[o + 3], verts[o + 4], verts[o + 5],
+                verts[o + 6], verts[o + 7], verts[o + 8], verts[o + 9],
+                verts[o + 10]);
+    }
+
+    /** Duplicates a vertex with a new normal, so the skirt shades flat. */
+    private void copyOf(int v, float nx, float nz) {
+        int o = v * STRIDE;
+        push(verts[o], verts[o + 1], verts[o + 2], nx, 0, nz,
+                verts[o + 6], verts[o + 7], verts[o + 8], verts[o + 9],
+                verts[o + 10]);
+    }
+
+    private void setNormal(int v, float nx, float ny, float nz) {
+        int o = v * STRIDE;
+        verts[o + 3] = nx;
+        verts[o + 4] = ny;
+        verts[o + 5] = nz;
     }
 
     /**

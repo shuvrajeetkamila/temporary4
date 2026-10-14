@@ -165,7 +165,19 @@ This matters more than anything above.
   which is what torn and striped geometry is), and a cancelled rebuild
   no longer strands a tile in a state where it is neither drawable nor
   reclaimable.
-  Second, the tide is a real one - just under two metres either way,
+  Second, the terrain is meshed at 32, 16 or 8 subdivisions a chunk
+  depending on distance, so two neighbouring chunks at different detail
+  levels did not agree about the ground along the edge between them: one
+  follows it every 32 m, the other cuts straight across 128 m. Measured
+  across this world that tear reaches **137 m** on the steep ground at
+  Malabar Hill and the Powai slopes, 15 m at the 99.9th percentile, and
+  a few metres almost everywhere else - a straight line of sea or sky
+  drawn across the land. Each chunk now hangs a skirt from its edges
+  down past its own lowest ground, which needs no agreement with
+  neighbours that are streamed independently and change detail level
+  constantly. It costs about 256 triangles on a 2048-triangle chunk and
+  is invisible unless it is doing its job.
+  Third, the tide is a real one - just under two metres either way,
   which is what Mumbai Harbour does - and **6.3 % of the land in the
   20 m terrain model sits below that line**: the reclaimed ground along
   Back Bay, the dock aprons, the low ground behind Mahim. At high water
