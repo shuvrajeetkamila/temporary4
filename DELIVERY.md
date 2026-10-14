@@ -90,8 +90,11 @@ This matters more than anything above.
 - **Audio is entirely synthesised** - every sound is computed sample by
   sample at runtime and there is not one recording in the package. That
   keeps it original, but it also means it sounds synthesised: engines,
-  sirens, horns, rain, wind and collisions are there, and music, voices
-  and footsteps are not.
+  sirens, horns, rain, wind, collisions and footsteps are there, and
+  music and voices are not. Footsteps are driven by the speed the player
+  actually makes over the ground rather than by the stick, so being
+  shoved against a wall at full input stops the sound as well as the
+  movement, and they brighten and ring longer in standing water.
 - **Boats, helicopters and aeroplanes are now things you can walk up to
   and get into.** Until this build all three flight and seakeeping models
   existed, were tested, and were unreachable: the only way into one was a
@@ -132,7 +135,48 @@ This matters more than anything above.
   source rather than a surface, and dark unless somebody is actually
   responding to you. The bars do not cast light on anything around them;
   there are no dynamic lights in this renderer.
-  There is no on-foot police officer: the response is vehicles and arrest.
+  **Officers on foot** now turn out alongside the patrol cars, from one
+  star, and more of them when you are on foot than when you are driving.
+  They run rather than walk, close to arm's length and stop, give up at
+  230 m so a chase has an end, and get back up after being batoned -
+  being able to delete the police force with a stick is not a chase. The
+  arrest is the same proximity test a patrol car uses, so being caught
+  means the same thing on foot as in a car. They wear khaki with a cap
+  and a baton on the belt: a colour and a silhouette, no crest, no
+  insignia and no lettering.
+- **Pedestrians walk.** Until this build they slid along the pavement
+  fully rigid. Each limb is tagged in the mesh and swung about its own
+  joint in the vertex shader - arms against legs, a small bob on the
+  whole body at twice the rate, stride scaled by how fast the person is
+  actually going and zero when they stop, so somebody waiting at a corner
+  stands still instead of marching on the spot. There is no skeleton and
+  no animation data; it is trigonometry on tagged vertices. Knocked-down
+  pedestrians are still sunk into the pavement rather than ragdolled.
+- **Two rendering faults reported from play are fixed, and both were
+  real.** First, a tile that crossed a detail-level boundary stopped
+  being drawn for the whole round trip through the I/O queue, a worker
+  thread and the upload budget - and because the sea is drawn under
+  everything, a missing tile is not a gap in the ground, it is water.
+  Driving anywhere crossed those boundaries constantly. The tile now
+  keeps its old mesh on screen until the new one is ready, the mesh it
+  replaces is handed back to be freed instead of being silently
+  overwritten (that leaked a tile's worth of GPU memory per detail
+  change, and a driver with no memory left stops honouring uploads,
+  which is what torn and striped geometry is), and a cancelled rebuild
+  no longer strands a tile in a state where it is neither drawable nor
+  reclaimable.
+  Second, the tide is a real one - just under two metres either way,
+  which is what Mumbai Harbour does - and **6.3 % of the land in the
+  20 m terrain model sits below that line**: the reclaimed ground along
+  Back Bay, the dock aprons, the low ground behind Mahim. At high water
+  the sea was drawn straight over those streets, and where the two
+  surfaces passed within centimetres of each other they fought for the
+  depth buffer and striped the road. The land mask has always been the
+  single authority for where the coast is; the sea shader now samples
+  the same mask and discards any pixel that falls on land. The mask
+  transform is rebased with the floating origin every frame, because a
+  texture coordinate built from a world constant and a render-space
+  position would have come apart only after a long drive.
 - **Transit has no stations or timetable.** Services run between the ends
   of their line with a dwell at each terminus; they do not stop at
   platforms, you cannot board one, and the 380 OSM platform ways are not

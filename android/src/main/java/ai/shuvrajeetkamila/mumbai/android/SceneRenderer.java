@@ -12,6 +12,7 @@ import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
+import ai.shuvrajeetkamila.mumbai.render.SeaMask;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.sim.Transit;
 import ai.shuvrajeetkamila.mumbai.world.ChunkMesher;
@@ -61,6 +62,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     /** 0 in daylight, 1 after dark. Set from the sun elevation each frame. */
     private float nightFactor;
     private int uSeaViewProj, uSeaCam, uSeaTime, uSeaExtent, uSeaTide;
+    private int uSeaLandXform, uSeaLandMask;
+    /** The land mask on the GPU, so the sea knows where the coast is. */
+    private int landMaskTex;
+    private final float[] landXform = new float[4];
     private int uSeaChop, uSeaSunDir, uSeaSunCol, uSeaSky, uSeaFogCol, uSeaFogDen;
     private int uSkySky, uSkyFog, uSkyHorizon;
 
@@ -74,6 +79,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      */
     private static final class VehicleGpu {
         int vao, vbo, ibo, instVbo, indexCount;
+        int instStride = 16;
     }
 
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
@@ -192,6 +198,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uSeaExtent = GLES30.glGetUniformLocation(seaProg, "uExtent");
         uSeaTide = GLES30.glGetUniformLocation(seaProg, "uTide");
         uSeaChop = GLES30.glGetUniformLocation(seaProg, "uChoppiness");
+        uSeaLandXform = GLES30.glGetUniformLocation(seaProg, "uLandXform");
+        uSeaLandMask = GLES30.glGetUniformLocation(seaProg, "uLandMask");
         uSeaSunDir = GLES30.glGetUniformLocation(seaProg, "uSunDir");
         uSeaSunCol = GLES30.glGetUniformLocation(seaProg, "uSunColour");
         uSeaSky = GLES30.glGetUniformLocation(seaProg, "uSkyColour");
@@ -305,6 +313,13 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             releaseTile(t);
             e.streamer.markReleased(t);
         }
+        // Meshes replaced by a detail-level rebuild. Every one of these
+        // was previously overwritten and never deleted: driving across
+        // the city leaked a tile's worth of GPU memory per LOD change,
+        // and a driver with no memory left starts refusing uploads.
+        for (Object handle : e.streamer.pollDisplaced(12)) {
+            releaseHandle(handle);
+        }
 
         drawScene(e, q);
         host.afterFrame(frameCount, dt);
@@ -413,6 +428,16 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUniform3fv(uSeaSky, 1, sky, 0);
         GLES30.glUniform3fv(uSeaFogCol, 1, fog, 0);
         GLES30.glUniform1f(uSeaFogDen, fogDensity);
+        if (landMaskTex == 0) { landMaskTex = buildLandMask(e.world); }
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE1);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, landMaskTex);
+        GLES30.glUniform1i(uSeaLandMask, 1);
+        // Recomputed every frame: the sea shader works in render space,
+        // so the mask's world origin has to be rebased along with
+        // everything else or the coastline slides out from under it.
+        SeaMask.transform(e.world, e.origin.offsetX(), e.origin.offsetZ(),
+                landXform);
+        GLES30.glUniform4fv(uSeaLandXform, 1, landXform, 0);
         GLES30.glBindVertexArray(seaVao);
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, seaIndexCount,
                 GLES30.GL_UNSIGNED_INT, 0);
@@ -641,6 +666,43 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         return id[0];
     }
 
+    /**
+     * Uploads the land mask so the sea fragment shader can refuse to draw
+     * over land.
+     *
+     * <p>Forty metres a texel rather than the mask's own twenty: the
+     * coastline is already drawn by the terrain, this only has to stop
+     * the water, and a quarter of the memory matters more than a sharper
+     * edge nobody can see. Nearest filtering, because an interpolated
+     * mask would put a half-land half-sea band along every shore.
+     */
+    private int buildLandMask(WorldData w) {
+        int[] size = new int[2];
+        byte[] texels = w.landMaskTexels(SeaMask.TEXEL_M, size);
+        int tw = size[0], th = size[1];
+        int[] id = new int[1];
+        GLES30.glGenTextures(1, id, 0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, id[0]);
+        ByteBuffer buf = ByteBuffer.allocateDirect(texels.length)
+                .order(ByteOrder.nativeOrder());
+        buf.put(texels).position(0);
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_R8, tw, th, 0,
+                GLES30.GL_RED, GLES30.GL_UNSIGNED_BYTE, buf);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D,
+                GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D,
+                GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST);
+        // Clamp: off the end of the mask is open sea, and that is what
+        // the edge texel says.
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D,
+                GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D,
+                GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+        Log.i(GLUtil.TAG, "MUMBAI_LANDMASK_OK " + tw + "x" + th);
+        return id[0];
+    }
+
     // ---------------------------------------------------------------- buffers
 
     private static final class TileGpu {
@@ -700,11 +762,16 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private void releaseTile(WorldStreamer.Tile t) {
-        if (!(t.gpu instanceof TileGpu)) { return; }
-        TileGpu g = (TileGpu) t.gpu;
+        if (releaseHandle(t.gpu)) { t.gpu = null; }
+    }
+
+    /** Frees one tile mesh, whether it is still attached to a tile or not. */
+    private boolean releaseHandle(Object handle) {
+        if (!(handle instanceof TileGpu)) { return false; }
+        TileGpu g = (TileGpu) handle;
         GLES30.glDeleteBuffers(2, new int[]{g.vbo, g.ibo}, 0);
         GLES30.glDeleteVertexArrays(1, new int[]{g.vao}, 0);
-        t.gpu = null;
+        return true;
     }
 
     private void buildSea(int grid) {
@@ -791,8 +858,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
         for (int i = 0; i < Meshes.PED_OUTFITS; i++) {
             pedGpu[i] = buildInstancedGpu(Meshes.pedVertices(i),
-                    Meshes.pedIndices(i), MAX_PEDS);
-            pedScratch[i] = GLUtil.floats(MAX_PEDS * 4);
+                    Meshes.pedIndices(i), MAX_PEDS, true);
+            pedScratch[i] = GLUtil.floats(MAX_PEDS * GAIT_FLOATS);
         }
         for (int i = 0; i < Meshes.SHADOW_COUNT; i++) {
             shadowGpu[i] = buildInstancedGpu(Meshes.shadowVertices(i),
@@ -826,7 +893,15 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         return buildInstancedGpu(v, i, MAX_PER_KIND);
     }
 
+    /** Floats per instance for a body that walks: x, y, z, yaw, phase, stride. */
+    private static final int GAIT_FLOATS = 6;
+
     private VehicleGpu buildInstancedGpu(float[] v, int[] i, int maxInstances) {
+        return buildInstancedGpu(v, i, maxInstances, false);
+    }
+
+    private VehicleGpu buildInstancedGpu(float[] v, int[] i, int maxInstances,
+                                         boolean walks) {
         VehicleGpu g = new VehicleGpu();
         g.indexCount = i.length;
 
@@ -854,6 +929,14 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glEnableVertexAttribArray(2);
         GLES30.glVertexAttribPointer(3, 1, GLES30.GL_FLOAT, false, stride, 36);
         GLES30.glEnableVertexAttribArray(3);
+        if (walks) {
+            // The limb tag, per vertex, in the slot props use for a
+            // texture coordinate. Left disabled on every other mesh,
+            // where it reads zero and nothing swings.
+            GLES30.glVertexAttribPointer(5, 1, GLES30.GL_FLOAT, false,
+                    stride, 40);
+            GLES30.glEnableVertexAttribArray(5);
+        }
 
         IntBuffer ib2 = ByteBuffer.allocateDirect(i.length * 4)
                 .order(ByteOrder.nativeOrder()).asIntBuffer();
@@ -862,12 +945,19 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, i.length * 4, ib2,
                 GLES30.GL_STATIC_DRAW);
 
+        int istride = walks ? GAIT_FLOATS * 4 : 16;
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, g.instVbo);
-        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, maxInstances * 16, null,
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, maxInstances * istride, null,
                 GLES30.GL_DYNAMIC_DRAW);
-        GLES30.glVertexAttribPointer(4, 4, GLES30.GL_FLOAT, false, 16, 0);
+        GLES30.glVertexAttribPointer(4, 4, GLES30.GL_FLOAT, false, istride, 0);
         GLES30.glEnableVertexAttribArray(4);
         GLES30.glVertexAttribDivisor(4, 1);
+        if (walks) {
+            GLES30.glVertexAttribPointer(6, 2, GLES30.GL_FLOAT, false, istride, 16);
+            GLES30.glEnableVertexAttribArray(6);
+            GLES30.glVertexAttribDivisor(6, 1);
+        }
+        g.instStride = istride;
         GLES30.glBindVertexArray(0);
         return g;
     }
@@ -993,13 +1083,19 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             int slot = Math.max(0, Math.min(Meshes.PED_OUTFITS - 1, p.outfit));
             if (pedCount[slot] >= MAX_PEDS) { continue; }
             FloatBuffer b = pedScratch[slot];
-            b.position(pedCount[slot] * 4);
+            b.position(pedCount[slot] * GAIT_FLOATS);
             b.put(x);
             // Knocked down: sunk into the pavement rather than animated,
             // which is honest about there being no ragdoll for an agent.
             b.put((float) (p.y - oy) - (p.downTimer > 0 ? 1.25f : 0f));
             b.put(z);
             b.put((float) p.heading);
+            // Stride grows with speed and stops when they do, so somebody
+            // standing at a corner stands still instead of marching on
+            // the spot.
+            b.put((float) p.phase);
+            b.put(p.downTimer > 0 ? 0f
+                    : (float) Math.min(1.0, p.speed / 1.6));
             pedCount[slot]++;
             total++;
         }
@@ -1008,8 +1104,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             if (n <= 0) { continue; }
             pedScratch[i].position(0);
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, pedGpu[i].instVbo);
-            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16,
-                    pedScratch[i]);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0,
+                    n * pedGpu[i].instStride, pedScratch[i]);
         }
         return total;
     }

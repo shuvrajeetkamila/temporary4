@@ -71,6 +71,20 @@ public final class WorldStreamer {
         public volatile long geometryBytes;
         /** Set when the tile stopped being wanted while work was outstanding. */
         public volatile boolean cancelled;
+        /**
+         * A new detail level is being built for a tile that is already on
+         * screen. The tile stays ACTIVE throughout: the old mesh keeps
+         * being drawn until the new one has been uploaded, and only then
+         * do they swap. Without this a tile vanishes for the whole round
+         * trip through the I/O queue, a worker thread and the upload
+         * budget - and because the sea is drawn under everything, a
+         * missing tile is not a gap, it is water.
+         */
+        public volatile boolean rebuilding;
+        /** The new mesh, parked until the swap. */
+        public volatile ChunkMesher.Mesh pendingMesh;
+        /** The detail level {@link #pendingMesh} was built at. */
+        public volatile int pendingLod;
         volatile int lastWantedFrame;
         volatile int generation;
         double priority;
@@ -102,6 +116,14 @@ public final class WorldStreamer {
     private final ArrayDeque<Tile> ioQueue = new ArrayDeque<>();
     private final ConcurrentLinkedQueue<Tile> decoded = new ConcurrentLinkedQueue<>();
     private final List<Tile> resident = new ArrayList<>();
+    /**
+     * GPU handles replaced by a rebuild, waiting for the host to free
+     * them. A displaced handle that nobody frees is leaked for the rest
+     * of the session, and a driver that runs out of memory stops honouring
+     * uploads, which is what torn and striped geometry on screen is.
+     */
+    private final ConcurrentLinkedQueue<Object> displaced =
+            new ConcurrentLinkedQueue<>();
     private final AtomicInteger inFlight = new AtomicInteger();
 
     private int frame;
@@ -116,6 +138,8 @@ public final class WorldStreamer {
     private int statActivated;
     private int statEvicted;
     private int statCancelled;
+    private int statStranded;
+    private int statDisplaced;
     private int statDecodeFailures;
     private int statUploadFailures;
     private long statDecodeNanos;
@@ -214,11 +238,15 @@ public final class WorldStreamer {
                     ioQueue.add(t);
                     statRequested++;
                 }
-            } else if (t.isActive() && t.lod != t.wantLod) {
-                // Already resident but at the wrong detail: rebuild it, keeping
-                // the current mesh on screen until the new one is uploaded.
+            } else if (t.isActive() && t.lod != t.wantLod && !t.rebuilding) {
+                // Already resident but at the wrong detail: rebuild it,
+                // keeping the current mesh on screen until the new one is
+                // uploaded. The state deliberately stays ACTIVE - the
+                // renderer draws whatever is active and knows nothing
+                // about rebuilds, so moving the state here is the same
+                // thing as deleting the ground for a few frames.
                 if (inFlight.get() + ioQueue.size() < MAX_IN_FLIGHT) {
-                    t.state = S_QUEUED_IO;
+                    t.rebuilding = true;
                     ioQueue.add(t);
                     statRequested++;
                 }
@@ -237,6 +265,18 @@ public final class WorldStreamer {
                 t.state = S_EVICTING;
             }
         }
+        // Anything resident that holds GPU memory but is neither drawable
+        // nor already on its way out is stranded: it occupies the
+        // residency cap for ever and nothing will free it. That can only
+        // happen through a path not thought of, which is exactly why the
+        // sweep is here.
+        for (int i = resident.size() - 1; i >= 0; i--) {
+            Tile t = resident.get(i);
+            if (t.gpu != null && !t.isActive() && t.state != S_EVICTING) {
+                t.state = S_EVICTING;
+                statStranded++;
+            }
+        }
         // Over the cap: drop the furthest-from-wanted first.
         if (resident.size() > maxResident) {
             resident.sort(Comparator.comparingInt(a -> a.lastWantedFrame));
@@ -252,11 +292,13 @@ public final class WorldStreamer {
     public Tile nextForDecode() {
         synchronized (ioQueue) {
             Tile t = ioQueue.poll();
-            while (t != null && t.state != S_QUEUED_IO) {
+            while (t != null && t.state != S_QUEUED_IO && !t.rebuilding) {
                 t = ioQueue.poll();
             }
             if (t != null) {
-                t.state = S_DECODING;
+                // A rebuild keeps its ACTIVE state; only a fresh load
+                // moves to DECODING.
+                if (!t.rebuilding) { t.state = S_DECODING; }
                 inFlight.incrementAndGet();
             }
             return t;
@@ -277,7 +319,7 @@ public final class WorldStreamer {
         long t0 = System.nanoTime();
         try {
             if (t.cancelled) {
-                t.state = S_UNLOADED;
+                abandon(t);
                 statCancelled++;
                 return;
             }
@@ -292,27 +334,54 @@ public final class WorldStreamer {
             }
             ChunkMesher.Mesh m = mesher.build(f, lod);
             if (t.cancelled) {
-                t.state = S_UNLOADED;
+                abandon(t);
                 statCancelled++;
                 return;
             }
             t.features = f;
-            t.mesh = m;
-            t.lod = lod;
-            t.geometryBytes = m.byteSize();
-            t.state = S_READY_CPU;
+            if (t.rebuilding) {
+                // Park it. The tile on screen is untouched until the swap,
+                // so a rebuild that never finishes costs detail, not land.
+                t.pendingMesh = m;
+                t.pendingLod = lod;
+            } else {
+                t.mesh = m;
+                t.lod = lod;
+                t.geometryBytes = m.byteSize();
+                t.state = S_READY_CPU;
+            }
             decoded.add(t);
             statDecoded++;
         } catch (Throwable e) {                                   // noqa
             // A corrupt tile must not take the session with it. Mark it
             // unloaded; it will simply not be requested again this frame.
-            t.state = S_UNLOADED;
-            t.mesh = null;
+            // If it was a rebuild of something already on screen, that
+            // something stays on screen - a tile that fails to re-mesh at
+            // a new detail level is not a reason to delete the ground.
+            abandon(t);
             statDecodeFailures++;
         } finally {
             inFlight.decrementAndGet();
             statDecodeNanos += System.nanoTime() - t0;
         }
+    }
+
+    /**
+     * Give up on outstanding work for a tile.
+     *
+     * <p>The distinction that matters: a tile with a mesh already on the
+     * GPU keeps it and keeps being drawn. Only a tile that has nothing on
+     * screen goes back to UNLOADED. Treating those two the same is how a
+     * cancelled rebuild used to strand a tile - still in the resident
+     * list, still holding GPU memory, no longer drawable, and invisible
+     * to the eviction path that would have freed it.
+     */
+    private void abandon(Tile t) {
+        t.pendingMesh = null;
+        t.rebuilding = false;
+        if (t.gpu != null) { return; }
+        t.mesh = null;
+        t.state = S_UNLOADED;
     }
 
     /**
@@ -327,6 +396,16 @@ public final class WorldStreamer {
         for (int i = 0; i < max; i++) {
             Tile t = decoded.poll();
             if (t == null) { break; }
+            if (t.rebuilding) {
+                if (t.pendingMesh == null) { continue; }
+                // Hand the new mesh over in the usual place so the host
+                // uploads it the same way it uploads a fresh tile. The
+                // state is untouched: this tile is on screen right now.
+                t.mesh = t.pendingMesh;
+                t.pendingMesh = null;
+                out.add(t);
+                continue;
+            }
             if (t.state != S_READY_CPU) { continue; }
             t.state = S_QUEUED_GPU;
             out.add(t);
@@ -336,22 +415,66 @@ public final class WorldStreamer {
 
     /** The host reports a successful GPU upload. */
     public void markUploaded(Tile t, Object handle) {
+        Object old = t.gpu;
         t.gpu = handle;
+        if (t.rebuilding) {
+            t.lod = t.pendingLod;
+            t.geometryBytes = t.mesh == null ? t.geometryBytes : t.mesh.byteSize();
+            t.rebuilding = false;
+        }
         t.state = t.lod == ChunkMesher.LOD_HIGH ? S_ACTIVE_HIGH
                 : (t.lod == ChunkMesher.LOD_MED ? S_ACTIVE_MED : S_ACTIVE_LOW);
         // CPU-side mesh has served its purpose; the GPU copy is authoritative.
         t.mesh = null;
         if (!resident.contains(t)) { resident.add(t); }
+        // The mesh this one replaced is still allocated on the GPU. Hand
+        // it back rather than overwriting the reference and hoping: see
+        // pollDisplaced.
+        if (old != null && old != handle) {
+            displaced.add(old);
+            statDisplaced++;
+        }
         statActivated++;
     }
 
+    /**
+     * GPU handles that have been replaced and must be freed by the host.
+     *
+     * <p>Drained next to the evictions every frame. The queue exists so
+     * that forgetting to free a replaced mesh is a growing number some
+     * test can see, rather than a silent leak that only shows up as a
+     * corrupted screen after twenty minutes of play.
+     */
+    public List<Object> pollDisplaced(int max) {
+        List<Object> out = new ArrayList<>();
+        for (int i = 0; i < max; i++) {
+            Object h = displaced.poll();
+            if (h == null) { break; }
+            out.add(h);
+        }
+        return out;
+    }
+
+    /** Replaced meshes still waiting to be freed. */
+    public int displacedPending() { return displaced.size(); }
+
+    /** Tiles reclaimed by the stranded sweep. Should stay at zero. */
+    public int strandedCount() { return statStranded; }
+
     /** The host reports that the upload failed, and nothing was allocated. */
     public void markUploadFailed(Tile t) {
+        statUploadFailures++;
+        if (t.rebuilding && t.gpu != null) {
+            // The old mesh is still there and still correct.
+            t.rebuilding = false;
+            t.pendingMesh = null;
+            t.mesh = null;
+            return;
+        }
         t.gpu = null;
         t.mesh = null;
         t.state = S_UNLOADED;
         resident.remove(t);
-        statUploadFailures++;
     }
 
     /**
@@ -370,6 +493,8 @@ public final class WorldStreamer {
     public void markReleased(Tile t) {
         t.gpu = null;
         t.mesh = null;
+        t.pendingMesh = null;
+        t.rebuilding = false;
         t.features = null;
         t.geometryBytes = 0;
         t.state = S_UNLOADED;
@@ -428,6 +553,8 @@ public final class WorldStreamer {
         decoded.clear();
         for (Tile t : tiles) {
             t.cancelled = true;
+            t.rebuilding = false;
+            t.pendingMesh = null;
         }
     }
 

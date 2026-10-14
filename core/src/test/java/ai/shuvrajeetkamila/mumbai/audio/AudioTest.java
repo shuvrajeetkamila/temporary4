@@ -247,6 +247,91 @@ final class AudioTest {
     }
 
     @Test
+    @DisplayName("footsteps are heard while walking and stop when you stop")
+    void footstepsFollowTheFeet() {
+        AudioMixer m = new AudioMixer();
+        m.master = 1.0;
+        m.stepRate = 0;
+        for (int i = 0; i < 40; i++) { render(m, 512); }
+        assertEquals(0.0, rms(render(m, 4096), 4096, 0), 1e-6,
+                "a player standing still was making footsteps");
+
+        m.stepRate = 2.0;
+        for (int i = 0; i < 40; i++) { render(m, 512); }
+        double walking = rms(render(m, 8192), 8192, 0);
+        assertTrue(walking > 1e-4, "walking was silent, got " + walking);
+
+        m.stepRate = 0;
+        // Long enough for the rate to smooth down and the last step to
+        // decay: a step that rings for ever is a drone.
+        for (int i = 0; i < 400; i++) { render(m, 512); }
+        double stopped = rms(render(m, 8192), 8192, 0);
+        assertTrue(stopped < walking * 0.02,
+                "the footsteps carried on after the player stopped: "
+                        + walking + " then " + stopped);
+    }
+
+    @Test
+    @DisplayName("steps come at the rate they are asked for")
+    void theStepRateIsTheStepRate() {
+        AudioMixer m = new AudioMixer();
+        m.master = 1.0;
+        m.stepRate = 3.0;
+        for (int i = 0; i < 80; i++) { render(m, 512); }
+        // Four seconds. Count the onsets by looking for the envelope
+        // jumping, which is what a step is.
+        int frames = Synth.SAMPLE_RATE * 4;
+        short[] buf = render(m, frames);
+        // Count onsets on a smoothed envelope with hysteresis. A raw noise
+        // burst swings from sample to sample, so a bare rising-edge test
+        // counts the grain of the noise rather than the steps.
+        int steps = 0;
+        double env = 0;
+        boolean armed = true;
+        double peak = 0;
+        for (int i = 0; i < frames; i++) {
+            env += (Math.abs(buf[i * 2] / 32768.0) - env) * 0.004;
+            peak = Math.max(peak, env);
+        }
+        env = 0;
+        for (int i = 0; i < frames; i++) {
+            env += (Math.abs(buf[i * 2] / 32768.0) - env) * 0.004;
+            if (armed && env > peak * 0.55) { steps++; armed = false; }
+            if (env < peak * 0.2) { armed = true; }
+        }
+        assertTrue(steps >= 10 && steps <= 14,
+                "asked for 3 steps a second for 4 seconds and counted "
+                        + steps);
+    }
+
+    @Test
+    @DisplayName("a step in the wet is brighter than a step on dry concrete")
+    void wetStepsAreBrighter() {
+        double dry = stepBrightness(0.0);
+        double wet = stepBrightness(1.0);
+        assertTrue(wet > dry * 1.3,
+                "wet and dry footsteps sound the same (dry " + dry
+                        + ", wet " + wet + "), so the monsoon is inaudible"
+                        + " underfoot");
+    }
+
+    /** Mean absolute sample-to-sample change: a cheap brightness measure. */
+    private static double stepBrightness(double wet) {
+        AudioMixer m = new AudioMixer();
+        m.master = 1.0;
+        m.stepWet = wet;
+        m.stepRate = 2.0;
+        for (int i = 0; i < 400; i++) { render(m, 512); }
+        short[] buf = render(m, 8192);
+        double slope = 0, level = 0;
+        for (int i = 1; i < 8192; i++) {
+            slope += Math.abs(buf[i * 2] - buf[(i - 1) * 2]);
+            level += Math.abs(buf[i * 2]);
+        }
+        return level < 1 ? 0 : slope / level;
+    }
+
+    @Test
     @DisplayName("rain is audible and gets louder as it gets heavier")
     void rainScalesWithWeather() {
         AudioMixer m = new AudioMixer();

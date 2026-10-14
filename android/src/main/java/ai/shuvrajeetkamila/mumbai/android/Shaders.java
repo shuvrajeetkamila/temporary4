@@ -199,6 +199,14 @@ final class Shaders {
             + "layout(location = 3) in float aAux;\n"
             // vec4(x, y, z, yaw), divisor 1.
             + "layout(location = 4) in vec4 aInstance;\n"
+            // vec2(phase, stride), divisor 1. Only pedestrian VAOs bind
+            // this; everything else leaves the attribute disabled, which
+            // reads as zero, and zero stride means nothing moves.
+            + "layout(location = 6) in vec2 aGait;\n"
+            // Per-vertex limb tag: 0 static, 1 arm, 2 leg. It rides in the
+            // texV slot, which props do not use, and is only bound on
+            // pedestrian VAOs.
+            + "layout(location = 5) in float aLimb;\n"
             + "uniform highp mat4 uViewProj;\n"
             + "uniform highp vec3 uCamera;\n"
             + "out highp vec3 vWorld;\n"
@@ -217,8 +225,29 @@ final class Shaders {
             // north to south against the direction it was moving.
             + "  highp float s = sin(aInstance.w);\n"
             + "  highp float c = -cos(aInstance.w);\n"
-            + "  highp vec3 p = vec3(aPos.x * c + aPos.z * s, aPos.y,\n"
-            + "                      -aPos.x * s + aPos.z * c);\n"
+            // A walk cycle without a skeleton. Each limb is tagged in the
+            // mesh and swings about its own joint, arms against legs, with
+            // a small bob on the whole body at twice the rate. Tagging
+            // rather than classifying by position matters: the inner face
+            // of an arm and the side of the torso are the same plane, so
+            // any threshold splits the arm box and stretches it.
+            + "  highp vec3 local = aPos;\n"
+            + "  if (aGait.y > 0.001) {\n"
+            + "    if (aLimb > 0.5) {\n"
+            + "      mediump float leg = step(1.5, aLimb);\n"
+            + "      mediump float pivot = mix(1.25, 0.76, leg);\n"
+            + "      mediump float amp = mix(-0.38, 0.52, leg);\n"
+            + "      mediump float side = local.x < 0.0 ? -1.0 : 1.0;\n"
+            + "      mediump float a = sin(aGait.x) * aGait.y * amp * side;\n"
+            + "      mediump float dy = local.y - pivot;\n"
+            + "      mediump float ca = cos(a), sa = sin(a);\n"
+            + "      local.y = pivot + dy * ca - local.z * sa;\n"
+            + "      local.z = dy * sa + local.z * ca;\n"
+            + "    }\n"
+            + "    local.y += 0.022 * cos(aGait.x * 2.0) * aGait.y;\n"
+            + "  }\n"
+            + "  highp vec3 p = vec3(local.x * c + local.z * s, local.y,\n"
+            + "                      -local.x * s + local.z * c);\n"
             + "  highp vec3 world = p + aInstance.xyz;\n"
             + "  vWorld = world;\n"
             + "  vNormal = vec3(aNormal.x * c + aNormal.z * s, aNormal.y,\n"
@@ -286,8 +315,23 @@ final class Shaders {
             + "uniform mediump vec3 uFogColour;\n"
             + "uniform highp float uFogDensity;\n"
             + "uniform highp vec3 uCamera;\n"
+            // The land mask, exactly as the physics reads it. xy is the
+            // world origin of the mask, zw is one over its span.
+            + "uniform highp vec4 uLandXform;\n"
+            + "uniform lowp sampler2D uLandMask;\n"
             + "out mediump vec4 fragColour;\n"
             + "void main() {\n"
+            // Never paint sea on land. The tide is a real one, just under
+            // two metres either way, and 6 per cent of this city's
+            // terrain sits below that line - the reclaimed ground along
+            // Back Bay, the dock aprons, the low ground behind Mahim. Left
+            // alone, high water drew the sea straight over those streets,
+            // and where the two surfaces passed within a few centimetres
+            // of each other they fought for the depth buffer and striped
+            // the ground. The land mask settles it: the terrain says where
+            // the coast is, and the sea stops there.
+            + "  highp vec2 luv = (vWorld.xz - uLandXform.xy) * uLandXform.zw;\n"
+            + "  if (texture(uLandMask, luv).r > 0.5) { discard; }\n"
             + "  mediump vec3 n = normalize(vNormal);\n"
             + "  mediump vec3 view = normalize(uCamera - vWorld);\n"
             + "  mediump float fres = pow(1.0 - max(dot(n, view), 0.0), 4.0);\n"

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
+import ai.shuvrajeetkamila.mumbai.geo.GeoProjection;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.world.WorldFixture;
 import org.junit.jupiter.api.Assumptions;
@@ -298,5 +299,90 @@ final class MapViewTest {
                 "the widest zoom does not reach Vasai Creek to Navy Nagar in x");
         assertTrue(vis[1] <= w.minWorldZ() && vis[3] >= w.maxWorldZ(),
                 "the widest zoom does not span the island in z");
+    }
+
+    // ---- how finely the coastline is sampled ----------------------------
+
+    @Test
+    @DisplayName("zoomed out, the map still draws a coastline and not a blob")
+    void theCoastlineSurvivesZoomingOut() {
+        // A fixed 72 columns made a map cell 1.25 km across at the widest
+        // zoom - wider than most of the creeks, bays and inlets on this
+        // coast, so they vanished and Salsette was drawn as one solid
+        // lump. Rather than naming a particular bay, this counts the
+        // land-water transitions the map would actually draw across the
+        // whole island at both resolutions. More transitions is more
+        // coastline.
+        WorldData w = WorldFixture.world();
+        MapView v = new MapView();
+        v.spanM = MapView.MAX_SPAN_M;
+        int viewW = 1080, viewH = 1920;
+        double mpp = 1.0 / v.scale(viewW, viewH);
+        int cols = MapView.landCols(viewW, mpp);
+        assertTrue(cols > 72, "the map is still sampled at " + cols
+                + " columns, which is what it was before");
+
+        double cellM = viewW * mpp / cols;
+        assertTrue(cellM < 400,
+                "a map cell is " + cellM + " m across at the widest zoom");
+
+        int coarse = coastlineCrossings(w, 1250.0);
+        int fine = coastlineCrossings(w, cellM);
+        assertTrue(fine > coarse * 1.5,
+                "at " + cellM + " m a draw finds " + fine + " coastline"
+                        + " crossings against " + coarse + " at the old"
+                        + " 1.25 km. The coastline is no sharper than it"
+                        + " was. (Cells went from 1250 m to " + cellM
+                        + " m, so the gain is real but sub-linear: a"
+                        + " finer sample finds more of the same coast,"
+                        + " not proportionally more coast.)");
+    }
+
+    /** Land-water transitions along east-west lines across the island. */
+    private static int coastlineCrossings(WorldData w, double stepM) {
+        int crossings = 0;
+        for (double z = -30000; z < 30000; z += 2000) {
+            Boolean prev = null;
+            for (double x = -24000; x < 24000; x += stepM) {
+                if (!w.inBounds(x, z)) { continue; }
+                boolean land = w.isLand(x, z);
+                if (prev != null && land != prev) { crossings++; }
+                prev = land;
+            }
+        }
+        return crossings;
+    }
+
+    @Test
+    @DisplayName("sampling the coastline stays cheap at every zoom")
+    void theSamplingIsBounded() {
+        MapView v = new MapView();
+        int viewW = 1440, viewH = 2560;
+        for (double span = MapView.MIN_SPAN_M; span <= MapView.MAX_SPAN_M;
+                span *= 1.35) {
+            v.spanM = span;
+            double mpp = 1.0 / v.scale(viewW, viewH);
+            int cols = MapView.landCols(viewW, mpp);
+            int rows = (int) (cols * (double) viewH / viewW);
+            assertTrue((long) cols * rows <= 200000,
+                    "at a " + span + " m span the map would take "
+                            + ((long) cols * rows) + " mask lookups a draw");
+            assertTrue(cols >= MapView.LAND_COLS_MIN,
+                    "at a " + span + " m span the map dropped to " + cols
+                            + " columns");
+        }
+    }
+
+    @Test
+    @DisplayName("close up, a cell is finer than the land mask itself")
+    void closeUpIsFinerThanTheData() {
+        MapView v = new MapView();
+        v.spanM = 400;
+        int viewW = 1080;
+        double mpp = 1.0 / v.scale(viewW, 1920);
+        double cellM = viewW * mpp / MapView.landCols(viewW, mpp);
+        assertTrue(cellM <= 20.0,
+                "zoomed right in the map samples every " + cellM + " m,"
+                        + " coarser than the 20 m mask it is reading");
     }
 }

@@ -183,21 +183,64 @@ final class MapOverlay extends View {
         drawChrome(canvas, v, w, h, d);
     }
 
+    /** Cached coastline: the run list from the last draw of this view. */
+    private float[] landRuns = new float[4096];
+    private int landRunCount;
+    private double landKeyX = Double.NaN;
+    private double landKeyZ;
+    private double landKeySpan;
+    private double landKeyRot;
+    private int landKeyW;
+    private int landKeyH;
+
     /**
-     * Land, as a grid of cells sampled from the land mask.
+     * Land, sampled from the land mask and cached.
      *
-     * <p>Coarse on purpose. A per-pixel landmass would mean a million
-     * mask lookups per draw, and the cell count is capped so that zooming
-     * out does not quietly turn into a hundred thousand rectangles. The
-     * result is chunky at the widest zoom, which is honest about what it
-     * is: a sketch of the coastline, good enough to tell Salsette from
-     * the Arabian Sea.
+     * <p>This used to be a fixed 72 columns across the screen, which at
+     * the widest zoom made every cell 1.25 km wide: Mahim Bay and Thane
+     * Creek disappeared into the coast and the island read as a blob.
+     * The mask underneath is 20 m, so the picture was being thrown away
+     * by the drawing, not by the data.
+     *
+     * <p>Two changes. The cell count now follows the zoom so a cell is
+     * about 70 m on screen whatever the span, down to the point where
+     * cells are finer than the mask itself; and the resulting run list is
+     * kept, so panning pays for the sampling and holding still does not.
+     * A map that is open and untouched costs one loop over a few hundred
+     * rectangles.
      */
     private void drawLand(Canvas canvas, MapView v, int w, int h) {
         WorldData wd = world;
         if (wd == null) { return; }
-        int cols = 72;
-        int rows = Math.max(8, Math.min(128, (int) (cols * (double) h / w)));
+        if (v.centreX != landKeyX || v.centreZ != landKeyZ
+                || v.spanM != landKeySpan || v.rotation != landKeyRot
+                || w != landKeyW || h != landKeyH) {
+            sampleLand(v, w, h);
+            landKeyX = v.centreX;
+            landKeyZ = v.centreZ;
+            landKeySpan = v.spanM;
+            landKeyRot = v.rotation;
+            landKeyW = w;
+            landKeyH = h;
+        }
+        for (int i = 0; i < landRunCount; i += 4) {
+            canvas.drawRect(landRuns[i], landRuns[i + 1], landRuns[i + 2],
+                    landRuns[i + 3], land);
+        }
+    }
+
+    /** Walks the mask and fills {@link #landRuns} with x0,y0,x1,y1 quads. */
+    private void sampleLand(MapView v, int w, int h) {
+        WorldData wd = world;
+        landRunCount = 0;
+        // About 70 m of world per cell, but never finer than the 20 m mask
+        // and never so many cells that a wide view turns into a hundred
+        // thousand samples.
+        double mpp = 1.0 / Math.max(1e-9, v.scale(w, h));
+        int cols = MapView.landCols(w, mpp);
+        int rows = Math.max(8, Math.min(560, (int) (cols * (double) h / w)));
+        // Guard rail, in case the clamps above are ever loosened.
+        if ((long) cols * rows > 200000) { return; }
         float cw = (float) w / cols;
         float ch = (float) h / rows;
         for (int r = 0; r < rows; r++) {
@@ -218,8 +261,15 @@ final class MapOverlay extends View {
                 if (isLand && runStart < 0) {
                     runStart = c;
                 } else if (!isLand && runStart >= 0) {
-                    canvas.drawRect(runStart * cw, sy, c * cw, sy + ch + 1,
-                            land);
+                    if (landRunCount + 4 > landRuns.length) {
+                        float[] bigger = new float[landRuns.length * 2];
+                        System.arraycopy(landRuns, 0, bigger, 0, landRunCount);
+                        landRuns = bigger;
+                    }
+                    landRuns[landRunCount++] = runStart * cw;
+                    landRuns[landRunCount++] = sy;
+                    landRuns[landRunCount++] = c * cw;
+                    landRuns[landRunCount++] = sy + ch + 1;
                     runStart = -1;
                 }
             }

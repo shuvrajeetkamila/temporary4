@@ -116,6 +116,32 @@ public final class MapView {
 
     // ---- the transform ---------------------------------------------------
 
+    /**
+     * How many columns of land mask to sample across a view this wide.
+     *
+     * <p>The rule, and the reason it is here rather than in the drawing
+     * code: a fixed column count means the cell size follows the zoom, so
+     * a count chosen to look right close up is useless at the widest
+     * span. 72 columns over a 90 km view is a 1.25 km cell, which is wide
+     * enough to swallow Mahim Bay whole. Tying the count to the pixel
+     * scale instead keeps a cell at roughly {@value #LAND_CELL_PX} pixels
+     * whatever the zoom, and the clamp keeps a wide view from turning
+     * into a hundred thousand mask lookups.
+     */
+    public static final double LAND_CELL_PX = 70.0;
+
+    /** Fewest columns, so a close-up view is not sampled pointlessly fine. */
+    public static final int LAND_COLS_MIN = 72;
+
+    /** Most columns, which bounds the cost of a draw. */
+    public static final int LAND_COLS_MAX = 320;
+
+    public static int landCols(int viewW, double metresPerPixel) {
+        int cols = (int) Math.round(viewW
+                / Math.max(1.0, LAND_CELL_PX / Math.max(1e-9, metresPerPixel)));
+        return Math.max(LAND_COLS_MIN, Math.min(LAND_COLS_MAX, cols));
+    }
+
     /** Pixels per world metre for a view of this size. */
     public double scale(int viewW, int viewH) {
         int shorter = Math.max(1, Math.min(viewW, viewH));

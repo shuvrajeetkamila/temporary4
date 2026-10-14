@@ -31,6 +31,13 @@ public class GLES30 {
     // --- added for the procedural texture atlas ---------------------------
     public static final int GL_TEXTURE_2D_ARRAY = 0x8C1A;
     public static final int GL_TEXTURE0 = 0x84C0;
+    public static final int GL_TEXTURE1 = 0x84C1;
+    public static final int GL_TEXTURE_2D = 0x0DE1;
+    public static final int GL_R8 = 0x8229;
+    public static final int GL_RED = 0x1903;
+    public static final int GL_NEAREST = 0x2600;
+    public static final int GL_CLAMP_TO_EDGE = 0x812F;
+    public static final int GL_UNPACK_ALIGNMENT = 0x0CF5;
     public static final int GL_RGBA8 = 0x8058;
     public static final int GL_RGBA = 0x1908;
     public static final int GL_UNSIGNED_BYTE = 0x1401;
@@ -52,6 +59,11 @@ public class GLES30 {
             java.nio.Buffer pixels) { }
     public static void glGenerateMipmap(int target) { }
     public static void glTexParameteri(int target, int pname, int param) { }
+    public static void glPixelStorei(int pname, int param) { }
+    public static void glUniform4fv(int loc, int count, float[] v, int off) { }
+    public static void glTexImage2D(int target, int level, int internalFormat,
+            int width, int height, int border, int format, int type,
+            java.nio.Buffer pixels) { }
     public static void glUniform1fv(int loc, int count, float[] v, int o) { }
     public static void glUniform1i(int loc, int v) { }
  public static void glBlendFunc(int a,int b){}

@@ -75,6 +75,19 @@ final class Meshes {
         }
     }
 
+    /**
+     * Limb tag written into the texV slot while a body is being built:
+     * 0 static, {@link #LIMB_ARM}, {@link #LIMB_LEG}. Negative means "not
+     * tagging", and the slot keeps its ordinary height value.
+     */
+    private static float limbTag = -1;
+
+    /** Swings about the shoulder. */
+    static final float LIMB_ARM = 1;
+
+    /** Swings about the hip. */
+    static final float LIMB_LEG = 2;
+
     private static int vert(float x, float y, float z, float nx, float ny, float nz,
                             float r, float g, float b, float aux) {
         int index = V.size() / ChunkMesher.STRIDE;
@@ -84,8 +97,10 @@ final class Meshes {
         V.add(aux);
         // Vertical texture coordinate. Props are small and the instanced
         // shader derives its own, but the slot has to be there or every
-        // vertex after the first is read at the wrong offset.
-        V.add(y);
+        // vertex after the first is read at the wrong offset. On a
+        // pedestrian the same slot carries the limb tag instead, which is
+        // what lets the walk cycle move an arm without moving the torso.
+        V.add(limbTag < 0 ? y : limbTag);
         return index;
     }
 
@@ -219,8 +234,14 @@ final class Meshes {
      * same packing the world geometry uses; material 0 is flat white, so
      * the vertex colour decides the tint.
      */
-    /** How many pedestrian outfits are modelled. */
-    static final int PED_OUTFITS = 4;
+    /**
+     * Pedestrian meshes: four civilian outfits and the khaki.
+     *
+     * <p>Index {@link ai.shuvrajeetkamila.mumbai.sim.Agents#OUTFIT_POLICE}
+     * is the officer, so the simulation and the renderer agree on which
+     * one of these is a constable without passing a flag.
+     */
+    static final int PED_OUTFITS = 5;
 
     private static final float[][] pedV = new float[PED_OUTFITS][];
     private static final int[][] pedI = new int[PED_OUTFITS][];
@@ -247,30 +268,49 @@ final class Meshes {
         float[][] tops = {
             {0.88f, 0.88f, 0.86f}, {0.26f, 0.38f, 0.62f},
             {0.22f, 0.46f, 0.32f}, {0.68f, 0.18f, 0.24f},
+            // Khaki. No crest, no insignia, no lettering: a colour and a
+            // cap, which is as far as this goes.
+            {0.60f, 0.55f, 0.36f},
         };
         float[][] legs = {
             {0.22f, 0.24f, 0.30f}, {0.18f, 0.19f, 0.22f},
             {0.34f, 0.30f, 0.24f}, {0.52f, 0.14f, 0.18f},
+            {0.54f, 0.49f, 0.32f},
         };
         float[] skin = {0.52f, 0.37f, 0.26f};
         float[] t = tops[outfit];
         float[] l = legs[outfit];
 
+        limbTag = 0;
         // Legs, slightly apart. Total height about 1.7 m.
+        limbTag = LIMB_LEG;
         box(-0.09f, 0.38f, 0, 0.07f, 0.38f, 0.08f, l[0], l[1], l[2], 0);
         box(0.09f, 0.38f, 0, 0.07f, 0.38f, 0.08f, l[0], l[1], l[2], 0);
         // Torso.
+        limbTag = 0;
         box(0, 1.03f, 0, 0.17f, 0.28f, 0.11f, t[0], t[1], t[2], 0);
-        // Arms.
+        // Arms, and the hands with them: a hand left behind by its arm is
+        // worse than no walk cycle at all.
+        limbTag = LIMB_ARM;
         box(-0.22f, 1.00f, 0, 0.05f, 0.25f, 0.06f, t[0], t[1], t[2], 0);
         box(0.22f, 1.00f, 0, 0.05f, 0.25f, 0.06f, t[0], t[1], t[2], 0);
-        // Hands and head.
         box(-0.22f, 0.70f, 0, 0.05f, 0.06f, 0.05f, skin[0], skin[1], skin[2], 0);
         box(0.22f, 0.70f, 0, 0.05f, 0.06f, 0.05f, skin[0], skin[1], skin[2], 0);
+        limbTag = 0;
+        // Head.
         box(0, 1.44f, 0, 0.10f, 0.13f, 0.10f, skin[0], skin[1], skin[2], 0);
         // Hair, which is what stops a head reading as a flesh-coloured box.
         box(0, 1.55f, -0.01f, 0.105f, 0.04f, 0.105f, 0.08f, 0.07f, 0.07f, 0);
+        if (outfit == ai.shuvrajeetkamila.mumbai.sim.Agents.OUTFIT_POLICE) {
+            // Peaked cap and a baton on the belt, so an officer reads as
+            // one from across the street.
+            box(0, 1.60f, 0, 0.115f, 0.045f, 0.115f, 0.30f, 0.28f, 0.20f, 0);
+            box(0, 1.585f, 0.10f, 0.10f, 0.02f, 0.045f, 0.22f, 0.21f, 0.15f, 0);
+            box(0.19f, 0.70f, -0.04f, 0.022f, 0.19f, 0.022f,
+                    0.26f, 0.20f, 0.14f, 0);
+        }
 
+        limbTag = -1;
         pedV[outfit] = packVertices();
         pedI[outfit] = packIndices();
     }

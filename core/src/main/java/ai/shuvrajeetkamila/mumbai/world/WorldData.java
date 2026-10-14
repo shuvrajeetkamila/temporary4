@@ -341,6 +341,67 @@ public final class WorldData {
 
     public boolean isWater(double x, double z) { return !isLand(x, z); }
 
+    /**
+     * The land mask as a texture the renderer can sample, one byte a cell.
+     *
+     * <p>Why this exists. The sea is drawn as a surface at mean level plus
+     * the tide, and the tide is a real one: a shade under two metres
+     * either way, which is what Mumbai Harbour actually does. The terrain
+     * is a 20 m DEM, and 6 % of the land in it sits below the two metre
+     * mark - the reclaimed ground along Back Bay, the dock aprons, the
+     * low ground behind Mahim. So at high water the sea was being drawn
+     * straight over the city: shimmering where the two surfaces met
+     * within a few centimetres of each other, open water where it had
+     * risen clear. Neither is a tide. It is a disagreement between the
+     * terrain's datum and the sea's, and the way to settle it is to let
+     * the renderer read the same land mask that the boat physics has
+     * always used, and never paint sea on land.
+     *
+     * @param metres how coarse the texture may be; rounded up to a whole
+     *               multiple of the mask's own cell size
+     * @return a row-major mask, 255 for land and 0 for water, starting at
+     *         {@link #minX}, {@link #minZ}
+     */
+    public byte[] landMaskTexels(double metres, int[] sizeOut) {
+        int step = Math.max(1, (int) Math.round(metres / gridM));
+        int tw = (nx + step - 1) / step;
+        int th = (nz + step - 1) / step;
+        byte[] out = new byte[tw * th];
+        for (int ty = 0; ty < th; ty++) {
+            for (int tx = 0; tx < tw; tx++) {
+                // Land wins over water within a texel. A texel that is
+                // half pavement must not be painted as sea, and the
+                // terrain is drawn over the top of it anyway.
+                boolean land = false;
+                for (int dz = 0; dz < step && !land; dz++) {
+                    int j = ty * step + dz;
+                    if (j >= nz) { break; }
+                    for (int dx = 0; dx < step; dx++) {
+                        int i = tx * step + dx;
+                        if (i >= nx) { break; }
+                        int bit = j * nx + i;
+                        if ((landMask[bit >>> 6] & (1L << (bit & 63))) != 0) {
+                            land = true;
+                            break;
+                        }
+                    }
+                }
+                out[ty * tw + tx] = (byte) (land ? 255 : 0);
+            }
+        }
+        if (sizeOut != null && sizeOut.length >= 2) {
+            sizeOut[0] = tw;
+            sizeOut[1] = th;
+        }
+        return out;
+    }
+
+    /** Width in metres covered by the mask, for the texture transform. */
+    public double maskSpanX() { return nx * gridM; }
+
+    /** Height in metres covered by the mask, for the texture transform. */
+    public double maskSpanZ() { return nz * gridM; }
+
     /** Depth below chart datum, metres, zero on land. Shallows near the shore. */
     public double seaDepth(double x, double z) {
         if (isLand(x, z)) { return 0; }

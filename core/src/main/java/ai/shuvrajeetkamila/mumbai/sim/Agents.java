@@ -74,6 +74,8 @@ public final class Agents {
         public double fleeTimer;
         /** Seconds left on the ground after being hit. */
         public double downTimer;
+        /** An officer on foot, closing on the player rather than wandering. */
+        public boolean cop;
     }
 
     /** Pedestrians run over since the counters were last read. */
@@ -84,8 +86,17 @@ public final class Agents {
     public int policeHit;
 
     /** Contact distances for the crime test, metres. */
-    /** Pedestrian outfits modelled. Keep in step with Meshes.PED_OUTFITS. */
+    /** Civilian pedestrian outfits. Keep in step with Meshes.PED_OUTFITS. */
     public static final int OUTFITS = 4;
+
+    /** The khaki. One more mesh than the civilian outfits. */
+    public static final int OUTFIT_POLICE = OUTFITS;
+
+    /** How fast an officer on foot runs, m/s. */
+    private static final double COP_SPEED = 4.3;
+
+    /** Officers give up outside this, so a chase has an end. */
+    private static final double COP_LEASH_M = 230.0;
 
     /**
      * How high the ground is for an agent.
@@ -365,9 +376,13 @@ public final class Agents {
                 continue;
             }
             if (p.downTimer > 0) {
-                // Knocked down: stays put, then gets up and is removed.
+                // Knocked down: stays put, then gets up and is removed. An
+                // officer gets back up and carries on, because an arrest
+                // you can end by driving at the constable is not an arrest.
                 p.downTimer -= dt;
-                if (p.downTimer <= 0) { p.active = false; }
+                if (p.downTimer <= 0 && !p.cop) { p.active = false; }
+            } else if (p.cop) {
+                stepCop(p, dt);
             } else {
                 stepPed(p, dt);
             }
@@ -380,6 +395,7 @@ public final class Agents {
                 p.downTimer = 4.0;
                 p.speed = 0;
             }
+            if (p.cop) { continue; }
             if (dx * dx + dz * dz > (despawnRadius * 0.4) * (despawnRadius * 0.4)) {
                 p.active = false;
             }
@@ -632,6 +648,99 @@ public final class Agents {
         c.shoveZ = vz;
         c.spin = spin;
         c.shoveTimer = SHOVE_S;
+    }
+
+    /**
+     * Put an officer on the pavement.
+     *
+     * <p>The response to a wanted level used to be entirely vehicular,
+     * which meant that on foot down an alley nothing could ever reach
+     * you. An officer is an ordinary pedestrian agent with somewhere to
+     * be: the arrest itself is the same proximity test that a patrol car
+     * uses, so there is one definition of being caught.
+     */
+    public boolean spawnFootPolice(double px, double pz, double radius) {
+        int slot = -1;
+        for (int i = 0; i < pedCap && i < peds.length; i++) {
+            if (!peds[i].active) { slot = i; break; }
+        }
+        // A free civilian slot will do if the crowd is at its cap: an
+        // officer who cannot be sent because the pavement is busy is worse
+        // than one passer-by fewer.
+        if (slot < 0) {
+            for (int i = 0; i < pedCap && i < peds.length; i++) {
+                if (!peds[i].cop) { slot = i; break; }
+            }
+        }
+        if (slot < 0) { return false; }
+        {
+            Ped p = peds[slot];
+            // Several candidate spots, not one. At the seafront a third of
+            // the ring around the player is water, so a single draw sent no
+            // officer at all better than a third of the time.
+            double x = 0, z = 0;
+            boolean found = false;
+            for (int attempt = 0; attempt < 14 && !found; attempt++) {
+                double a = rng.nextDouble() * Math.PI * 2;
+                double r = radius * (0.55 + rng.nextDouble() * 0.45);
+                x = px + Math.cos(a) * r;
+                z = pz + Math.sin(a) * r;
+                found = world.inBounds(x, z) && world.isLand(x, z);
+            }
+            if (!found) { return false; }
+            p.x = x;
+            p.z = z;
+            p.y = groundAt(x, z);
+            p.heading = Math.atan2(px - x, -(pz - z));
+            p.speed = COP_SPEED;
+            p.phase = rng.nextDouble() * 6.28;
+            p.outfit = OUTFIT_POLICE;
+            p.cop = true;
+            p.fleeTimer = 0;
+            p.downTimer = 0;
+            p.wanderTimer = 0;
+            p.active = true;
+            return true;
+        }
+    }
+
+    /** Officers on foot currently chasing. */
+    public int footPoliceCount() {
+        int n = 0;
+        for (Ped p : peds) { if (p.active && p.cop) { n++; } }
+        return n;
+    }
+
+    /** Stand them all down. */
+    public void clearFootPolice() {
+        for (Ped p : peds) { if (p.cop) { p.active = false; p.cop = false; } }
+    }
+
+    /** Distance to the closest officer on foot, or a large number. */
+    public double nearestFootPolice(double px, double pz) {
+        double best = Double.MAX_VALUE;
+        for (Ped p : peds) {
+            if (!p.active || !p.cop || p.downTimer > 0) { continue; }
+            best = Math.min(best, Math.hypot(p.x - px, p.z - pz));
+        }
+        return best;
+    }
+
+    /** One officer's step: run at the player until out of range. */
+    private void stepCop(Ped p, double dt) {
+        double dx = playerX - p.x;
+        double dz = playerZ - p.z;
+        double d = Math.hypot(dx, dz);
+        if (d > COP_LEASH_M) { p.active = false; p.cop = false; return; }
+        p.heading = Math.atan2(dx, -dz);
+        // Close to arm's length and then stop, rather than shouldering
+        // the player across the pavement for ever.
+        double want = d < 2.0 ? 0.0 : COP_SPEED;
+        p.speed += MathUtil.clamp(want - p.speed, -8 * dt, 6 * dt);
+        p.x += Math.sin(p.heading) * p.speed * dt;
+        p.z += -Math.cos(p.heading) * p.speed * dt;
+        p.y = groundAt(p.x, p.z);
+        p.phase += dt * p.speed * 2.1;
     }
 
     private void stepCar(Car c, double dt) {

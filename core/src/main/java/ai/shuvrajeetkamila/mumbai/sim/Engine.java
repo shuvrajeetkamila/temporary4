@@ -123,6 +123,9 @@ public final class Engine {
      */
     public static final double AGENT_SPAWN_M = 300.0;
 
+    /** How far off an officer on foot appears from, metres. */
+    public static final double FOOT_POLICE_SPAWN_M = 70.0;
+
     /**
      * Where they are given up, metres. Comfortably outside the spawn ring
      * so nothing spawns and is immediately thrown away, and close enough
@@ -754,6 +757,20 @@ public final class Engine {
         }
 
         audio.rainLevel = weather.rain;
+
+        // Footsteps, from the speed the player is actually making over the
+        // ground rather than from the stick: shoved against a wall at full
+        // input you stop walking, and so does the sound. A pace is about
+        // two steps per metre at a walk, which is why the rate is a speed.
+        if (profile == ControlProfile.ON_FOOT && human.grounded
+                && !human.swimming) {
+            double gs = Math.hypot(human.velocity.x, human.velocity.z);
+            audio.stepRate = gs < 0.25 ? 0 : MathUtil.clamp(gs * 0.95, 0.9, 3.4);
+        } else {
+            audio.stepRate = 0;
+        }
+        audio.stepWet = MathUtil.clamp(
+                Math.max(weather.wetness, human.waterDepth * 3.0), 0, 1);
         // Wind is the only cue that you are going fast in an open cockpit,
         // and on foot there should not be any.
         audio.windLevel = profile == ControlProfile.ON_FOOT
@@ -791,7 +808,11 @@ public final class Engine {
         }
         agents.clearCrimeCounters();
 
-        double near = agents.nearestPolice(b.position.x, b.position.z);
+        // Whichever is closer: a patrol car or an officer on foot. On foot
+        // down an alley nothing vehicular could ever reach the player, so
+        // a wanted level was something you could simply walk away from.
+        double near = Math.min(agents.nearestPolice(b.position.x, b.position.z),
+                agents.nearestFootPolice(b.position.x, b.position.z));
         wanted.update(dt, near, speed);
         agents.pursuitPace = wanted.pursuitPace();
 
@@ -801,11 +822,13 @@ public final class Engine {
             if (missions.money < 0) { missions.money = 0; }
             missions.reset();
             agents.clearPolice();
+            agents.clearFootPolice();
             return;
         }
 
         if (!wanted.active()) {
             if (agents.policeCount() > 0) { agents.clearPolice(); }
+            if (agents.footPoliceCount() > 0) { agents.clearFootPolice(); }
             return;
         }
 
@@ -816,6 +839,16 @@ public final class Engine {
             policeCallTimer = 0;
             if (agents.policeCount() < wanted.desiredUnits()) {
                 agents.spawnPolice(b.position.x, b.position.z, POLICE_SPAWN_M);
+            }
+            // Officers on foot, from one star. They are what makes being
+            // on foot a worse idea than being in a car rather than a
+            // better one, and they close the alley the cars cannot enter.
+            int wantFoot = profile == ControlProfile.ON_FOOT
+                    ? Math.min(4, wanted.stars() + 1)
+                    : Math.max(0, wanted.stars() - 2);
+            if (agents.footPoliceCount() < wantFoot) {
+                agents.spawnFootPolice(b.position.x, b.position.z,
+                        FOOT_POLICE_SPAWN_M);
             }
         }
     }

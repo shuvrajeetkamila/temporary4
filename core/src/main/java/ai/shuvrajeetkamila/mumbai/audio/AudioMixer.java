@@ -65,12 +65,31 @@ public final class AudioMixer {
     /** Set from the game thread to fire a one-shot. Consumed by the mixer. */
     public volatile double impactPending;
 
+    /**
+     * Footsteps per second for the player on foot, 0 when not walking.
+     *
+     * <p>The game thread publishes a rate rather than individual events,
+     * so the steps land on exact sample boundaries at the audio rate
+     * instead of being quantised to whenever a frame happened to end.
+     */
+    public volatile double stepRate;
+
+    /** 0 dry, 1 standing water: a wet step is brighter and rings longer. */
+    public volatile double stepWet;
+
     // --- audio-thread state ------------------------------------------------
     private double engPhase, engPhase2, engFilter;
     private double rainFilter, windFilter;
     private int noise = 0x1234567;
     private double impactEnv;
     private double impactPhase;
+    private double stepPhase;
+    private double stepEnv;
+    private double stepTone;
+    private double stepRateSmooth;
+    private double stepWetSmooth;
+    /** Alternates, so left and right are not the same sample twice. */
+    private boolean stepLeft;
     private double rainSmooth, windSmooth, rpmSmooth, loadSmooth;
 
     private final double[] pan = new double[2];
@@ -131,6 +150,8 @@ public final class AudioMixer {
         rainSmooth += (rainLevel - rainSmooth) * 0.25;
         windSmooth += (windLevel - windSmooth) * 0.25;
         rpmSmooth += (playerRpm - rpmSmooth) * 0.35;
+        stepRateSmooth += (stepRate - stepRateSmooth) * 0.25;
+        stepWetSmooth += (stepWet - stepWetSmooth) * 0.12;
         loadSmooth += (playerLoad - loadSmooth) * 0.25;
 
         double pending = impactPending;
@@ -241,6 +262,36 @@ public final class AudioMixer {
                 }
                 l += v * s.gainL;
                 r += v * s.gainR;
+            }
+
+            // --- footsteps ----------------------------------------------------
+            // A step is a short burst of noise through a low-pass whose
+            // cutoff rises with how wet the ground is: a dry sole on
+            // concrete is a dull slap, the same sole in standing water is
+            // a brighter one. Nothing is sampled; it is an envelope.
+            if (stepRateSmooth > 0.01) {
+                stepPhase += stepRateSmooth * inv;
+                if (stepPhase >= 1) {
+                    stepPhase -= 1;
+                    stepEnv = 1.0;
+                    stepLeft = !stepLeft;
+                }
+            } else {
+                stepPhase = 0;
+            }
+            if (stepEnv > 1e-4) {
+                noise = Synth.noiseNext(noise);
+                double cutoff = 420 + 2600 * stepWetSmooth
+                        + (stepLeft ? 60 : 0);
+                stepTone = Synth.lowPass(stepTone,
+                        Synth.noiseValue(noise), cutoff);
+                double v = stepTone * stepEnv * stepEnv * 0.42;
+                // Barely off centre, left and right alternating: a footstep
+                // hard left would sound like somebody else walking.
+                l += v * (stepLeft ? 1.12 : 0.88);
+                r += v * (stepLeft ? 0.88 : 1.12);
+                stepEnv *= stepWetSmooth > 0.5 ? 0.99945 : 0.9988;
+                if (stepEnv < 1e-4) { stepEnv = 0; }
             }
 
             // --- a bang -------------------------------------------------------
