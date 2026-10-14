@@ -119,7 +119,13 @@ public final class Sky {
         // sun rose over the harbour and set behind Thane Creek, which is
         // exactly backwards for a city on the west coast.
         sunDir[0] = (float) (Math.cos(az) * horiz);
-        sunDir[1] = (float) Math.max(0.045, elev);
+        // The real elevation, negative at night. It used to be clamped to
+        // +0.045 so the vector never dipped below the horizon, which meant
+        // the sun did not set: it climbed back up through the night and at
+        // midnight the city was lit from forty-seven degrees overhead by a
+        // sun that was in fact fifty-seven degrees under it. Night light
+        // comes from the ambient and sky terms, which is where it belongs.
+        sunDir[1] = (float) elev;
         sunDir[2] = (float) (Math.sin(az) * horiz * -0.35);
         normalise(sunDir);
 

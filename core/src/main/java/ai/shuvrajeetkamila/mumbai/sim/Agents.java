@@ -54,6 +54,12 @@ public final class Agents {
         public boolean police;
         /** Siren phase, seconds. Drives the flashing light in the renderer. */
         public double siren;
+        /** Velocity while knocked off its route by an impact, m/s. */
+        public double shoveX, shoveZ;
+        /** Seconds left free-rolling before it rejoins the graph. */
+        public double shoveTimer;
+        /** Yaw rate while shoved, rad/s. */
+        public double spin;
     }
 
     public static final class Ped {
@@ -305,7 +311,7 @@ public final class Agents {
             // A parked car stays where it was put. This is what lets the
             // vehicle you got out of still be standing there when you turn
             // round, instead of driving itself away down the nearest edge.
-            if (!c.parked) { stepCar(c, dt); }
+            if (!c.parked || c.shoveTimer > 0) { stepCar(c, dt); }
             if (c.hornTimer > 0) { c.hornTimer -= dt; }
             if (c.police) { c.siren += dt; }
             double dx = c.x - px, dz = c.z - pz;
@@ -560,7 +566,52 @@ public final class Agents {
         return tries == 0 ? -1 : best;
     }
 
+    /** How long a struck car stays off its route before rejoining it. */
+    private static final double SHOVE_S = 2.6;
+
+    /**
+     * A car that has been hit, moving under the impact rather than along
+     * its edge.
+     *
+     * <p>Without this the collision is invisible: {@code stepCar} finishes
+     * with {@code placeOnEdge}, which overwrites x and z from the graph,
+     * so a struck car was back in its lane on the next frame as though
+     * nothing had happened.
+     */
+    private void stepShoved(Car c, double dt) {
+        c.x += c.shoveX * dt;
+        c.z += c.shoveZ * dt;
+        c.heading = MathUtil.wrapPi(c.heading + c.spin * dt);
+        c.y = world.height(c.x, c.z);
+        double decay = Math.exp(-2.4 * dt);
+        c.shoveX *= decay;
+        c.shoveZ *= decay;
+        c.spin *= decay;
+        c.speed = Math.hypot(c.shoveX, c.shoveZ);
+        c.shoveTimer -= dt;
+        if (c.shoveTimer <= 0) {
+            // Rejoin the network at whatever edge is nearest to where it
+            // has ended up, facing the way it was pushed.
+            int e = pickEdgeNear(c.x, c.z, 70);
+            if (e < 0) { c.active = false; return; }
+            c.edge = e;
+            c.t = rng.nextDouble();
+            c.speed = 0;
+            placeOnEdge(c);
+        }
+    }
+
+    /** Knock a car off its route. Velocity in m/s, spin in rad/s. */
+    public void shove(Car c, double vx, double vz, double spin) {
+        if (c.parked) { c.parked = false; }
+        c.shoveX = vx;
+        c.shoveZ = vz;
+        c.spin = spin;
+        c.shoveTimer = SHOVE_S;
+    }
+
     private void stepCar(Car c, double dt) {
+        if (c.shoveTimer > 0) { stepShoved(c, dt); return; }
         int a = world.graphEdge[c.edge * 2];
         int b = world.graphEdge[c.edge * 2 + 1];
         double ax = world.graphNodeXZ[a * 2], az = world.graphNodeXZ[a * 2 + 1];

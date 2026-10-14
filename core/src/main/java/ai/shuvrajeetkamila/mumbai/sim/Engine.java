@@ -7,6 +7,7 @@ import ai.shuvrajeetkamila.mumbai.audio.AudioDirector;
 import ai.shuvrajeetkamila.mumbai.audio.AudioMixer;
 import ai.shuvrajeetkamila.mumbai.game.MapView;
 import ai.shuvrajeetkamila.mumbai.game.Minimap;
+import ai.shuvrajeetkamila.mumbai.game.Progress;
 import ai.shuvrajeetkamila.mumbai.game.Missions;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.game.Wanted;
@@ -23,6 +24,7 @@ import ai.shuvrajeetkamila.mumbai.physics.Ocean;
 import ai.shuvrajeetkamila.mumbai.physics.RigidBody;
 import ai.shuvrajeetkamila.mumbai.render.Sky;
 import ai.shuvrajeetkamila.mumbai.render.Weather;
+import ai.shuvrajeetkamila.mumbai.world.CityCollision;
 import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
@@ -104,6 +106,12 @@ public final class Engine {
      */
     public final Weather weather = new Weather();
 
+    /** Where the save lives. Replaced by the host before the first frame. */
+    private Progress.Store store = new Progress.Memory();
+
+    /** What has been earned and done. Written on pause, read on start. */
+    public final Progress progress = new Progress();
+
     /**
      * How far out traffic and pedestrians are populated, metres.
      *
@@ -167,11 +175,27 @@ public final class Engine {
     private double fpsAccum;
     private int fpsFrames;
 
+    /** Walls and bridge decks. Built lazily around whatever is moving. */
+    public final CityCollision city;
+
+    /** Height the player's body is at, for telling a deck from an underpass. */
+    private double probeY = 2.0;
+
     private final CarPhysics.GroundProbe carGround = new CarPhysics.GroundProbe() {
         @Override public double heightAt(double x, double z) {
             if (!world.inBounds(x, z)) { return 0; }
-            if (world.isWater(x, z)) { return ocean.heightAt(x, z) - 0.35; }
-            return world.height(x, z);
+            if (world.isWater(x, z)) {
+                // The sea is not a road surface. It used to return the wave
+                // height less 35 cm, which is a floor, and a saloon would
+                // drive eight kilometres out into the Arabian Sea at 130
+                // km/h. Give the wheels the seabed and let buoyancy and
+                // drag in CarPhysics decide what floats.
+                double deck = city.deckAt(x, z, probeY);
+                if (deck != Double.NEGATIVE_INFINITY) { return deck; }
+                if (!deepWater(x, z)) { return world.height(x, z); }
+                return -Math.max(0.6, world.seaDepth(x, z));
+            }
+            return city.surfaceAt(x, z, probeY, world.height(x, z));
         }
 
         @Override public void normalAt(double x, double z, Vec3 out) {
@@ -184,6 +208,18 @@ public final class Engine {
             // Anything that is not built-up or a road surface behaves like dirt.
             return c != WorldData.COVER_WATER && world.slope(x, z) > 0.055;
         }
+
+        @Override public double waterLevelAt(double x, double z) {
+            if (!world.inBounds(x, z) || !world.isWater(x, z)) {
+                return Double.NEGATIVE_INFINITY;
+            }
+            // On a bridge over the harbour you are not in the harbour.
+            if (city.deckAt(x, z, probeY) != Double.NEGATIVE_INFINITY) {
+                return Double.NEGATIVE_INFINITY;
+            }
+            if (!deepWater(x, z)) { return Double.NEGATIVE_INFINITY; }
+            return ocean.heightAt(x, z);
+        }
     };
 
     // Assigned in the constructor rather than here: a lambda in a field
@@ -194,11 +230,14 @@ public final class Engine {
 
     private final HumanPhysics.Terrain humanTerrain = new HumanPhysics.Terrain() {
         @Override public double heightAt(double x, double z) {
-            return world.inBounds(x, z) ? world.height(x, z) : 0;
+            if (!world.inBounds(x, z)) { return 0; }
+            return city.surfaceAt(x, z, probeY, world.height(x, z));
         }
 
         @Override public boolean isWater(double x, double z) {
-            return world.inBounds(x, z) && world.isWater(x, z);
+            if (!world.inBounds(x, z) || !world.isWater(x, z)) { return false; }
+            // Standing on a bridge over water is not standing in water.
+            return city.deckAt(x, z, probeY) == Double.NEGATIVE_INFINITY;
         }
 
         @Override public double slopeAt(double x, double z) {
@@ -214,22 +253,72 @@ public final class Engine {
         this.minimap = new Minimap(world);
         this.mapView.setWorldBounds(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
+        this.city = new CityCollision(world);
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
         this.heliGround = (x, z) -> {
             if (!world.inBounds(x, z)) { return 0; }
-            return world.isWater(x, z) ? ocean.heightAt(x, z) : world.height(x, z);
+            double base = world.isWater(x, z) ? ocean.heightAt(x, z) : world.height(x, z);
+            return city.surfaceAt(x, z, probeY, base);
         };
         this.planeGround = (x, z) -> {
             if (!world.inBounds(x, z)) { return 0; }
-            return world.isWater(x, z) ? ocean.heightAt(x, z) : world.height(x, z);
+            double base = world.isWater(x, z) ? ocean.heightAt(x, z) : world.height(x, z);
+            return city.surfaceAt(x, z, probeY, base);
         };
         applyQuality(quality);
     }
 
+    /**
+     * Attach somewhere to save, and load whatever is already there.
+     *
+     * <p>Call before {@code spawnAt}: if the save has a position, the
+     * caller should use it instead of the default spawn.
+     */
+    public Progress loadProgress(Progress.Store s) {
+        this.store = s == null ? new Progress.Memory() : s;
+        Progress saved = Progress.parse(this.store.read());
+        progress.money = saved.money;
+        progress.faresDone = saved.faresDone;
+        progress.deliveriesDone = saved.deliveriesDone;
+        progress.racesWon = saved.racesWon;
+        progress.timesBusted = saved.timesBusted;
+        progress.distanceM = saved.distanceM;
+        progress.bestRaceS = saved.bestRaceS;
+        progress.x = saved.x;
+        progress.z = saved.z;
+        progress.hour = saved.hour;
+        missions.money = progress.money;
+        wanted.timesBusted = progress.timesBusted;
+        timeOfDay = progress.hour;
+        return progress;
+    }
+
+    /**
+     * Write the save. Cheap enough to call on every completed job as well
+     * as on pause, which matters: a phone can kill the process without
+     * ever calling onPause.
+     */
+    public void saveProgress() {
+        RigidBody b = activeBody();
+        progress.money = missions.money;
+        progress.faresDone = missions.faresDone;
+        progress.deliveriesDone = missions.deliveriesDone;
+        progress.racesWon = missions.racesWon;
+        progress.timesBusted = wanted.timesBusted;
+        progress.bestRaceS = missions.bestRaceSec;
+        progress.x = b.position.x;
+        progress.z = b.position.z;
+        progress.hour = timeOfDay;
+        store.write(progress.toString());
+    }
+
     /** Drop the player at a latitude and longitude, on the ground. */
     public void spawnAt(double lat, double lon, ControlProfile p) {
-        double x = GeoProjection.toX(lat, lon);
-        double z = GeoProjection.toZ(lat);
+        spawnAtWorld(GeoProjection.toX(lat, lon), GeoProjection.toZ(lat), p);
+    }
+
+    /** Drop the player at a world position, on the ground. */
+    public void spawnAtWorld(double x, double z, ControlProfile p) {
         profile = p;
         RigidBody b = activeBody();
         b.position.set(x, world.inBounds(x, z) ? world.height(x, z) + 1.4 : 2.0, z);
@@ -239,6 +328,8 @@ public final class Engine {
         origin.reset();
         origin.update(x, z);
         origin.consumeRebase(rebase2);
+        probeY = b.position.y;
+        city.clear();
         // Two snapshots, or the first rendered frame interpolates from wherever
         // the player used to be and the camera flies across the city.
         snapshot();
@@ -341,11 +432,232 @@ public final class Engine {
         in.clearEdges();
     }
 
+    /**
+     * Abandon a sinking car.
+     *
+     * <p>Not a normal exit: there is nowhere dry to stand, so the player
+     * surfaces where the car was and swims. {@link HumanPhysics} already
+     * handles being in open water.
+     */
+    private void bailOutOfTheWater() {
+        human.position.set(car.position.x,
+                ocean.heightAt(car.position.x, car.position.z) + 0.2,
+                car.position.z);
+        human.velocity.set(car.velocity.x * 0.3, 0, car.velocity.z * 0.3);
+        human.angularVelocity.zero();
+        human.orientation.set(Quat.yaw(car.orientation.heading()));
+        human.headingRad = car.orientation.heading();
+        profile = ControlProfile.ON_FOOT;
+        car.reset();
+
+        snapshot();
+    }
+
+    /**
+     * Water a car can actually drown in, as opposed to the edge of the
+     * land mask.
+     *
+     * <p>The mask is on a 20 m grid, so the cell containing a seafront
+     * road is half sea and reads as water - which meant a car driving
+     * along Marine Drive drowned on the promenade twenty-eight metres
+     * from where it started. Depth here is a function of distance from
+     * land, so this is really "more than about twenty metres offshore".
+     */
+    private boolean deepWater(double x, double z) {
+        return world.seaDepth(x, z) > SHALLOWS_DEPTH_M;
+    }
+
+    /** Below this the shore is fordable and the land mask is just coarse. */
+    private static final double SHALLOWS_DEPTH_M = 1.56;
+
     private double groundHeight(double x, double z) {
         return world.inBounds(x, z) ? world.height(x, z) : 0;
     }
 
+    /** Scratch for the wall query. Not reentrant, and does not need to be. */
+    private final double[] push2 = new double[2];
+    private final Vec3 cornerW = new Vec3();
+    private final Vec3 cornerF = new Vec3();
+
+    /** How far a wall gives before it is rigid, metres. */
+    private static final double WALL_GIVE_M = 0.18;
+
+    /** How fast a wall pushes a body that is already inside it clear, m/s. */
+    private static final double WALL_EXTRACT = 1.6;
+
+    /**
+     * Push a body out of any wall it is standing in.
+     *
+     * <p>Force, not teleportation, and the same shape as the ground
+     * contact: compliant for the first finger's width, rigid after, with
+     * the force capped at what will arrest the approach in one step and
+     * ease a body that is already buried back out at walking pace. A
+     * plain spring on the full depth would make every building a
+     * trampoline the way the ground used to be.
+     */
+    private boolean pushOutOfWall(RigidBody b, double radius, double atY,
+                                  double dt, double x, double z,
+                                  boolean atPoint) {
+        double depth = city.wallPush(x, z, atY, radius, push2);
+        if (depth <= 0) { return false; }
+        double len = Math.hypot(push2[0], push2[1]);
+        if (len < 1e-9) { return false; }
+        double ux = push2[0] / len;
+        double uz = push2[1] / len;
+        double vn = b.velocity.x * ux + b.velocity.z * uz;   // + is separating
+        double soft = Math.min(depth, WALL_GIVE_M);
+        double k = b.mass * 240.0;
+        double c = b.mass * 20.0;
+        double f = Math.max(0, soft * k - vn * c);
+        if (depth > WALL_GIVE_M) {
+            double cap = b.mass * (WALL_EXTRACT - vn) / dt;
+            f = Math.min(f, Math.max(0, cap));
+        }
+        if (f <= 0) { return false; }
+        if (atPoint) {
+            cornerF.set(ux * f, 0, uz * f);
+            cornerW.set(x, b.position.y, z);
+            b.carryForceAtPoint(cornerF, cornerW);
+        } else {
+            b.carryForce(ux * f, 0, uz * f);
+        }
+        return true;
+    }
+
+    /** True on the step a solid impact happened, for sound and damage. */
+    public boolean wallHit;
+
+    /** Closing speed of the last wall impact, m/s. */
+    public double wallHitSpeed;
+
+    private void resolveWalls(double dt) {
+        wallHit = false;
+        switch (profile) {
+            case ON_FOOT: {
+                double before = Math.hypot(human.velocity.x, human.velocity.z);
+                if (pushOutOfWall(human, 0.42,
+                        human.position.y - human.height * 0.5 + 0.9, dt,
+                        human.position.x, human.position.z, false)) {
+                    wallHit = before > 3.0;
+                    wallHitSpeed = before;
+                }
+                break;
+            }
+            case CAR: {
+                VehicleKind k = car.kind == null ? VehicleKind.SEDAN : car.kind;
+                double hl = k.lengthM * 0.5;
+                double hw = k.widthM * 0.5;
+                double yaw = car.orientation.heading();
+                // Body +Z is the nose; the heading rotation puts it on the
+                // compass bearing. Same mapping Quat.yaw uses.
+                double fx = Math.sin(yaw), fz = -Math.cos(yaw);
+                double rx = -fz, rz = fx;
+                double atY = car.position.y + 0.3;
+                double before = Math.hypot(car.velocity.x, car.velocity.z);
+                boolean any = false;
+                for (int i = 0; i < 4; i++) {
+                    double sl = (i < 2 ? 1 : -1) * hl;
+                    double sw = (i % 2 == 0 ? 1 : -1) * hw;
+                    double cx = car.position.x + fx * sl + rx * sw;
+                    double cz = car.position.z + fz * sl + rz * sw;
+                    any |= pushOutOfWall(car, 0.30, atY, dt, cx, cz, true);
+                }
+                if (any) {
+                    wallHit = before > 3.0;
+                    wallHitSpeed = before;
+                }
+                break;
+            }
+            case HELICOPTER:
+                pushOutOfWall(heli, 4.2, heli.position.y, dt,
+                        heli.position.x, heli.position.z, false);
+                break;
+            case AEROPLANE:
+                pushOutOfWall(plane, 4.0, plane.position.y, dt,
+                        plane.position.x, plane.position.z, false);
+                break;
+            case BOAT:
+                pushOutOfWall(boat, 3.0, boat.position.y + 0.8, dt,
+                        boat.position.x, boat.position.z, false);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** Closing speed of the last vehicle impact, m/s. Zero if none. */
+    public double carHitSpeed;
+
+    /**
+     * Resolve the player's vehicle against the traffic.
+     *
+     * <p>Proximity to a traffic car was already detected - it is what
+     * raises the wanted level and triggers the impact sound - but nothing
+     * was ever done about it, so you drove through other cars and came out
+     * the far side faster than you went in. This is a plain two-body
+     * impulse along the line of centres, with the struck car knocked off
+     * its route for a couple of seconds so the hit is visible.
+     */
+    private void resolveTraffic(double dt) {
+        carHitSpeed = 0;
+        if (profile != ControlProfile.CAR) { return; }
+        VehicleKind mine = car.kind == null ? VehicleKind.SEDAN : car.kind;
+        double rMine = Math.max(mine.lengthM, mine.widthM) * 0.42;
+        for (Agents.Car c : agents.cars()) {
+            if (!c.active) { continue; }
+            VehicleKind k = VehicleKind.values()[
+                    MathUtil.clampi(c.kindOrdinal, 0, VehicleKind.values().length - 1)];
+            double rOther = Math.max(k.lengthM, k.widthM) * 0.42;
+            double dx = car.position.x - c.x;
+            double dz = car.position.z - c.z;
+            double d = Math.hypot(dx, dz);
+            double touch = rMine + rOther;
+            if (d >= touch || d < 1e-6) { continue; }
+
+            double ux = dx / d, uz = dz / d;
+            // Traffic velocity in the world frame. A parked car is still.
+            double ovx = c.shoveTimer > 0 ? c.shoveX : Math.sin(c.heading) * c.speed;
+            double ovz = c.shoveTimer > 0 ? c.shoveZ : -Math.cos(c.heading) * c.speed;
+            double rel = (car.velocity.x - ovx) * ux + (car.velocity.z - ovz) * uz;
+            if (rel > 0) { continue; }          // already separating
+
+            double m1 = car.mass;
+            double m2 = Math.max(120.0, k.massKg);
+            double e = 0.15;                    // sheet metal does not bounce
+            double j = -(1 + e) * rel / (1 / m1 + 1 / m2);
+
+            // The impulse as a force over this step, so nothing is assigned.
+            car.carryForce(ux * j / dt, 0, uz * j / dt);
+
+            // And the other way for the car that was hit.
+            double give = j / m2;
+            agents.shove(c, ovx - ux * give, ovz - uz * give,
+                    (rng() - 0.5) * 2.2 * Math.min(1, -rel / 12.0));
+
+            // Separate the overlap so they do not sit inside each other.
+            double depth = touch - d;
+            if (depth > 0.02) {
+                double push = car.mass * Math.min(depth, 0.4) * 90.0;
+                car.carryForce(ux * push, 0, uz * push);
+            }
+            carHitSpeed = Math.max(carHitSpeed, -rel);
+        }
+    }
+
+    private long hitSeed = 0x9E3779B97F4A7C15L;
+
+    private double rng() {
+        hitSeed ^= hitSeed << 13;
+        hitSeed ^= hitSeed >>> 7;
+        hitSeed ^= hitSeed << 17;
+        return ((hitSeed >>> 11) & ((1L << 53) - 1)) / (double) (1L << 53);
+    }
+
     private void fixedStep(double dt, InputState in) {
+        // Every ground query this step needs to know whether the body is on
+        // a bridge or under one, and it can only know that from where the
+        // body is.
+        probeY = activeBody().position.y;
         ocean.advance(dt);
         // The monsoon raises the sea state as well as wetting the roads.
         ocean.setChoppiness(0.8 + wetness * 1.1);
@@ -362,6 +674,13 @@ public final class Engine {
             case HELICOPTER: stepHeli(dt, in); break;
             case AEROPLANE: stepPlane(dt, in); break;
             default: stepHuman(dt, in); break;
+        }
+
+        resolveWalls(dt);
+        resolveTraffic(dt);
+        if (profile == ControlProfile.CAR && car.sinkTime > 3.0) {
+            // She is going down. Get out and swim.
+            bailOutOfTheWater();
         }
 
         RigidBody b = activeBody();
@@ -852,7 +1171,12 @@ public final class Engine {
 
     private void stepHeli(double dt, InputState in) {
         heli.collective = MathUtil.clamp(in.collective, 0, 1);
-        heli.cyclicPitch = -in.lookY;
+        // lookY is a screen axis: negative is the stick pushed forward.
+        // Cyclic forward puts the nose DOWN and the machine flies forward,
+        // which is the whole of how a helicopter goes anywhere. It used to
+        // be negated, so pushing the stick forward pitched the nose up and
+        // flew you backwards.
+        heli.cyclicPitch = in.lookY;
         heli.cyclicRoll = in.lookX;
         heli.pedal = in.pedal;
         if (in.engineToggle) { heli.engineOn = !heli.engineOn; }
@@ -861,7 +1185,11 @@ public final class Engine {
 
     private void stepPlane(double dt, InputState in) {
         plane.throttle = in.throttle;
-        plane.elevator = -in.lookY;
+        // Stick back is nose up, as it is in every aeroplane ever built.
+        // Back on a touchscreen is down, which is lookY positive, and
+        // elevator is positive nose-up: so this is a straight assignment
+        // and the negation that used to be here made the stick backwards.
+        plane.elevator = in.lookY;
         plane.aileron = in.lookX;
         plane.rudderInput = in.pedal;
         plane.brakes = in.brake;
@@ -1002,6 +1330,9 @@ public final class Engine {
     public Quat renderRotation() { return renderRot; }
 
     /** Where the camera should be this frame, in world metres. */
+    /** How far clear of a wall the camera is kept, metres. */
+    private static final double CAMERA_CLEARANCE_M = 0.55;
+
     public Vec3 cameraPosition(Vec3 out) {
         if (firstPerson && profile == ControlProfile.ON_FOOT) {
             return human.eyePosition(out);
@@ -1010,10 +1341,30 @@ public final class Engine {
                 : profile == ControlProfile.HELICOPTER ? 2.4
                 : profile == ControlProfile.BOAT ? 2.0 : 1.0);
         double cy = Math.cos(cameraPitch);
-        out.set(renderPos.x - Math.sin(cameraYaw) * cy * d,
-                renderPos.y + 1.9 - Math.sin(cameraPitch) * d,
-                renderPos.z + Math.cos(cameraYaw) * cy * d);
-        // Do not let the camera sink into a hill behind the player.
+        double bx = -Math.sin(cameraYaw) * cy;
+        double by = -Math.sin(cameraPitch);
+        double bz = Math.cos(cameraYaw) * cy;
+        double hx = renderPos.x;
+        double hy = renderPos.y + 1.9;
+        double hz = renderPos.z;
+
+        // March out from the player's head and stop at the first wall. The
+        // camera used to be protected against exactly one thing - sinking
+        // into a hill - and against nothing else, so in any dense street it
+        // spent its time inside the building behind you, looking at the
+        // back of a facade.
+        double hit = d;
+        for (double t = 1.0; t <= d; t += 1.0) {
+            double px = hx + bx * t;
+            double py = hy + by * t;
+            double pz = hz + bz * t;
+            if (city.blocked(px, pz, py, CAMERA_CLEARANCE_M)) {
+                hit = Math.max(0.9, t - 1.0);
+                break;
+            }
+        }
+        out.set(hx + bx * hit, hy + by * hit, hz + bz * hit);
+        // And still do not let it sink into a hill behind the player.
         double g = groundHeight(out.x, out.z) + 1.1;
         if (out.y < g) { out.y = g; }
         return out;

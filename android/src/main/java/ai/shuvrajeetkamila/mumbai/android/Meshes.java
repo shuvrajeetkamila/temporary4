@@ -180,6 +180,46 @@ final class Meshes {
      * same packing the world geometry uses; material 0 is flat white, so
      * the vertex colour decides the tint.
      */
+    /** Blob shadow sizes: a person, a car, a bus. */
+    static final float[] SHADOW_R = {0.48f, 1.55f, 3.30f};
+    static final int SHADOW_COUNT = 3;
+
+    private static final float[][] shadowV = new float[SHADOW_COUNT][];
+    private static final int[][] shadowI = new int[SHADOW_COUNT][];
+
+    /**
+     * A flat disc in the XZ plane. One mesh per size rather than a scale
+     * in the instance, because the instance is (x, y, z, heading) and a
+     * disc has no heading to give up.
+     */
+    static float[] shadowVertices(int size) { buildShadow(size); return shadowV[size]; }
+
+    static int[] shadowIndices(int size) { buildShadow(size); return shadowI[size]; }
+
+    private static void buildShadow(int size) {
+        if (shadowV[size] != null) { return; }
+        float rad = SHADOW_R[size];
+        reset();
+        final int sides = 14;
+        // Unit radius. The instance scales it, so one mesh serves a scooter
+        // and a double-decker. Darkness is carried in the albedo and faded
+        // out at the rim so the edge is not a hard circle.
+        int centre = vert(0, 0, 0, 0, 1, 0, 0.04f, 0.04f, 0.05f, Shaders.SHADOW_AUX);
+        int first = -1;
+        int prev = -1;
+        for (int i = 0; i <= sides; i++) {
+            double a = i * 2 * Math.PI / sides;
+            int v = vert((float) Math.cos(a) * rad, 0, (float) Math.sin(a) * rad,
+                    0, 1, 0, 0.04f, 0.04f, 0.05f, Shaders.SHADOW_AUX + 0.98f);
+            if (i == 0) { first = v; }
+            if (prev >= 0) { I.add(centre); I.add(prev); I.add(v); }
+            prev = v;
+        }
+        if (first >= 0 && prev >= 0) { I.add(centre); I.add(prev); I.add(first); }
+        shadowV[size] = packVertices();
+        shadowI[size] = packIndices();
+    }
+
     static float[] markerVertices() { buildMarker(); return markerV; }
 
     static int[] markerIndices() { buildMarker(); return markerI; }

@@ -217,7 +217,13 @@ public final class AeroplanePhysics extends RigidBody {
             // Dihedral: the windward wing meets the air at a greater angle,
             // so the aeroplane rolls away from the slip. Same sign note as
             // the fin above.
-            double dihedral = sideslip * auth * 0.20;
+            // 0.20 was three times too strong: three seconds of rudder
+            // produced 51 degrees of bank for 29 degrees of yaw, so the
+            // pedals flew the aeroplane and the ailerons were decoration.
+            // A light twin rolls perhaps half as fast as it yaws on rudder
+            // alone. Spiral stability still comes from this term, just not
+            // at the expense of being able to hold a heading.
+            double dihedral = sideslip * auth * 0.068;
             addTorque(tmp1.x * dihedral, tmp1.y * dihedral, tmp1.z * dihedral);
         } else {
             angleOfAttack = 0;

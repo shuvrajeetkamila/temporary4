@@ -353,8 +353,14 @@ vehicle's own weight, that nothing moves with the throttle shut, that
 drive force does not change sign during steady acceleration, and that
 the helicopter cannot climb on energy its engine does not have.
 
-Autorotation is survivable and has a best-glide collective, but the
-descent is about twice as steep as a real one.
+Autorotation was described here as "about twice as steep as a real one".
+It is not, and the claim came from a bad measurement: a vertical
+autorotation from a hover with no airspeed, which in a real helicopter is
+also a very bad day. Entered properly - trimmed, a hundred kilometres an
+hour on, then the engine off - it comes down at 11.1 m/s on a flat pitch
+and 7.3 m/s with the collective back at 30 %, against roughly 12 m/s for
+a real light helicopter. Those numbers are now asserted in
+`FlightControlsTest` so the claim cannot rot again.
 
 ### A third pass: the world as you actually meet it
 
@@ -474,6 +480,101 @@ Also confirmed working, and now covered: walking up to a parked car,
 boarding it and driving away; and a taxi fare from being offered to being
 paid.
 
+### A fifth pass: making the city solid
+
+The fourth pass found that the streets were empty. This one started from
+a written audit of the whole project and worked down it. The headline:
+**nothing in the world was solid.**
+
+There was no collision geometry of any kind - grepping the whole project
+for an AABB or a collide found nothing - because the only question a
+physics body could ask the world was how high the ground was, and the
+answer came from the elevation grid. So all 195,743 buildings were
+scenery. A sedan started ninety metres west of a thirty-three metre
+building at Kalbadevi and finished a hundred and sixty-four metres east
+of its centre at 120 km/h, closest approach twenty centimetres. The same
+was true on foot, and of the helicopter, and of everything else.
+
+Bridges were worse, because they looked right. The mesher lifts a bridge
+deck into an arch over the water; the ground probe went on returning the
+seabed underneath it. The Sea Link was a painting you drove through on
+your way down.
+
+Both are now answered by one index, `CityCollision`, built from the chunk
+payload that is already shipped and already decoded for drawing -
+footprint rings, road centrelines, widths, the bridge flag. No new data
+goes into the world file. Four things had to be got right and each of
+them was wrong first:
+
+- **The push has to use the footprint's own outward normal.** Pushed by
+  unsigned distance, a body a hand's breadth past the midline is pushed
+  on *through* the wall. The winding of each ring is worked out at build
+  time and the normal never reverses.
+- **A wall is solid below its drawn base.** The mesher bases a building
+  at the lowest ground under its ring, which on anything but a flat block
+  is a couple of metres above the pavement the player is standing on -
+  leaving a gap under every wall in the city.
+- **A query has to look at the neighbouring chunks.** Footprints are
+  stored in whichever chunk the compiler assigned them to and large ones
+  run over the edge; the first building this was tested against spans
+  104 m across a boundary, so its walls lived in one chunk's list while
+  standing in the next.
+- **The force is carried into the next step.** Contacts are resolved
+  outside the body's own `step`, so a force added afterwards would be
+  thrown away by the next `clearAccumulators`. `RigidBody` now carries
+  one step's worth, which is sixteen milliseconds and shorter than the
+  contact.
+
+Traffic became solid at the same time, with a two-body impulse along the
+line of centres and a couple of seconds of free-rolling for the car that
+was hit - without that, `placeOnEdge` snaps it back into its lane on the
+next frame and the collision is invisible.
+
+The sea stopped being a road surface. It used to be returned as a floor
+35 cm under the waves, and a saloon would drive 7.7 km out into the
+Arabian Sea at 131 km/h. Deep water now gets the seabed, with buoyancy
+and drag sized so a car wallows and goes down, the engine drowns when the
+intake is under, and the player bails out and swims. The shoreline is
+still fordable, which matters more than it sounds: the land mask is on a
+20 m grid, so the cell holding the seafront road reads as water, and the
+first version of this drowned the player on the promenade twenty-eight
+metres from the spawn.
+
+Three smaller things in the same pass. **The sun never set** -
+`Sky.evaluate` computed the elevation correctly and then clamped the
+direction vector to stay above the horizon, so at midnight the city was
+lit from forty-seven degrees overhead by a sun that was fifty-seven
+degrees under it. **Nothing was ever saved**, so money, jobs and the
+clock were lost not only on exit but on a rotation. And `AudioMixer.render`
+would write past the end of its buffer if you passed the array length as
+the frame count, which is a crash in the audio thread with no useful
+stack.
+
+The chase camera now sweeps against the same index instead of being
+protected against exactly one thing - sinking into a hill - and bodies
+get a blob shadow on the ground beneath them, which is what the games
+this is modelled on did.
+
+### The flight controls
+
+Both aircraft had the stick in backwards. `lookY` is a screen axis, so
+negative is the stick pushed forward, and both of them negated it again:
+pushing the cyclic forward pitched the helicopter's nose *up* and flew it
+backwards, and pushing the aeroplane's stick forward made it climb. Every
+existing test drove the physics fields directly and so could not see it.
+They now go through `InputState`, which is the only path a player has.
+
+The aeroplane's rudder was also flying the aeroplane: three seconds of
+pedal produced 51 degrees of bank for 29 degrees of yaw, because the
+dihedral term was three times too strong. At 0.068 it gives 22 degrees of
+bank for 34 of yaw, and a sideslip still washes out to a hundredth of a
+degree, so directional stability is intact.
+
+Checked and found healthy while in there: ground effect (47 % collective
+at 1.5 m against 56 % at 12 m), the takeoff run (894 m clean, 740 m at
+10 degrees of flap, 591 m at 25 - flaps shorten it, as they must), and
+the stall.
+
 ## Verification
 
 Nothing is published unless all of this passes first:
@@ -482,7 +583,7 @@ Nothing is published unless all of this passes first:
   checkpoints, run against the compiled files with an independently derived
   projection. The craft gates re-read the land mask themselves, so a bug in
   the mooring code cannot certify its own output.
-- **365** core tests in `core/src/test`, including the same 51 checkpoints
+- **404** core tests in `core/src/test`, including the same 51 checkpoints
   read back through the game's own loader.
 - The built APK is then inspected rather than trusted: badging, signature,
   and a check that all four world files really are inside the zip.

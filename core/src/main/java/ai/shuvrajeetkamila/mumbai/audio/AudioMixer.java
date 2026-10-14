@@ -109,7 +109,19 @@ public final class AudioMixer {
      * @param out    interleaved L,R; length must be even
      * @param frames how many stereo frames to write
      */
+    /**
+     * Fill {@code out} with {@code frames} stereo frames.
+     *
+     * <p>{@code out} must hold {@code 2 * frames} shorts. Reading the
+     * signature the other way - passing the array length as the frame
+     * count - used to walk off the end of the buffer, which is a crash in
+     * the audio thread and therefore a crash with no useful stack. It is
+     * clamped rather than thrown, because silence is a better failure than
+     * a dead process.
+     */
     public void render(short[] out, int frames) {
+        frames = Math.min(frames, out.length / 2);
+        if (frames <= 0) { return; }
         double inv = 1.0 / Synth.SAMPLE_RATE;
         double lx = listenerX, lz = listenerZ, lh = listenerHeading;
 

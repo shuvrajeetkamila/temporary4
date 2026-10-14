@@ -99,6 +99,9 @@ public final class Missions {
     public int jobsDone;
     public int jobsFailed;
     public int racesWon;
+    /** Finished jobs by kind, so progression can be saved and shown. */
+    public int faresDone;
+    public int deliveriesDone;
     /** Best race time in whole seconds, 0 if none finished. */
     public int bestRaceSec;
 
@@ -264,6 +267,11 @@ public final class Missions {
         }
         money += paid;
         jobsDone++;
+        switch (active.kind) {
+            case TAXI: faresDone++; break;
+            case DELIVERY: deliveriesDone++; break;
+            default: break;
+        }
         active = null;
         cooldown = 6.0;
     }

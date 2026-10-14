@@ -31,6 +31,14 @@ final class Shaders {
      */
     static final float BEACON_AUX = 60.0f;
 
+    /**
+     * Aux value marking a blob shadow. Like the beacon it is handled
+     * before any lighting: a shadow is an absence of light, so shading it
+     * as a surface makes it glow at noon. The fraction carries the
+     * distance from the centre of the disc, used to fade the rim.
+     */
+    static final float SHADOW_AUX = 70.0f;
+
     /** Shared header. Keep the two stages in step. */
     private static final String VS_HEAD =
             "#version 300 es\n"
@@ -111,6 +119,17 @@ final class Shaders {
             + "  mediump float hemi = 0.5 + 0.5 * n.y;\n"
             + "  mediump vec3 ambient = mix(vec3(0.22, 0.20, 0.18), uSkyColour, hemi) * 0.55;\n"
             + "  mediump vec3 albedo = vAlbedo;\n"
+            + "  if (vAux > " + (SHADOW_AUX - 0.5f) + ") {\n"
+            // A blob shadow. Not a surface: it is multiplied over whatever
+            // is already there, faded to nothing at the rim so the edge is
+            // soft, and weakest when the sun is low or it is raining.
+            + "    mediump float rim = vAux - " + SHADOW_AUX + ";\n"
+            + "    mediump float k = (1.0 - rim * rim) * 0.55\n"
+            + "        * clamp(uSunDir.y * 1.6, 0.0, 1.0) * (1.0 - 0.45 * uNight);\n"
+            + "    if (k < 0.01) { discard; }\n"
+            + "    fragColour = vec4(0.0, 0.0, 0.0, k);\n"
+            + "    return;\n"
+            + "  }\n"
             + "  if (vAux > " + (BEACON_AUX - 0.5f) + ") {\n"
             // An emergency beacon. Unlit and untextured on purpose: a lamp
             // is a light source, not a surface, so it must not go dim in

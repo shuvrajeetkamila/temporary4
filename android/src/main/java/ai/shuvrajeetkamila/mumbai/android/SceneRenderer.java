@@ -78,6 +78,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
     private VehicleGpu markerGpu;
+
+    /** Blob shadows, one buffer per size. */
+    private final VehicleGpu[] shadowGpu = new VehicleGpu[Meshes.SHADOW_COUNT];
+    private final int[] shadowCount = new int[Meshes.SHADOW_COUNT];
+    private final FloatBuffer[] shadowScratch = new FloatBuffer[Meshes.SHADOW_COUNT];
+    private static final int MAX_SHADOWS = 180;
     /** One VAO per transit body: suburban, metro, monorail, vessel. */
     private final VehicleGpu[] transitGpu = new VehicleGpu[4];
     /** Boats, helicopters and aeroplanes: moored ones and the one flown. */
@@ -406,6 +412,31 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 GLES30.GL_UNSIGNED_INT, 0);
         drawn++;
         tris += seaIndexCount / 3;
+
+        // --- blob shadows, under everything that moves --------------------------
+        // Not a shadow map: a dark disc on the ground under each body,
+        // which is what the games this is modelled on did and what the
+        // frame budget here allows. Drawn before the traffic so the
+        // vehicles sit on top of their own shadows.
+        int shadows = uploadShadows(e, ox, oy, oz);
+        if (shadows > 0) {
+            setupInstanced(e, viewProj, ox, oy, oz, sunDir, sun, sky, fog,
+                    fogDensity, nightFactor);
+            GLES30.glEnable(GLES30.GL_BLEND);
+            GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA);
+            GLES30.glDepthMask(false);
+            for (int i = 0; i < shadowGpu.length; i++) {
+                int n = shadowCount[i];
+                if (n <= 0) { continue; }
+                GLES30.glBindVertexArray(shadowGpu[i].vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES,
+                        shadowGpu[i].indexCount, GLES30.GL_UNSIGNED_INT, 0, n);
+                drawn++;
+                tris += n * shadowGpu[i].indexCount / 3;
+            }
+            GLES30.glDepthMask(true);
+            GLES30.glDisable(GLES30.GL_BLEND);
+        }
 
         // --- traffic, instanced per vehicle type --------------------------------
         int instances = uploadInstances(e);
@@ -736,6 +767,11 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             vehGpu[k.ordinal()] = buildVehicleGpu(k);
             vehScratch[k.ordinal()] = GLUtil.floats(MAX_PER_KIND * 4);
         }
+        for (int i = 0; i < Meshes.SHADOW_COUNT; i++) {
+            shadowGpu[i] = buildInstancedGpu(Meshes.shadowVertices(i),
+                    Meshes.shadowIndices(i), MAX_SHADOWS);
+            shadowScratch[i] = GLUtil.floats(MAX_SHADOWS * 4);
+        }
         markerGpu = buildInstancedGpu(Meshes.markerVertices(),
                 Meshes.markerIndices());
         craftScratch = new FloatBuffer[Meshes.CRAFT_COUNT];
@@ -905,6 +941,72 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private static float sirenPhase(Engine e) {
         if (e.wanted.stars() <= 0) { return -1f; }
         return (float) ((e.clock.simulatedSeconds() * 2.5) % 1.0);
+    }
+
+    /** Which blob size a vehicle kind gets. */
+    private static int shadowSlot(VehicleKind k) {
+        if (k == null) { return 1; }
+        if (k.isTwoWheeler()) { return 0; }
+        return k.lengthM > 7.0 ? 2 : 1;
+    }
+
+    /**
+     * One dark disc per body, on the ground beneath it.
+     *
+     * <p>Placed on the terrain rather than at the body's own height, so a
+     * car on a flyover throws its shadow onto the road below, which is
+     * both cheaper and more nearly right than projecting onto the deck.
+     */
+    private int uploadShadows(Engine e, double ox, double oy, double oz) {
+        for (int i = 0; i < shadowCount.length; i++) {
+            shadowCount[i] = 0;
+            shadowScratch[i].position(0);
+        }
+        int total = 0;
+        double px = e.renderPosition().x;
+        double pz = e.renderPosition().z;
+        for (Agents.Car c : e.agents.cars()) {
+            if (!c.active) { continue; }
+            if (Math.hypot(c.x - px, c.z - pz) > 170) { continue; }
+            int slot = shadowSlot(VehicleKind.values()[
+                    Math.max(0, Math.min(VehicleKind.values().length - 1,
+                            c.kindOrdinal))]);
+            total += putShadow(slot, c.x, c.z, ox, oy, oz, e);
+        }
+        for (Agents.Ped p : e.agents.peds()) {
+            if (!p.active) { continue; }
+            if (Math.hypot(p.x - px, p.z - pz) > 110) { continue; }
+            total += putShadow(0, p.x, p.z, ox, oy, oz, e);
+        }
+        // And the player, whatever they are in.
+        int own = e.profile == ControlProfile.ON_FOOT ? 0
+                : shadowSlot(e.drivingKind());
+        total += putShadow(own, e.renderPosition().x, e.renderPosition().z,
+                ox, oy, oz, e);
+
+        for (int i = 0; i < shadowGpu.length; i++) {
+            int n = shadowCount[i];
+            if (n <= 0) { continue; }
+            shadowScratch[i].position(0);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, shadowGpu[i].instVbo);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16,
+                    shadowScratch[i]);
+        }
+        return total;
+    }
+
+    private int putShadow(int slot, double wx, double wz,
+                          double ox, double oy, double oz, Engine e) {
+        if (shadowCount[slot] >= MAX_SHADOWS) { return 0; }
+        double g = e.world.inBounds(wx, wz) ? e.world.height(wx, wz) : 0;
+        FloatBuffer b = shadowScratch[slot];
+        b.position(shadowCount[slot] * 4);
+        b.put((float) (wx - ox));
+        b.put((float) (g - oy + 0.06));
+        b.put((float) (wz - oz));
+        b.put(0f);
+        shadowCount[slot]++;
+        return 1;
     }
 
     /** Packs every carriage and hull into its per-kind instance buffer. */

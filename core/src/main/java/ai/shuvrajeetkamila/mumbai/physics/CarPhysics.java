@@ -452,6 +452,62 @@ public final class CarPhysics extends RigidBody {
         addTorque(tmp1.x * tq, tmp1.y * tq, tmp1.z * tq);
     }
 
+    /** 0 dry, 1 roof under. Drives buoyancy, drag and the drowned engine. */
+    public double submerged;
+
+    /** True once the intake is under and the engine has stopped. */
+    public boolean drowned;
+
+    /** Seconds the body has been more than half under. */
+    public double sinkTime;
+
+    /**
+     * What happens when you drive into the sea.
+     *
+     * <p>A car floats, badly, for a few seconds, and then it does not. It
+     * is close to the density of water with the doors shut, so the
+     * displaced volume here is sized to put it just on the wrong side of
+     * floating; the drag is what actually stops it, and the engine dies
+     * when the intake goes under whatever the wheels think they are
+     * resting on.
+     */
+    private void stepWater(double dt, GroundProbe ground) {
+        double sea = ground.waterLevelAt(position.x, position.z);
+        if (sea == Double.NEGATIVE_INFINITY) {
+            submerged = 0;
+            drowned = false;
+            sinkTime = 0;
+            return;
+        }
+        double hull = Math.max(1.0, kind == null ? 1.45 : kind.heightM);
+        double floorY = position.y - hull * 0.35;
+        submerged = MathUtil.clamp((sea - floorY) / hull, 0, 1);
+        if (submerged <= 0) {
+            drowned = false;
+            sinkTime = 0;
+            return;
+        }
+        sinkTime += submerged > 0.5 ? dt : -dt;
+        if (sinkTime < 0) { sinkTime = 0; }
+
+        // Buoyancy on the submerged fraction. 1040 rather than 1000 for
+        // seawater, and a displacement that leaves her slightly heavy, so
+        // she wallows and then goes down instead of bobbing for ever.
+        double displaced = (mass / 1040.0) * 0.92 * submerged;
+        addForce(0, MathUtil.RHO_SEA * MathUtil.G * displaced, 0);
+
+        // Water drag. This is the thing that actually stops the car.
+        double cd = 3.4 * submerged;
+        tmp1.set(velocity).scaleSelf(-mass * cd);
+        addForce(tmp1);
+        addTorque(-angularVelocity.x * mass * 0.9 * submerged,
+                -angularVelocity.y * mass * 0.9 * submerged,
+                -angularVelocity.z * mass * 0.9 * submerged);
+
+        // Intake under: the engine stops and does not restart.
+        if (submerged > 0.42) { drowned = true; }
+    }
+
     /** One fixed-step update. {@code ground} supplies height and normal. */
     public void step(double dt, GroundProbe ground, double wetness) {
         clearAccumulators();
@@ -493,6 +549,9 @@ public final class CarPhysics extends RigidBody {
             tmp1.set(velocity).normalizeSelf().scaleSelf(-q * dragArea);
             addForce(tmp1);
         }
+
+        // --- water ------------------------------------------------------------
+        stepWater(dt, ground);
 
         // --- the rider leans --------------------------------------------------
         if (kind != null && kind.isTwoWheeler()) { leanWithTheRider(); }
@@ -696,7 +755,9 @@ public final class CarPhysics extends RigidBody {
         // half. A real clutch slips instead: it transmits what it can hold and
         // the engine revs on the difference, which is what makes a standing
         // start smooth.
-        double crankTorque = engineTorque(engineRpm, MathUtil.clamp(throttle, 0, 1));
+        // A drowned engine makes no torque, whatever the pedal says.
+        double crankTorque = drowned ? -14.0
+                : engineTorque(engineRpm, MathUtil.clamp(throttle, 0, 1));
         double transmitted = 0;
         if (engaged) {
             double inputRpm = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
@@ -872,6 +933,16 @@ public final class CarPhysics extends RigidBody {
     /** What the ground looks like to a wheel. */
     public interface GroundProbe {
         double heightAt(double x, double z);
+
+        /**
+         * Water surface here, or {@link Double#NEGATIVE_INFINITY} on dry
+         * land. A car is not a boat, and the ground probe used to hand it
+         * the wave height as a <em>floor</em>, so a saloon could drive
+         * eight kilometres out into the Arabian Sea at 130 km/h.
+         */
+        default double waterLevelAt(double x, double z) {
+            return Double.NEGATIVE_INFINITY;
+        }
 
         void normalAt(double x, double z, Vec3 out);
 

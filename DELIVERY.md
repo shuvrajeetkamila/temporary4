@@ -102,6 +102,18 @@ This matters more than anything above.
   marked on the full-screen map, and boarded with the same ENTER you use
   on a car. Every one of the 89 is covered by a test that walks up to it
   and gets in.
+- **The city is solid now**: buildings, bridge decks, other vehicles and
+  deep water all push back. What is *not* modelled: no interiors, so
+  every building is a sealed exterior; collision is against the footprint
+  ring extruded to the roof, so a balcony or an archway is as solid as
+  the wall it is on; pedestrians are not pushed out of walls, only the
+  player is; and traffic does not collide with traffic, only with you.
+- **Shadows are blobs**, one dark ellipse on the ground under each body,
+  faded by sun elevation and by night. Buildings cast none. There is no
+  shadow map and no dynamic light anywhere in the renderer.
+- **Progress is saved** to SharedPreferences on pause and on every
+  completed job: money, jobs by kind, best race time, the clock and
+  where you were standing. There is one slot and no manual save.
 - **Traffic density is a budget spent near the player**, not a simulation
   of the whole city. Cars and pedestrians are populated within 300 m and
   given up past 620 m; beyond that the streets are empty, because you
@@ -132,6 +144,11 @@ This matters more than anything above.
   within thirty metres of somewhere to stand - 79 of them were moved -
   and drops the 53 it could not bring alongside. Out at sea the game
   refuses the request and says so rather than drowning you.
+- **Some OSM footprints are self-intersecting** after simplification -
+  the first building this project's collision tests picked had ten
+  vertices that crossed each other twice. They are still extruded and
+  still collide wall by wall, which is correct, but "inside the
+  building" is not a well-defined question for one of them.
 - **Rooftop helipads are still rejected**, for the same reason: there is
   no way up onto a roof. The 27 helicopters are on ground-level pads.
 - **The scooter's lean is kinematic.** The rider is modelled as a control

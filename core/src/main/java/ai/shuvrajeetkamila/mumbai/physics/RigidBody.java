@@ -41,9 +41,38 @@ public class RigidBody {
     /** Set to false for a body resting on the ground, to damp jitter. */
     public boolean active = true;
 
+    /**
+     * Force and torque carried into the next step.
+     *
+     * <p>Contacts with the city are resolved outside the body's own
+     * {@code step}, because the collision index belongs to the world and
+     * not to the physics. A force added after {@code step} returns would
+     * be thrown away by the next {@code clearAccumulators}, so it is
+     * parked here instead and seeded into the accumulator at the top of
+     * the following step. One step of lag, sixteen milliseconds, which is
+     * shorter than the contact itself.
+     */
+    public final Vec3 carriedForce = new Vec3();
+    public final Vec3 carriedTorque = new Vec3();
+
     public void clearAccumulators() {
-        force.zero();
-        torque.zero();
+        force.set(carriedForce);
+        torque.set(carriedTorque);
+        carriedForce.zero();
+        carriedTorque.zero();
+    }
+
+    /** A force for the next step rather than this one. */
+    public void carryForce(double fx, double fy, double fz) {
+        carriedForce.addSelf(fx, fy, fz);
+    }
+
+    /** As {@link #addForceAtPoint}, but for the next step. */
+    public void carryForceAtPoint(Vec3 f, Vec3 worldPoint) {
+        carriedForce.addSelf(f);
+        tmpA.set(worldPoint).subSelf(position);
+        tmpA.crossInto(f, tmpB);
+        carriedTorque.addSelf(tmpB);
     }
 
     /** World-frame force through the centre of mass, newtons. */

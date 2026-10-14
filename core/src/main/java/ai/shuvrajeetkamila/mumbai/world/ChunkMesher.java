@@ -263,12 +263,10 @@ public final class ChunkMesher {
                 }
                 double y;
                 if (bridge && total > 1) {
-                    double t = Math.min(1, travelled / total);
-                    double deck = y0 + (y1 - y0) * t;
-                    double arch = 4.5 * Math.sin(Math.PI * t);
                     double ground = world.isLand(ox + lx, oz + lz)
                             ? world.height(ox + lx, oz + lz) : 0.0;
-                    y = Math.max(deck + arch, ground + 1.2);
+                    y = RoadDeck.height(y0, y1, Math.min(1, travelled / total),
+                            ground);
                 } else {
                     y = world.height(ox + lx, oz + lz) + lift;
                 }

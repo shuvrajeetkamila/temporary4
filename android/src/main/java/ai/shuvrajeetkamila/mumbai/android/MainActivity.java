@@ -17,6 +17,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
+import ai.shuvrajeetkamila.mumbai.game.Progress;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.app.Quality;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
@@ -116,9 +117,21 @@ public final class MainActivity extends Activity
             WorldData world = WorldData.load(path -> getAssets().open(path));
             Engine e = new Engine(world);
             e.setBaseQuality(pickStartingQuality());
-            // Marine Drive, facing the bay. A recognisable place to start,
-            // and a good test of the streamer because the sea is right there.
-            e.spawnAt(18.9430, 72.8230, ControlProfile.ON_FOOT);
+            // Whatever was earned last time, before anything is spawned.
+            // Android destroys and recreates this activity routinely - on a
+            // rotation, under memory pressure - so "saved on exit" is not
+            // good enough and never was: nothing was saved at all.
+            Progress p = e.loadProgress(new PrefsStore(
+                    getSharedPreferences("mumbai", MODE_PRIVATE)));
+            if (!Double.isNaN(p.x) && !Double.isNaN(p.z)
+                    && world.inBounds(p.x, p.z)) {
+                e.spawnAtWorld(p.x, p.z, ControlProfile.ON_FOOT);
+            } else {
+                // Marine Drive, facing the bay. A recognisable place to
+                // start, and a good test of the streamer because the sea
+                // is right there.
+                e.spawnAt(18.9430, 72.8230, ControlProfile.ON_FOOT);
+            }
             engine = e;
             // Sound can only start once there is a mixer to pull from.
             // It is started on the UI thread so start/stop stay ordered
@@ -287,6 +300,8 @@ public final class MainActivity extends Activity
     @Override
     protected void onPause() {
         super.onPause();
+        Engine e = engine;
+        if (e != null) { e.saveProgress(); }
         surface.onPause();
         // Hand the output device back while backgrounded, so the game is
         // not still droning over whatever the player switched to.
