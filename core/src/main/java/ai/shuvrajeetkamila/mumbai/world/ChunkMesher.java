@@ -261,6 +261,10 @@ public final class ChunkMesher {
     /** The lowest ground in a chunk, sampled at full detail. */
     private double lowestGround(double ox, double oz, double size) {
         double lo = Double.MAX_VALUE;
+        // At the finest the terrain is ever drawn. Sampling any coarser
+        // leaves the skirt of a distant chunk stopping above the valley
+        // floor its detailed neighbour shows, and the seam opens again -
+        // TerrainSeamTest measures exactly that.
         int n = 32;
         double step = size / n;
         for (int j = 0; j <= n; j++) {

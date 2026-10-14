@@ -97,6 +97,8 @@ public final class Transit {
     /** Where the stations are on each route, as distance along it. */
     private final double[][] stopS;
 
+    private static final double[] EMPTY = new double[0];
+
     /** Routes worth running a service on, by index into the world's list. */
     private final int[] usable;
     private final int usableCount;
@@ -317,7 +319,8 @@ public final class Transit {
         // Slow for the stop ahead, and hold there when it arrives. A
         // service that only ever stopped at the ends of its line was not
         // a railway, it was a shuttle, and there was nowhere to get on.
-        double[] stops = stopS[sv.route];
+        double[] stops = stopS[sv.route] == null
+                ? EMPTY : stopS[sv.route];
         if (stops.length > 0) {
             if (sv.nextStop < 0 || sv.nextStop >= stops.length) {
                 sv.nextStop = nearestStopAhead(stops, sv.s, sv.dir);

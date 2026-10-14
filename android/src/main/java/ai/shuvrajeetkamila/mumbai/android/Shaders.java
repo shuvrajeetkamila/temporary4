@@ -312,7 +312,6 @@ final class Shaders {
             + "uniform highp mat4 uViewProj;\n"
             + "uniform highp vec3 uCamera;\n"
             + "uniform highp float uExtent;\n"
-            + "uniform highp float uTide;\n"
             + "out highp vec3 vWorld;\n"
             + "out highp float vDepth;\n"
             + WAVE_COMMON

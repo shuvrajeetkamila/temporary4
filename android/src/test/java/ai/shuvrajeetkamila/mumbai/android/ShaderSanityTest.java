@@ -96,6 +96,35 @@ final class ShaderSanityTest {
     }
 
     @Test
+    @DisplayName("nothing is declared twice in one stage")
+    void noRedefinitions() {
+        // A driver rejects the whole shader for this, and the app dies
+        // on its first frame. It happened the moment the wave code was
+        // factored into a block shared by both sea stages: the vertex
+        // stage already declared uTide, and the shared block declared
+        // it again. Nothing in a Java build can see that, because the
+        // shader is a string built by concatenation - which is exactly
+        // why the check has to read the finished string.
+        List<String> bad = new ArrayList<>();
+        for (String[] p : programs()) {
+            for (int stage = 1; stage <= 2; stage++) {
+                String src = p[stage];
+                Set<String> seen = new LinkedHashSet<>();
+                Matcher m = DECL.matcher(src);
+                while (m.find()) {
+                    String name = m.group(4);
+                    if (!seen.add(name)) {
+                        bad.add(p[0] + " "
+                                + (stage == 1 ? "vertex" : "fragment")
+                                + " stage declares " + name + " twice");
+                    }
+                }
+            }
+        }
+        assertTrue(bad.isEmpty(), String.join("\n", bad));
+    }
+
+    @Test
     @DisplayName("the two stages of a program agree on their varyings")
     void varyingsMatchAcrossTheProgram() {
         List<String> bad = new ArrayList<>();
