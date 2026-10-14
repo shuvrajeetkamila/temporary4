@@ -189,6 +189,37 @@ This matters more than anything above.
   transform is rebased with the floating origin every frame, because a
   texture coordinate built from a world constant and a render-space
   position would have come apart only after a long drive.
+- **Four more rendering faults reported from play, all arithmetic or
+  lifetime bugs.** The symptoms were that the water went white, that a
+  "moving carpet like transparent screen" appeared after a while, and
+  that the graphics button sometimes helped and sometimes did not.
+  - *The sea's phase grew without bound.* The shader was handed elapsed
+    time and worked out the wave phase itself in 32-bit floats. After an
+    hour that phase is tens of thousands of radians, which a float
+    cannot resolve to a wave crest, and `sin()` of an argument that
+    large returns garbage on real drivers. A garbage vertex does not
+    just look wrong - it throws a triangle across the whole screen,
+    which is the carpet. The phase is now wrapped into one cycle in
+    double precision before it leaves `Ocean`.
+  - *The surface normal was a finite difference.* Two height samples
+    1.5 m apart, subtracted: the one operation floating point is worst
+    at. Noise in the normal goes through a 220-power specular, and noise
+    through a 220-power specular is a sheet of white. It is now the
+    analytic derivative, which is also four fewer evaluations.
+  - *The shader's wave set was not the model's wave set,* despite a
+    comment in the shader promising it was. Not one of the twelve
+    numbers matched: the drawn sea ran 93 m swells of 0.62 m while the
+    boats floated on 38 m swells of 0.26 m. The waves now arrive from
+    `Ocean` as uniforms and the shader has no constants left to drift.
+    The waves are also evaluated in world space rather than render
+    space, so they stay put when the floating origin rebases.
+  - *A lost GL context left dead handles behind.* Android destroys the
+    context when the app is backgrounded. The programs, the atlas and
+    the props were all rebuilt; the land mask texture and every chunk's
+    vertex array were not. Those handles are small integers that the
+    driver hands out again for different objects, so the sea sampled
+    something that was no longer a coastline and the terrain drew
+    whatever owned its name now. Both are reset and re-streamed.
 - **Transit has no stations or timetable.** Services run between the ends
   of their line with a dwell at each terminus; they do not stop at
   platforms, you cannot board one, and the 380 OSM platform ways are not

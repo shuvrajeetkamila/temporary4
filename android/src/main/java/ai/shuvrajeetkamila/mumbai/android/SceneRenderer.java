@@ -12,6 +12,7 @@ import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
 import ai.shuvrajeetkamila.mumbai.app.ControlProfile;
 import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
+import ai.shuvrajeetkamila.mumbai.physics.Ocean;
 import ai.shuvrajeetkamila.mumbai.render.SeaMask;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.sim.Transit;
@@ -61,12 +62,16 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private int atlas;
     /** 0 in daylight, 1 after dark. Set from the sun elevation each frame. */
     private float nightFactor;
-    private int uSeaViewProj, uSeaCam, uSeaTime, uSeaExtent, uSeaTide;
+    private int uSeaViewProj, uSeaCam, uSeaExtent, uSeaTide;
     private int uSeaLandXform, uSeaLandMask;
+    private int uSeaWaveAmp, uSeaWaveK, uSeaWaveDirX, uSeaWaveDirZ;
+    private int uSeaWavePhase, uSeaWorldOffset;
+    /** Wave set, refilled from Ocean every frame. Five groups of four. */
+    private final float[] waveParams = new float[Ocean.WAVES * 5];
     /** The land mask on the GPU, so the sea knows where the coast is. */
     private int landMaskTex;
     private final float[] landXform = new float[4];
-    private int uSeaChop, uSeaSunDir, uSeaSunCol, uSeaSky, uSeaFogCol, uSeaFogDen;
+    private int uSeaSunDir, uSeaSunCol, uSeaSky, uSeaFogCol, uSeaFogDen;
     private int uSkySky, uSkyFog, uSkyHorizon;
 
     private int seaVao, seaVbo, seaIbo, seaIndexCount, seaGridBuilt;
@@ -194,11 +199,15 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
         uSeaViewProj = GLES30.glGetUniformLocation(seaProg, "uViewProj");
         uSeaCam = GLES30.glGetUniformLocation(seaProg, "uCamera");
-        uSeaTime = GLES30.glGetUniformLocation(seaProg, "uTime");
         uSeaExtent = GLES30.glGetUniformLocation(seaProg, "uExtent");
         uSeaTide = GLES30.glGetUniformLocation(seaProg, "uTide");
-        uSeaChop = GLES30.glGetUniformLocation(seaProg, "uChoppiness");
         uSeaLandXform = GLES30.glGetUniformLocation(seaProg, "uLandXform");
+        uSeaWaveAmp = GLES30.glGetUniformLocation(seaProg, "uWaveAmp");
+        uSeaWaveK = GLES30.glGetUniformLocation(seaProg, "uWaveK");
+        uSeaWaveDirX = GLES30.glGetUniformLocation(seaProg, "uWaveDirX");
+        uSeaWaveDirZ = GLES30.glGetUniformLocation(seaProg, "uWaveDirZ");
+        uSeaWavePhase = GLES30.glGetUniformLocation(seaProg, "uWavePhase");
+        uSeaWorldOffset = GLES30.glGetUniformLocation(seaProg, "uWorldOffset");
         uSeaLandMask = GLES30.glGetUniformLocation(seaProg, "uLandMask");
         uSeaSunDir = GLES30.glGetUniformLocation(seaProg, "uSunDir");
         uSeaSunCol = GLES30.glGetUniformLocation(seaProg, "uSunColour");
@@ -223,11 +232,27 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
         buildSky();
         buildProps();
+        // Everything built against the old context died with it. The
+        // handles did not: they are small integers, and the driver hands
+        // the same numbers out again for entirely different objects, so
+        // anything still holding one draws whatever owns that name now.
+        // The programs, the atlas and the props above are rebuilt
+        // unconditionally; these two were not, and this is what came back
+        // after the app had been in the background - a land mask that was
+        // no longer a land mask, so the sea stopped knowing where the
+        // coast was, and chunk meshes pointing at nothing.
+        landMaskTex = 0;
+        seaGridBuilt = 0;
+
         Engine e = host.engine();
         if (e != null) {
             mesher = new ChunkMesher(e.world);
             buildSea(e.quality.seaGrid);
-            startWorkers(e);
+            e.streamer.forgetGpu();
+            // The decode workers touch no GL and survive a lost context.
+            // Starting a second set would leave the first running for
+            // ever, both pulling from the same queue.
+            if (workers == null) { startWorkers(e); }
         }
         host.markGlReady();
         Log.i(GLUtil.TAG, "GL ready, programs linked");
@@ -419,10 +444,18 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUseProgram(seaProg);
         GLES30.glUniformMatrix4fv(uSeaViewProj, 1, false, viewProj, 0);
         GLES30.glUniform3f(uSeaCam, ox, oy, oz);
-        GLES30.glUniform1f(uSeaTime, (float) e.ocean.time());
         GLES30.glUniform1f(uSeaExtent, (float) Math.min(9000, q.farRadius));
         GLES30.glUniform1f(uSeaTide, (float) e.ocean.tide());
-        GLES30.glUniform1f(uSeaChop, (float) e.ocean.choppiness());
+        // The wave set, straight from the model the boats float on. There
+        // is no copy of these numbers in the shader any more.
+        e.ocean.waveParameters(waveParams);
+        GLES30.glUniform4fv(uSeaWaveAmp, 1, waveParams, 0);
+        GLES30.glUniform4fv(uSeaWaveK, 1, waveParams, Ocean.WAVES);
+        GLES30.glUniform4fv(uSeaWaveDirX, 1, waveParams, Ocean.WAVES * 2);
+        GLES30.glUniform4fv(uSeaWaveDirZ, 1, waveParams, Ocean.WAVES * 3);
+        GLES30.glUniform4fv(uSeaWavePhase, 1, waveParams, Ocean.WAVES * 4);
+        GLES30.glUniform2f(uSeaWorldOffset, (float) e.origin.offsetX(),
+                (float) e.origin.offsetZ());
         GLES30.glUniform3fv(uSeaSunDir, 1, sunDir, 0);
         GLES30.glUniform3fv(uSeaSunCol, 1, sun, 0);
         GLES30.glUniform3fv(uSeaSky, 1, sky, 0);

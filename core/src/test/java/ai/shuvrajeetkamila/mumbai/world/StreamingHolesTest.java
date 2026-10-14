@@ -286,4 +286,47 @@ final class StreamingHolesTest {
                 "the ground directly under the player was missing on "
                         + missing + " of " + checked + " frames");
     }
+
+    @Test
+    @DisplayName("a lost GL context does not leave tiles pointing at nothing")
+    void forgettingTheGpuStreamsEverythingBackIn() {
+        // Android throws the GL context away when the app goes to the
+        // background. Every buffer and vertex array dies with it, but the
+        // handles are small integers that the driver hands out again for
+        // completely different objects - so a tile still holding one
+        // draws whatever owns that name now. This is what came back
+        // "after playing for a while": the app had been backgrounded.
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        WorldStreamer s = streamer(w);
+        FakeGpu gpu = new FakeGpu();
+
+        double x = -5761, z = 14722;
+        for (int i = 0; i < 60; i++) { pump(s, mesher, gpu, x, z); }
+        int before = s.residentCount();
+        assertTrue(before > 10, "nothing was resident to begin with");
+
+        s.forgetGpu();
+        assertEquals(0, s.residentCount(),
+                "tiles are still resident after the context that owned"
+                        + " their buffers was destroyed");
+        for (WorldStreamer.Tile t : s.residentTiles()) {
+            assertTrue(t.gpu == null);
+        }
+
+        // And it all comes back, rather than leaving a hole for ever.
+        for (int i = 0; i < 60; i++) { pump(s, mesher, gpu, x, z); }
+        assertTrue(s.residentCount() > before / 2,
+                "after the context came back only " + s.residentCount()
+                        + " of " + before + " tiles were streamed in again");
+        boolean under = false;
+        for (WorldStreamer.Tile t : s.residentTiles()) {
+            if (!drawable(t)) { continue; }
+            if (x >= t.originX && x < t.originX + w.chunkM
+                    && z >= t.originZ && z < t.originZ + w.chunkM) {
+                under = true;
+            }
+        }
+        assertTrue(under, "there is no ground under the player any more");
+    }
 }

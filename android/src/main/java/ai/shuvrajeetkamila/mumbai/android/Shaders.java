@@ -264,42 +264,65 @@ final class Shaders {
             + "layout(location = 0) in vec2 aGrid;\n"
             + "uniform highp mat4 uViewProj;\n"
             + "uniform highp vec3 uCamera;\n"
-            + "uniform highp float uTime;\n"
             + "uniform highp float uExtent;\n"
             + "uniform highp float uTide;\n"
-            + "uniform mediump float uChoppiness;\n"
             + "out highp vec3 vWorld;\n"
             + "out mediump vec3 vNormal;\n"
             + "out highp float vDepth;\n"
-            // The same four directional waves as Ocean.java. If these two
-            // ever disagree, boats float above or sink into the drawn
-            // surface, which is immediately obvious and impossible to tune
-            // away. The constants are duplicated rather than uploaded because
-            // they never change.
-            + "const vec4 WA = vec4(0.62, 0.41, 0.24, 0.13);\n"
-            + "const vec4 WL = vec4(93.0, 47.0, 23.0, 11.0);\n"
-            + "const vec4 WS = vec4(0.95, 1.25, 1.65, 2.30);\n"
-            + "const vec2 D0 = vec2(0.886, 0.464);\n"
-            + "const vec2 D1 = vec2(0.629, -0.777);\n"
-            + "const vec2 D2 = vec2(0.998, -0.070);\n"
-            + "const vec2 D3 = vec2(0.342, 0.940);\n"
-            + "highp float waveAt(highp vec2 p) {\n"
+            // The wave set comes from Ocean.java as uniforms rather than
+            // being copied in here as constants. It used to be copied,
+            // under a comment promising the two agreed - and not one of
+            // the twelve numbers matched. The drawn sea ran 93 m swells
+            // of 0.62 m one way while the boats floated on 38 m swells
+            // of 0.26 m going another.
+            + "uniform highp vec4 uWaveAmp;\n"
+            + "uniform highp vec4 uWaveK;\n"
+            + "uniform highp vec4 uWaveDirX;\n"
+            + "uniform highp vec4 uWaveDirZ;\n"
+            + "uniform highp vec4 uWavePhase;\n"
+            // Render space is world space minus the floating origin. The
+            // waves have to be evaluated where the physics evaluates
+            // them, or after the first rebase the drawn surface slides
+            // out from under every hull in the harbour.
+            + "uniform highp vec2 uWorldOffset;\n"
+            // Height and slope together. The slope used to be four extra
+            // height samples differenced 1.5 m apart, which is a
+            // subtraction of two nearly equal numbers - the one operation
+            // a float is worst at, and the reason the sea turned into a
+            // sheet of white noise once the phase had grown. The
+            // derivative of a sine is a cosine; there is no reason to
+            // approximate it.
+            + "highp float waveAt(highp vec2 pr, out highp vec2 slope) {\n"
+            + "  highp vec2 p = pr + uWorldOffset;\n"
             + "  highp float h = 0.0;\n"
-            + "  h += WA.x * uChoppiness * sin(dot(p, D0) * 6.2831853 / WL.x + uTime * WS.x);\n"
-            + "  h += WA.y * uChoppiness * sin(dot(p, D1) * 6.2831853 / WL.y + uTime * WS.y);\n"
-            + "  h += WA.z * uChoppiness * sin(dot(p, D2) * 6.2831853 / WL.z + uTime * WS.z);\n"
-            + "  h += WA.w * uChoppiness * sin(dot(p, D3) * 6.2831853 / WL.w + uTime * WS.w);\n"
-            + "  return h + uTide;\n"
+            + "  slope = vec2(0.0);\n"
+            + "  for (int i = 0; i < 4; i++) {\n"
+            + "    highp vec2 d = vec2(uWaveDirX[i], uWaveDirZ[i]);\n"
+            + "    highp float k = uWaveK[i];\n"
+            // Reduce the distance along the wave into one wavelength
+            // before turning it into an angle. Mumbai is 70 km across and
+            // the shortest wave is 7.5 m, so without this the angle
+            // reaches 60,000 radians at the far corner of the map and a
+            // 32-bit float can no longer tell one crest from the next.
+            + "    highp float along = dot(p, d);\n"
+            + "    highp float lambda = 6.2831853 / k;\n"
+            + "    highp float a = mod(along, lambda) * k + uWavePhase[i];\n"
+            + "    h += uWaveAmp[i] * sin(a);\n"
+            + "    slope += uWaveAmp[i] * k * cos(a) * d;\n"
+            + "  }\n"
+            // Insurance. The real surface is a metre and a half of swell
+            // on a two metre tide; anything outside this is arithmetic
+            // having gone wrong, and an unclamped vertex does not just
+            // look wrong, it throws a triangle across the whole screen.
+            + "  return clamp(h, -4.0, 4.0) + uTide;\n"
             + "}\n"
             + "void main() {\n"
             // A grid that follows the camera, snapped so it does not crawl.
             + "  highp vec2 centre = floor(uCamera.xz / 8.0) * 8.0;\n"
             + "  highp vec2 p = centre + aGrid * uExtent;\n"
-            + "  highp float h = waveAt(p);\n"
-            + "  highp float e = 0.75;\n"
-            + "  highp float hx = waveAt(p + vec2(e, 0.0)) - waveAt(p - vec2(e, 0.0));\n"
-            + "  highp float hz = waveAt(p + vec2(0.0, e)) - waveAt(p - vec2(0.0, e));\n"
-            + "  vNormal = normalize(vec3(-hx / (2.0 * e), 1.0, -hz / (2.0 * e)));\n"
+            + "  highp vec2 slope;\n"
+            + "  highp float h = waveAt(p, slope);\n"
+            + "  vNormal = normalize(vec3(-slope.x, 1.0, -slope.y));\n"
             + "  vWorld = vec3(p.x, h, p.y);\n"
             + "  vDepth = length(vWorld - uCamera);\n"
             + "  gl_Position = uViewProj * vec4(vWorld, 1.0);\n"
@@ -383,7 +406,7 @@ final class Shaders {
      */
     static final String RAIN_FS = FS_HEAD
             + "in mediump vec2 vNdc;\n"
-            + "uniform mediump float uTime;\n"
+            + "uniform highp float uTime;\n"
             + "uniform mediump float uRain;\n"
             + "uniform mediump float uAspect;\n"
             + "uniform mediump vec3 uTint;\n"
@@ -403,7 +426,7 @@ final class Shaders {
             + "    p *= scale;\n"
             + "    mediump float col = floor(p.x);\n"
             + "    mediump float off = h11(col + fi * 31.7);\n"
-            + "    mediump float y = fract(p.y * 0.25 - uTime * speed - off);\n"
+            + "    highp float y = fract(p.y * 0.25 - uTime * speed - off);\n"
             + "    mediump float streak = smoothstep(0.0, 0.05, y)\n"
             + "        * (1.0 - smoothstep(0.05, 0.28, y));\n"
             + "    mediump float present = step(0.38, h11(col * 1.7 + fi * 5.3));\n"

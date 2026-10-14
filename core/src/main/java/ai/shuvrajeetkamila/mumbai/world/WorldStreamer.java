@@ -547,6 +547,33 @@ public final class WorldStreamer {
         return n;
     }
 
+    /**
+     * Forget every GPU handle without trying to free it.
+     *
+     * <p>For when the GL context has gone - the app was backgrounded and
+     * Android threw the context away. Every buffer and every vertex array
+     * died with it, but the tiles still hold their handles, and those are
+     * small integers that the driver will hand out again to completely
+     * different objects. Drawing with them afterwards is drawing whatever
+     * happens to own that name now. The tiles go back to UNLOADED and are
+     * streamed in again.
+     */
+    public void forgetGpu() {
+        synchronized (ioQueue) { ioQueue.clear(); }
+        decoded.clear();
+        displaced.clear();
+        for (Tile t : tiles) {
+            t.gpu = null;
+            t.mesh = null;
+            t.pendingMesh = null;
+            t.rebuilding = false;
+            t.cancelled = true;
+            t.state = S_UNLOADED;
+            t.geometryBytes = 0;
+        }
+        resident.clear();
+    }
+
     /** Drop everything. Used when the floating origin rebases or on teardown. */
     public void reset() {
         synchronized (ioQueue) { ioQueue.clear(); }

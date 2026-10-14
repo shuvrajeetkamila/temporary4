@@ -59,6 +59,53 @@ public final class Ocean {
         return h;
     }
 
+    /** How many wave components there are. */
+    public static final int WAVES = 4;
+
+    /**
+     * The wave set, packed for the renderer: amplitude, wavenumber, the two
+     * direction components, and the time phase.
+     *
+     * <p>This exists so that there is one set of wave numbers in the game
+     * rather than two. The shader used to carry its own copy as GLSL
+     * constants, under a comment promising they matched these - and they
+     * did not match in a single value. The drawn sea had 93 m swells of
+     * 0.62 m running one way while the sea the boats floated on had 38 m
+     * swells of 0.26 m running another.
+     *
+     * <p>The phase is wrapped into one cycle before it leaves here, and
+     * that matters more than it looks. The shader evaluates sine in 32-bit
+     * floats; the phase grows by a few radians a second and after an hour
+     * of play it is tens of thousands of radians, where a float can no
+     * longer resolve a wave crest. The surface decays into noise, and
+     * because the lighting takes a 220-power specular off the slope, noise
+     * reads as a sheet of moving white. Wrapping costs nothing and the sine
+     * is unchanged: it is periodic, so a whole number of cycles is free.
+     *
+     * @param out five groups of {@value #WAVES}: amplitude, wavenumber,
+     *            direction x, direction z, phase
+     */
+    public void waveParameters(float[] out) {
+        for (int i = 0; i < WAVES; i++) {
+            double k = 2 * Math.PI / LEN[i];
+            double dx = Math.sin(DIR[i]);
+            double dz = -Math.cos(DIR[i]);
+            // The phase the shader adds, wrapped to one cycle. Computed in
+            // double, where the wrap is exact.
+            double phase = -SPD[i] * k * time;
+            phase = phase % (2 * Math.PI);
+            if (phase < 0) { phase += 2 * Math.PI; }
+            out[i] = (float) (AMP[i] * choppiness);
+            out[WAVES + i] = (float) k;
+            out[WAVES * 2 + i] = (float) dx;
+            out[WAVES * 3 + i] = (float) dz;
+            out[WAVES * 4 + i] = (float) phase;
+        }
+    }
+
+    /** Wavelength of the longest component, for the shader's phase wrap. */
+    public static double longestWave() { return LEN[0]; }
+
     /** Surface normal, for buoyancy torque and for the shader's lighting. */
     public void normalAt(double x, double z, double[] out3) {
         double dhx = 0, dhz = 0;

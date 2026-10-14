@@ -232,4 +232,49 @@ final class WalkCycleTest {
                 "the mask is sampled after the pixel is shaded, which"
                         + " wastes the work it is supposed to save");
     }
+
+    @Test
+    void theSeaHasNoWaveConstantsOfItsOwn() {
+        // The shader used to carry its own copy of the wave set under a
+        // comment promising it matched Ocean.java. Not one of the twelve
+        // numbers matched: the drawn sea ran 93 m swells of 0.62 m while
+        // the boats floated on 38 m swells of 0.26 m. The only way that
+        // cannot come back is for the shader to have no constants.
+        String vs = Shaders.SEA_VS;
+        for (String ghost : new String[]{"93.0", "47.0", "0.62", "0.41",
+                                         "0.886", "0.629", "WA", "WL", "WS"}) {
+            assertTrue(!vs.contains(ghost),
+                    "the sea shader still carries its own wave constant \""
+                            + ghost + "\" instead of reading Ocean's");
+        }
+        for (String u : new String[]{"uWaveAmp", "uWaveK", "uWaveDirX",
+                                     "uWaveDirZ", "uWavePhase"}) {
+            assertTrue(vs.contains("uniform highp vec4 " + u),
+                    "the sea shader does not read " + u + " from the model");
+        }
+    }
+
+    @Test
+    void theSeaDoesNotDifferenceHeightsForItsNormal() {
+        // Four extra height samples 1.5 m apart, subtracted: two nearly
+        // equal numbers, which is where the white noise came from once
+        // the phase had grown. The derivative of a sine is a cosine.
+        String vs = Shaders.SEA_VS;
+        assertTrue(vs.contains("cos(a)"),
+                "the sea no longer takes its slope analytically");
+        assertTrue(!vs.contains("hx / (2.0 * e)"),
+                "the sea is back to differencing height samples for its"
+                        + " normal");
+        assertTrue(vs.contains("mod(along, lambda)"),
+                "the sea no longer reduces the distance along a wave into"
+                        + " one wavelength, so the angle grows without"
+                        + " bound across the map");
+        assertTrue(vs.contains("clamp(h, -4.0, 4.0)"),
+                "the drawn surface is unclamped again: if the arithmetic"
+                        + " ever goes wrong, a sea vertex throws a triangle"
+                        + " across the whole screen");
+        assertTrue(vs.contains("uWorldOffset"),
+                "the sea evaluates its waves in render space, so they will"
+                        + " slide off the physics after a rebase");
+    }
 }

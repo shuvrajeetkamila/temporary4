@@ -61,6 +61,7 @@ public class GLES30 {
     public static void glTexParameteri(int target, int pname, int param) { }
     public static void glPixelStorei(int pname, int param) { }
     public static void glUniform4fv(int loc, int count, float[] v, int off) { }
+    public static void glUniform2f(int loc, float a, float b) { }
     public static void glTexImage2D(int target, int level, int internalFormat,
             int width, int height, int border, int format, int type,
             java.nio.Buffer pixels) { }

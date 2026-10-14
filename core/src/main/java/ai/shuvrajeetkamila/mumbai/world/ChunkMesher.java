@@ -132,7 +132,6 @@ public final class ChunkMesher {
         int n = lod == LOD_HIGH ? 32 : (lod == LOD_MED ? 16 : 8);
         double step = size / n;
         int base = vCount;
-        double minH = Double.MAX_VALUE;
         float[] rgb = new float[3];
         for (int j = 0; j <= n; j++) {
             for (int i = 0; i <= n; i++) {
@@ -149,7 +148,6 @@ public final class ChunkMesher {
                 if (!land) {
                     nrm[0] = 0; nrm[1] = 1; nrm[2] = 0;
                 }
-                if (h < minH) { minH = h; }
                 push((float) lx, (float) h, (float) lz,
                         (float) nrm[0], (float) nrm[1], (float) nrm[2],
                         rgb[0], rgb[1], rgb[2],
@@ -164,7 +162,30 @@ public final class ChunkMesher {
                 triN(a + 1, a + row, a + row + 1);
             }
         }
-        skirt(base, n, step, minH - SKIRT_MARGIN_M);
+        // The skirt must reach past the lowest ground any neighbour might
+        // show along this edge, and a neighbour at full detail samples
+        // the ground 16 times more finely than a distant chunk does. Using
+        // this chunk's own coarse minimum would leave a low-detail chunk
+        // with a skirt that stops above its detailed neighbour's valley
+        // floor, and the seam opens again. So the bottom is found at full
+        // detail whatever this chunk is being built at.
+        skirt(base, n, step, lowestGround(ox, oz, size) - SKIRT_MARGIN_M);
+    }
+
+    /** The lowest ground in a chunk, sampled at full detail. */
+    private double lowestGround(double ox, double oz, double size) {
+        double lo = Double.MAX_VALUE;
+        int n = 32;
+        double step = size / n;
+        for (int j = 0; j <= n; j++) {
+            for (int i = 0; i <= n; i++) {
+                double x = ox + i * step;
+                double z = oz + j * step;
+                double h = world.isLand(x, z) ? world.height(x, z) : 0.0;
+                if (h < lo) { lo = h; }
+            }
+        }
+        return lo == Double.MAX_VALUE ? 0 : lo;
     }
 
     /** How far below a chunk's lowest ground its skirt hangs, metres. */
