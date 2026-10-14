@@ -357,7 +357,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         target.set(e.renderPosition());
 
         float far = (float) Math.max(3000, q.farRadius);
-        float near = 0.35f;
+        // Tied to ChunkMesher.ROAD_LIFT_M: a 24-bit depth buffer resolves
+        // about d*d/(near * 2^24) metres at distance d, so the near plane
+        // is what decides how far away road surfaces can be drawn before
+        // they start fighting the ground they lie on. At 0.35 that was
+        // 700 m, which is well inside the city.
+        float near = (float) ChunkMesher.NEAR_PLANE_M;
         GLUtil.perspective(proj, 62f, width / (float) height, near, far);
         // The camera matrix is built in render space, the floating-origin
         // frame. World doubles never reach the GPU.
@@ -444,7 +449,14 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUseProgram(seaProg);
         GLES30.glUniformMatrix4fv(uSeaViewProj, 1, false, viewProj, 0);
         GLES30.glUniform3f(uSeaCam, ox, oy, oz);
-        GLES30.glUniform1f(uSeaExtent, (float) Math.min(9000, q.farRadius));
+        // Out to the far plane, not to a fixed nine kilometres. The
+        // terrain used to draw its own flat water beyond the sea grid and
+        // hide the edge; it no longer draws water at all, so the grid has
+        // to reach the fog on its own or the sea visibly stops - which
+        // from a helicopter at five hundred metres is most of the view.
+        // The grid is spaced quadratically, so widening it costs nothing
+        // near the camera.
+        GLES30.glUniform1f(uSeaExtent, (float) q.farRadius);
         GLES30.glUniform1f(uSeaTide, (float) e.ocean.tide());
         // The wave set, straight from the model the boats float on. There
         // is no copy of these numbers in the shader any more.

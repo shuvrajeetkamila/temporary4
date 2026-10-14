@@ -125,14 +125,20 @@ public final class ChunkMesher {
 
     /**
      * A height-field patch for the chunk, coloured by the real land-cover
-     * raster. Water cells are pushed to chart datum and flagged so the shader
-     * can animate them in step with the analytic wave the boat physics uses.
+     * raster.
+     *
+     * <p>Cells that are sea at all four corners are left out entirely.
+     * The animated sea surface draws them. Drawing both - a flat plane
+     * at chart datum here, and the sea grid at tide plus swell - meant
+     * two surfaces crossing each other all over the harbour, fighting
+     * for the depth buffer along a join that crawled with the waves.
      */
     private void terrain(double ox, double oz, double size, int lod) {
         int n = lod == LOD_HIGH ? 32 : (lod == LOD_MED ? 16 : 8);
         double step = size / n;
         int base = vCount;
         float[] rgb = new float[3];
+        boolean[] wet = new boolean[(n + 1) * (n + 1)];
         for (int j = 0; j <= n; j++) {
             for (int i = 0; i <= n; i++) {
                 double lx = i * step;
@@ -140,6 +146,7 @@ public final class ChunkMesher {
                 double wx = ox + lx;
                 double wz = oz + lz;
                 boolean land = world.isLand(wx, wz);
+                wet[j * (n + 1) + i] = !land;
                 double h = land ? world.height(wx, wz) : 0.0;
                 double[] nrm = new double[3];
                 world.normal(wx, wz, nrm);
@@ -157,9 +164,30 @@ public final class ChunkMesher {
         int row = n + 1;
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < n; i++) {
+                // A cell with sea at all four corners is not drawn. The
+                // animated sea surface covers it, and until now both were
+                // drawn: this flat plane at chart datum, and the sea grid
+                // at the tide plus a metre and a half of swell. The two
+                // cross each other constantly - the tide passes through
+                // zero twice a cycle and the waves straddle it the whole
+                // time - so over open water they interleaved in the depth
+                // buffer and the join crawled with the waves. That is the
+                // moving sheet that comes over the view after a while.
+                //
+                // Cells with any land in them are kept, so the shoreline
+                // is still drawn by the terrain at whatever detail the
+                // chunk is built at, and the sea tucks under it.
+                boolean w00 = wet[j * row + i];
+                boolean w10 = wet[j * row + i + 1];
+                boolean w01 = wet[(j + 1) * row + i];
+                boolean w11 = wet[(j + 1) * row + i + 1];
                 int a = base + j * row + i;
-                triN(a, a + row, a + 1);
-                triN(a + 1, a + row, a + row + 1);
+                // Per triangle, not per cell: a cell with a single
+                // corner of land still has one triangle that is all
+                // sea, and that triangle is as much of a second water
+                // surface as a whole cell of them.
+                if (!(w00 && w01 && w10)) { triN(a, a + row, a + 1); }
+                if (!(w10 && w01 && w11)) { triN(a + 1, a + row, a + row + 1); }
             }
         }
         // The skirt must reach past the lowest ground any neighbour might
@@ -170,6 +198,64 @@ public final class ChunkMesher {
         // floor, and the seam opens again. So the bottom is found at full
         // detail whatever this chunk is being built at.
         skirt(base, n, step, lowestGround(ox, oz, size) - SKIRT_MARGIN_M);
+    }
+
+    /**
+     * How far above the ground a road surface sits, metres.
+     *
+     * <p>Enough to clear the depth buffer at the distances roads are
+     * drawn at. A 24-bit buffer with the near plane at
+     * {@value #NEAR_PLANE_M} m resolves about
+     * {@code d * d / (near * 2^24)} metres at distance d, so seven
+     * centimetres - what this used to be - stops being enough at around
+     * 700 m, and beyond that every road in view shimmers against the
+     * ground it is lying on.
+     */
+    public static final float ROAD_LIFT_M = 0.14f;
+
+    /**
+     * The renderer's near plane, metres. Here because the road lift is
+     * derived from it and the two have to be chosen together.
+     */
+    public static final double NEAR_PLANE_M = 0.70;
+
+    /**
+     * The height of the drawn terrain surface at a chunk-local point.
+     *
+     * <p>Not {@code world.height}: that is the ground in the data. This
+     * is the ground in the mesh, which samples it on the chunk's own
+     * grid and interpolates across the same two triangles the terrain
+     * pass emits. Anything laid on the ground has to use this or it
+     * will not be lying on what the player can see.
+     */
+    double lodGround(double ox, double oz, int lod, double lx, double lz) {
+        int n = lod == LOD_HIGH ? 32 : (lod == LOD_MED ? 16 : 8);
+        double step = world.chunkM / n;
+        double gu = lx / step;
+        double gv = lz / step;
+        int i = (int) Math.floor(gu);
+        int j = (int) Math.floor(gv);
+        if (i < 0) { i = 0; } else if (i > n - 1) { i = n - 1; }
+        if (j < 0) { j = 0; } else if (j > n - 1) { j = n - 1; }
+        double u = gu - i;
+        double v = gv - j;
+        u = u < 0 ? 0 : (u > 1 ? 1 : u);
+        v = v < 0 ? 0 : (v > 1 ? 1 : v);
+        double h00 = nodeHeight(ox + i * step, oz + j * step);
+        double h10 = nodeHeight(ox + (i + 1) * step, oz + j * step);
+        double h01 = nodeHeight(ox + i * step, oz + (j + 1) * step);
+        double h11 = nodeHeight(ox + (i + 1) * step, oz + (j + 1) * step);
+        // The grid is split along the diagonal from (i, j+1) to (i+1, j),
+        // which is the diagonal the terrain pass emits.
+        if (u + v <= 1.0) {
+            return h00 + u * (h10 - h00) + v * (h01 - h00);
+        }
+        return h11 + (1 - u) * (h01 - h11) + (1 - v) * (h10 - h11);
+    }
+
+    /** A terrain grid node, by the same rule the terrain pass uses. */
+    private double nodeHeight(double wx, double wz) {
+        return world.isLand(wx, wz) ? world.height(wx, wz) : 0.0;
     }
 
     /** The lowest ground in a chunk, sampled at full detail. */
@@ -346,7 +432,7 @@ public final class ChunkMesher {
             boolean bridge = (f.roadFlags[r] & ChunkFeatures.FLAG_BRIDGE) != 0;
             boolean tunnel = (f.roadFlags[r] & ChunkFeatures.FLAG_TUNNEL) != 0;
             if (tunnel) { continue; }
-            float lift = bridge ? 0.0f : 0.07f;
+            float lift = bridge ? 0.0f : ROAD_LIFT_M;
             float[] rgb = new float[3];
             boolean unpavedRoad = (f.roadFlags[r] & ChunkFeatures.FLAG_UNPAVED) != 0;
             roadColour(cls, unpavedRoad, rgb);
@@ -386,16 +472,42 @@ public final class ChunkMesher {
                 }
                 double y;
                 if (bridge && total > 1) {
-                    double ground = world.isLand(ox + lx, oz + lz)
-                            ? world.height(ox + lx, oz + lz) : 0.0;
+                    // The drawn ground again, not the true one: a deck
+                    // that clears the real hillside by a metre can still
+                    // be buried in the coarse mesh a distant chunk draws.
+                    double ground = lodGround(ox, oz, lod, lx, lz);
                     y = RoadDeck.height(y0, y1, Math.min(1, travelled / total),
                             ground);
                 } else {
-                    y = world.height(ox + lx, oz + lz) + lift;
+                    // On the terrain that is actually drawn, not the
+                    // terrain in the data. The mesh samples the ground
+                    // every 32, 64 or 128 m depending on how far away the
+                    // chunk is and interpolates between those samples,
+                    // so on any slope the drawn surface is metres away
+                    // from the true height. A road laid at the true
+                    // height disappears into the hillside in patches and
+                    // hangs in the air in others, and the edge of the
+                    // ribbon where it crosses the ground tears into
+                    // exactly the sort of line that gets reported as
+                    // texture on the land.
+                    y = lodGround(ox, oz, lod, lx, lz) + lift;
                 }
-                int li = push(lx + nx * half, (float) y, lz + nz * half,
+                // Each edge of the ribbon takes the ground under itself.
+                // Using the centreline height for both, as this did,
+                // leaves a wide road on a cross slope with one edge
+                // buried in the hillside and the other hanging over it -
+                // measured at 3.8 m on the Ghatkopar and Powai slopes.
+                double yl = y;
+                double yr = y;
+                if (!(bridge && total > 1)) {
+                    yl = lodGround(ox, oz, lod, lx + nx * half, lz + nz * half)
+                            + lift;
+                    yr = lodGround(ox, oz, lod, lx - nx * half, lz - nz * half)
+                            + lift;
+                }
+                int li = push(lx + nx * half, (float) yl, lz + nz * half,
                         0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
-                int ri = push(lx - nx * half, (float) y, lz - nz * half,
+                int ri = push(lx - nx * half, (float) yr, lz - nz * half,
                         0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
                 if (prevL >= 0) {
                     triN(prevL, li, prevR);

@@ -259,23 +259,14 @@ final class Shaders {
             + "  gl_Position = uViewProj * vec4(world, 1.0);\n"
             + "}\n";
 
-    /** The sea surface, displaced by the same wave sum the physics uses. */
-    static final String SEA_VS = VS_HEAD
-            + "layout(location = 0) in vec2 aGrid;\n"
-            + "uniform highp mat4 uViewProj;\n"
-            + "uniform highp vec3 uCamera;\n"
-            + "uniform highp float uExtent;\n"
-            + "uniform highp float uTide;\n"
-            + "out highp vec3 vWorld;\n"
-            + "out mediump vec3 vNormal;\n"
-            + "out highp float vDepth;\n"
-            // The wave set comes from Ocean.java as uniforms rather than
-            // being copied in here as constants. It used to be copied,
-            // under a comment promising the two agreed - and not one of
-            // the twelve numbers matched. The drawn sea ran 93 m swells
-            // of 0.62 m one way while the boats floated on 38 m swells
-            // of 0.26 m going another.
-            + "uniform highp vec4 uWaveAmp;\n"
+    /**
+     * The wave set and its evaluation, shared verbatim by the sea's
+     * vertex and fragment stages so the surface they draw and the slope
+     * they light it with cannot disagree. The numbers arrive from
+     * Ocean.java as uniforms; there are no wave constants in GLSL.
+     */
+    private static final String WAVE_COMMON =
+            "uniform highp vec4 uWaveAmp;\n"
             + "uniform highp vec4 uWaveK;\n"
             + "uniform highp vec4 uWaveDirX;\n"
             + "uniform highp vec4 uWaveDirZ;\n"
@@ -285,13 +276,12 @@ final class Shaders {
             // them, or after the first rebase the drawn surface slides
             // out from under every hull in the harbour.
             + "uniform highp vec2 uWorldOffset;\n"
+            + "uniform highp float uTide;\n"
             // Height and slope together. The slope used to be four extra
-            // height samples differenced 1.5 m apart, which is a
-            // subtraction of two nearly equal numbers - the one operation
-            // a float is worst at, and the reason the sea turned into a
-            // sheet of white noise once the phase had grown. The
-            // derivative of a sine is a cosine; there is no reason to
-            // approximate it.
+            // height samples differenced 1.5 m apart - a subtraction of
+            // two nearly equal numbers, the one operation a float is
+            // worst at. The derivative of a sine is a cosine; there is no
+            // reason to approximate it.
             + "highp float waveAt(highp vec2 pr, out highp vec2 slope) {\n"
             + "  highp vec2 p = pr + uWorldOffset;\n"
             + "  highp float h = 0.0;\n"
@@ -304,9 +294,8 @@ final class Shaders {
             // the shortest wave is 7.5 m, so without this the angle
             // reaches 60,000 radians at the far corner of the map and a
             // 32-bit float can no longer tell one crest from the next.
-            + "    highp float along = dot(p, d);\n"
             + "    highp float lambda = 6.2831853 / k;\n"
-            + "    highp float a = mod(along, lambda) * k + uWavePhase[i];\n"
+            + "    highp float a = mod(dot(p, d), lambda) * k + uWavePhase[i];\n"
             + "    h += uWaveAmp[i] * sin(a);\n"
             + "    slope += uWaveAmp[i] * k * cos(a) * d;\n"
             + "  }\n"
@@ -315,14 +304,32 @@ final class Shaders {
             // having gone wrong, and an unclamped vertex does not just
             // look wrong, it throws a triangle across the whole screen.
             + "  return clamp(h, -4.0, 4.0) + uTide;\n"
-            + "}\n"
+            + "}\n";
+
+    /** The sea surface, displaced by the same wave sum the physics uses. */
+    static final String SEA_VS = VS_HEAD
+            + "layout(location = 0) in vec2 aGrid;\n"
+            + "uniform highp mat4 uViewProj;\n"
+            + "uniform highp vec3 uCamera;\n"
+            + "uniform highp float uExtent;\n"
+            + "uniform highp float uTide;\n"
+            + "out highp vec3 vWorld;\n"
+            + "out highp float vDepth;\n"
+            + WAVE_COMMON
             + "void main() {\n"
             // A grid that follows the camera, snapped so it does not crawl.
             + "  highp vec2 centre = floor(uCamera.xz / 8.0) * 8.0;\n"
             + "  highp vec2 p = centre + aGrid * uExtent;\n"
             + "  highp vec2 slope;\n"
             + "  highp float h = waveAt(p, slope);\n"
-            + "  vNormal = normalize(vec3(-slope.x, 1.0, -slope.y));\n"
+            // Flatten the displacement where the mesh is too coarse to
+            // carry it. This grid spends its vertices near the camera, so
+            // a cell a kilometre out spans several wavelengths: the
+            // height it samples there is not a wave, it is noise on the
+            // horizon. The shape is still there in the lighting, which is
+            // computed per pixel.
+            + "  highp float away = distance(p, uCamera.xz);\n"
+            + "  h = mix(h, uTide, smoothstep(250.0, 900.0, away));\n"
             + "  vWorld = vec3(p.x, h, p.y);\n"
             + "  vDepth = length(vWorld - uCamera);\n"
             + "  gl_Position = uViewProj * vec4(vWorld, 1.0);\n"
@@ -330,7 +337,6 @@ final class Shaders {
 
     static final String SEA_FS = FS_HEAD
             + "in highp vec3 vWorld;\n"
-            + "in mediump vec3 vNormal;\n"
             + "in highp float vDepth;\n"
             + "uniform mediump vec3 uSunDir;\n"
             + "uniform mediump vec3 uSunColour;\n"
@@ -338,6 +344,7 @@ final class Shaders {
             + "uniform mediump vec3 uFogColour;\n"
             + "uniform highp float uFogDensity;\n"
             + "uniform highp vec3 uCamera;\n"
+            + WAVE_COMMON
             // The land mask, exactly as the physics reads it. xy is the
             // world origin of the mask, zw is one over its span.
             + "uniform highp vec4 uLandXform;\n"
@@ -355,7 +362,22 @@ final class Shaders {
             // the coast is, and the sea stops there.
             + "  highp vec2 luv = (vWorld.xz - uLandXform.xy) * uLandXform.zw;\n"
             + "  if (texture(uLandMask, luv).r > 0.5) { discard; }\n"
-            + "  mediump vec3 n = normalize(vNormal);\n"
+            // The slope, per pixel. Taken at the vertices it was
+            // meaningless: the grid is tens of metres across out here and
+            // the swell is seven, so each vertex sampled an unrelated part
+            // of a different wave and the triangle between them
+            // interpolated nonsense. Through a 220-power specular,
+            // nonsense is a sheet of moving white - which is what the
+            // water turned into after a while.
+            + "  highp vec2 slope;\n"
+            + "  waveAt(vWorld.xz, slope);\n"
+            // And fade the ripple out with distance. A seven metre wave a
+            // kilometre away is finer than a pixel; keeping it only
+            // aliases. Real water goes glassy towards the horizon for the
+            // same reason.
+            + "  mediump float detail = 1.0 - smoothstep(180.0, 1400.0, vDepth);\n"
+            + "  mediump vec3 n = normalize(vec3(-slope.x * detail, 1.0,\n"
+            + "      -slope.y * detail));\n"
             + "  mediump vec3 view = normalize(uCamera - vWorld);\n"
             + "  mediump float fres = pow(1.0 - max(dot(n, view), 0.0), 4.0);\n"
             + "  mediump vec3 deep = vec3(0.030, 0.082, 0.106);\n"

@@ -262,10 +262,18 @@ final class WalkCycleTest {
         String vs = Shaders.SEA_VS;
         assertTrue(vs.contains("cos(a)"),
                 "the sea no longer takes its slope analytically");
+        assertTrue(Shaders.SEA_FS.contains("waveAt(vWorld.xz, slope)"),
+                "the sea's slope is back on the vertices, where the grid"
+                        + " is tens of metres across and the swell is"
+                        + " seven - the normal there is noise, and noise"
+                        + " through a 220-power specular is white");
+        assertTrue(Shaders.SEA_FS.contains("smoothstep(180.0, 1400.0, vDepth)"),
+                "the sea no longer fades its ripple out with distance, so"
+                        + " waves finer than a pixel will alias");
         assertTrue(!vs.contains("hx / (2.0 * e)"),
                 "the sea is back to differencing height samples for its"
                         + " normal");
-        assertTrue(vs.contains("mod(along, lambda)"),
+        assertTrue(vs.contains("mod(dot(p, d), lambda)"),
                 "the sea no longer reduces the distance along a wave into"
                         + " one wavelength, so the angle grows without"
                         + " bound across the map");
