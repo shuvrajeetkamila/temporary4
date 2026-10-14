@@ -349,22 +349,68 @@ These are already in `DELIVERY.md`. Listed for completeness; none is new.
     between the ends of their lines and cannot be ridden; the 380 OSM
     platform ways are not modelled. Fix: platform proximity trigger plus
     a camera-attached-to-carriage state.
-15. **No on-foot police.** The response is vehicles and arrest. Fix: a
+15. ~~**No on-foot police.**~~ **Fixed.** Officers on foot turn out from
+    one star, more of them when the player is on foot, and the arrest is
+    the same proximity test a patrol car uses. Originally: a
     pedestrian agent variant that pursues and uses the existing baton.
 16. **85.7 % of building heights are inferred,** not surveyed.
     14.3 % carry an OSM tag. Fix: no better free source exists for
     Mumbai; Copernicus GLO-30 was tried and cannot resolve dense urban
     morphology.
-17. **The full-screen map's coastline is chunky** — it is drawn from a
+17. ~~**The full-screen map's coastline is chunky.**~~ **Improved.** The
+    sampling now follows the zoom instead of being fixed at 72 columns,
+    so a cell is about 280 m at the widest span rather than 1.25 km, and
+    the run list is cached between draws. Originally: it is drawn from a
     72-column land mask. Fix: raise the mask resolution for the map
     layer, or draw the coastline from the vector rings already in the
     world file.
 18. **Upper Thane and Vasai Creek are land,** because OSM maps them as
     intertidal mudflat. Not navigable in this build.
-19. **No music, no voices, no footsteps.** Everything audible is
+19. **No music and no voices.** Footsteps now exist, synthesised from
+    the speed the player makes over the ground and brighter in standing
+    water. Otherwise: everything audible is
     synthesised at runtime, which keeps it original but limits it.
 
 ---
+
+## Found later, from play, and fixed
+
+These three were not in the audit. They came from the player's report
+that "land becomes water sometimes" and that "on land it becomes some
+texture lines", both eased for a while by cycling the graphics button.
+That button changes the streaming radii and the sea extent, which is
+why it helped and why it never lasted. All three were measured before
+anything was changed.
+
+20. **A tile changing detail level stopped being drawn.** The streamer
+    moved it out of ACTIVE for the whole round trip through the I/O
+    queue, a worker thread and the upload budget — despite a comment
+    claiming the old mesh stayed up. The sea is drawn under everything,
+    so a missing tile is not a hole, it is water. **Fixed:** the tile
+    keeps its mesh and its ACTIVE state until the replacement is
+    uploaded.
+
+21. **Every detail change leaked a tile's worth of GPU memory.** The new
+    handle overwrote the old one and nothing ever deleted it. A driver
+    with no memory left stops honouring uploads, which on screen is torn
+    and striped geometry. **Fixed:** replaced meshes go on a queue the
+    renderer drains every frame, and a test fails if any handed-out
+    handle is neither in use nor freed.
+
+22. **The terrain tore open at detail seams, by up to 137 m.** Chunks are
+    meshed at 32, 16 or 8 subdivisions, so neighbours at different
+    levels disagree along their shared edge. Measured: 137 m worst,
+    15 m at the 99.9th percentile. **Fixed:** every chunk hangs a skirt
+    below its own lowest ground.
+
+23. **The sea was drawn over the city at high water.** The tide is ±1.9 m,
+    correct for Mumbai Harbour, and **6.3 % of the land in the 20 m
+    terrain model is below that line** (lowest land 0.30 m) — the
+    reclaimed ground along Back Bay, the dock aprons, the low ground
+    behind Mahim. Where the two surfaces passed within centimetres they
+    fought for the depth buffer and striped the road. **Fixed:** the sea
+    fragment shader samples the same land mask the boat physics uses and
+    discards on land; the transform rebases with the floating origin.
 
 ## Suggested order
 
