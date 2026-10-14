@@ -115,6 +115,13 @@ jobs:
       - name: Run the core test suite
         run: gradle --no-daemon :core:test -Dmumbai.requireWorld=true
 
+      # The prop meshes live in the android module, and so does the check
+      # that they are wound the right way out. Without this the module had
+      # no tests at all, which is why a third of every vehicle in the game
+      # was inside out for as long as it was.
+      - name: Run the android unit tests
+        run: gradle --no-daemon :android:testReleaseUnitTest
+
       - name: Publish the test report
         if: always()
         uses: actions/upload-artifact@v4

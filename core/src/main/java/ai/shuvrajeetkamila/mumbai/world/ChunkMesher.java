@@ -98,9 +98,11 @@ public final class ChunkMesher {
         lastOz = oz;
 
         terrain(ox, oz, size, lod);
-        if (lod <= LOD_MED) {
-            roads(f, ox, oz, lod);
-        }
+        // Roads at every level of detail, not just the near two. A city
+        // seen from a kilometre up with no streets in it reads as a field
+        // of blocks; the arterials are what make it legible, and at long
+        // range there are few enough of them to be nearly free.
+        roads(f, ox, oz, lod);
         buildings(f, ox, oz, lod);
 
         float minY = Float.MAX_VALUE;
@@ -156,8 +158,8 @@ public final class ChunkMesher {
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < n; i++) {
                 int a = base + j * row + i;
-                tri(a, a + row, a + 1);
-                tri(a + 1, a + row, a + row + 1);
+                triN(a, a + row, a + 1);
+                triN(a + 1, a + row, a + row + 1);
             }
         }
     }
@@ -214,6 +216,9 @@ public final class ChunkMesher {
             int cls = f.roadClass[r];
             if (lod == LOD_MED && cls > 4 && cls != 19 && cls != 20) {
                 continue;                       // keep arterials and runways only
+            }
+            if (lod == LOD_LOW && cls > 2 && cls != 19) {
+                continue;                       // motorway, trunk, primary, runway
             }
             if (cls == 23) { continue; }        // ferry route: not a surface
             int s = f.roadOffset[r];
@@ -275,8 +280,8 @@ public final class ChunkMesher {
                 int ri = push(lx - nx * half, (float) y, lz - nz * half,
                         0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
                 if (prevL >= 0) {
-                    tri(prevL, li, prevR);
-                    tri(prevR, li, ri);
+                    triN(prevL, li, prevR);
+                    triN(prevR, li, ri);
                 }
                 prevL = li;
                 prevR = ri;
@@ -372,6 +377,19 @@ public final class ChunkMesher {
                     && f.buildingArea(b) > 90;
             double capY = y1 + (parapet ? PARAPET_M : 0.0);
 
+            // Which way round the ring goes. OSM gives both, and an
+            // outward normal is right-of-travel on one and left on the
+            // other - so a third of the city was lit, and after culling
+            // drawn, inside out. Shoelace once per building, not per edge.
+            double area2 = 0;
+            for (int k = 0; k < n; k++) {
+                int i0 = s + k;
+                int i1 = s + (k + 1) % n;
+                area2 += (double) f.buildingXZ[i0 * 2] * f.buildingXZ[i1 * 2 + 1]
+                        - (double) f.buildingXZ[i1 * 2] * f.buildingXZ[i0 * 2 + 1];
+            }
+            double wind = area2 >= 0 ? 1.0 : -1.0;
+
             // Walls.
             for (int k = 0; k < n; k++) {
                 int i0 = s + k;
@@ -381,8 +399,8 @@ public final class ChunkMesher {
                 double ex = bx - ax, ez = bz - az;
                 double el = Math.sqrt(ex * ex + ez * ez);
                 if (el < 0.25) { continue; }
-                float nx = (float) (ez / el);
-                float nz = (float) (-ex / el);
+                float nx = (float) (wind * ez / el);
+                float nz = (float) (-wind * ex / el);
                 // Faces catch the light differently; a flat albedo makes a city
                 // of boxes look like a single grey mass. Four distinguishable
                 // steps rather than two, so a corner reads as a corner.
@@ -437,10 +455,10 @@ public final class ChunkMesher {
                 int v = push(f.buildingXZ[ik * 2], (float) y1, f.buildingXZ[ik * 2 + 1],
                         0, 1, 0, rr, rg, rb, roofMat);
                 if (first < 0) { first = v; }
-                if (prev >= 0) { tri(c, prev, v); }
+                if (prev >= 0) { triN(c, prev, v); }
                 prev = v;
             }
-            if (first >= 0 && prev >= 0) { tri(c, prev, first); }
+            if (first >= 0 && prev >= 0) { triN(c, prev, first); }
 
             if (parapet) { roofClutter(f, b, cx, cz, y1, h, roofMat); }
         }
@@ -457,8 +475,8 @@ public final class ChunkMesher {
         int v1 = push(bx, (float) y0, bz, nx, 0, nz, r, g, b, aux, v0h);
         int v2 = push(bx, (float) y1, bz, nx, 0, nz, r, g, b, aux, v1h);
         int v3 = push(ax, (float) y1, az, nx, 0, nz, r, g, b, aux, v1h);
-        tri(v0, v1, v2);
-        tri(v0, v2, v3);
+        triN(v0, v1, v2);
+        triN(v0, v2, v3);
     }
 
     /**
@@ -513,8 +531,8 @@ public final class ChunkMesher {
         int c = push(x1, (float) y1, z0, 0, 1, 0, r, g, b, mat);
         int d = push(x1, (float) y1, z1, 0, 1, 0, r, g, b, mat);
         int ee = push(x0, (float) y1, z1, 0, 1, 0, r, g, b, mat);
-        tri(a, c, d);
-        tri(a, d, ee);
+        triN(a, c, d);
+        triN(a, d, ee);
     }
 
     /** Which building classes have a shop on the ground floor. */
@@ -748,6 +766,42 @@ public final class ChunkMesher {
         verts[o + 6] = r; verts[o + 7] = g; verts[o + 8] = b;
         verts[o + 9] = aux; verts[o + 10] = texV;
         return vCount++;
+    }
+
+    /**
+     * Emit a triangle wound to agree with the normal it is shaded by.
+     *
+     * <p>The renderer culls back faces with CCW front-facing, so a
+     * triangle whose winding disagrees with its own normal is invisible
+     * from the side it is lit on and visible from the side it is not.
+     * Ninety-one per cent of this mesher's triangles were in that state:
+     * walls, roofs and the road ribbons. Walking up to a building, the
+     * near wall simply was not there, and through the gap you could see
+     * the inside of the far wall; roads were culled from above, so the
+     * street network was invisible from the only angle anyone looks at it.
+     *
+     * <p>The cause is that nothing here can assume a winding. An OSM ring
+     * comes either way round and a road runs in either direction, so the
+     * order the vertices happen to arrive in means nothing. Rather than
+     * work the sign out at a dozen call sites and get one of them wrong
+     * again, the answer is computed from the geometry: take the normal
+     * the vertices are shaded by and flip the winding if it disagrees.
+     */
+    private void triN(int a, int b, int c) {
+        int oa = a * STRIDE;
+        int ob = b * STRIDE;
+        int oc = c * STRIDE;
+        double ux = verts[ob] - verts[oa];
+        double uy = verts[ob + 1] - verts[oa + 1];
+        double uz = verts[ob + 2] - verts[oa + 2];
+        double vx = verts[oc] - verts[oa];
+        double vy = verts[oc + 1] - verts[oa + 1];
+        double vz = verts[oc + 2] - verts[oa + 2];
+        double gx = uy * vz - uz * vy;
+        double gy = uz * vx - ux * vz;
+        double gz = ux * vy - uy * vx;
+        double d = gx * verts[oa + 3] + gy * verts[oa + 4] + gz * verts[oa + 5];
+        if (d < 0) { tri(a, c, b); } else { tri(a, b, c); }
     }
 
     private void tri(int a, int b, int c) {

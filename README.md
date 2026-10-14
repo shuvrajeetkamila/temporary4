@@ -575,6 +575,64 @@ at 1.5 m against 56 % at 12 m), the takeoff run (894 m clean, 740 m at
 10 degrees of flap, 591 m at 25 - flaps shorten it, as they must), and
 the stall.
 
+### A sixth pass: which way the triangles face
+
+The user's report was precise enough to be diagnostic: *walk up to a
+building and you see the other side of it, and the inside.* That is what
+back-face culling looks like when the winding is wrong. It was, almost
+everywhere.
+
+The renderer culls back faces with CCW front-facing. A triangle whose
+vertex order disagrees with the normal its own vertices carry is drawn
+only from the side nobody is looking from - so the near wall is not
+there, and through the gap you see the inside of the far wall and the
+underside of the roof. Measured on one dense chunk:
+**27,887 of 30,600 triangles**, or 91 %, were wound against their own
+normal. Walls, roofs, and - this is why the streets looked bare - the
+road ribbons, which were culled from above.
+
+The props were no better. A third of every mesh in `Meshes` was
+backwards, because two faces of every box were: every vehicle, every
+ship, every train. The blob shadows added in the previous pass were
+*entirely* backwards - all fourteen triangles of each disc faced
+downwards, so the only thing that could see them was the ground they
+were drawn on.
+
+Working the order out by hand per primitive is how it went wrong, so
+neither fix does that. Both meshers now have one helper that takes the
+normal the vertices are shaded by, computes the geometric normal from the
+winding, and flips the order if they disagree. Every triangle in the
+project goes through it. The count is now zero out of 30,600 and zero out
+of 2,994.
+
+On top of that, a wall's *normal* has to point out of its own footprint,
+and an OSM ring comes either way round: **7.1 % of footprints in this
+data are wound the other way**, 158 of them convex. For those the outward
+normal is on the opposite side, so they were lit - and, after culling,
+drawn - inside out. One shoelace per building fixes it. The test that
+guards this is deliberately aimed: it scans until it has at least a dozen
+reverse-wound buildings in the sample, because a chunk that happens to
+hold none of them proves nothing. With the fix reverted it reports 96
+inward normals; with it, none.
+
+**Nobody was ever drawn on the pavement.** Seventy pedestrians were
+simulated, scattered when you drove at them, were counted in the
+telemetry - and had no mesh. They have one now, four outfits of it, and
+the simulation was handing out eight outfit indices for the four that
+exist, so five eighths of the city wore the same clothes.
+
+**Traffic on a bridge was placed on the seabed** and drove along
+underneath its own deck, because agents took their height from the
+elevation grid. They ask the deck now.
+
+Roads are also drawn at long range for the first time - arterials only,
+which is few enough to be nearly free and is what makes a city read as a
+city from the air rather than a field of blocks.
+
+The android module had no unit tests at all before this pass, which is
+exactly why a third of every vehicle in the game could be inside out for
+as long as it was. It has seven now, and CI runs them.
+
 ## Verification
 
 Nothing is published unless all of this passes first:
@@ -583,7 +641,7 @@ Nothing is published unless all of this passes first:
   checkpoints, run against the compiled files with an independently derived
   projection. The craft gates re-read the land mask themselves, so a bug in
   the mooring code cannot certify its own output.
-- **404** core tests in `core/src/test`, including the same 51 checkpoints
+- **411** core tests in `core/src/test`, and **7** in `android/src/test`, including the same 51 checkpoints
   read back through the game's own loader.
 - The built APK is then inspected rather than trusted: badging, signature,
   and a check that all four world files really are inside the zip.

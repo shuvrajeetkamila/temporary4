@@ -39,6 +39,42 @@ final class Meshes {
         I.clear();
     }
 
+    /**
+     * Emit a triangle wound to agree with the normal its vertices carry.
+     *
+     * <p>Same correction as {@code ChunkMesher.triN}, and needed for the
+     * same reason: the renderer culls back faces, so a triangle wound
+     * against its own normal is drawn from the side nobody is looking
+     * from. A third of every prop in this file was in that state - two
+     * faces of every box - which means every vehicle, every pedestrian,
+     * every ship and train was partly inside out. The blob shadows were
+     * worse: every one of their triangles faced down, so the only thing
+     * that could see them was the ground.
+     *
+     * <p>Working the order out by hand per primitive is how it went wrong
+     * in the first place. This derives it.
+     */
+    private static void triN(int a, int b, int c) {
+        int oa = a * ChunkMesher.STRIDE;
+        int ob = b * ChunkMesher.STRIDE;
+        int oc = c * ChunkMesher.STRIDE;
+        double ux = V.get(ob) - V.get(oa);
+        double uy = V.get(ob + 1) - V.get(oa + 1);
+        double uz = V.get(ob + 2) - V.get(oa + 2);
+        double vx = V.get(oc) - V.get(oa);
+        double vy = V.get(oc + 1) - V.get(oa + 1);
+        double vz = V.get(oc + 2) - V.get(oa + 2);
+        double gx = uy * vz - uz * vy;
+        double gy = uz * vx - ux * vz;
+        double gz = ux * vy - uy * vx;
+        double d = gx * V.get(oa + 3) + gy * V.get(oa + 4) + gz * V.get(oa + 5);
+        if (d < 0) {
+            I.add(a); I.add(c); I.add(b);
+        } else {
+            I.add(a); I.add(b); I.add(c);
+        }
+    }
+
     private static int vert(float x, float y, float z, float nx, float ny, float nz,
                             float r, float g, float b, float aux) {
         int index = V.size() / ChunkMesher.STRIDE;
@@ -82,8 +118,8 @@ final class Meshes {
                     pz + u[2] * hz + w[2] * hz, n[0], n[1], n[2], r, g, b, aux);
             int d = vert(px - u[0] * hx + w[0] * hx, py - u[1] * hy + w[1] * hy,
                     pz - u[2] * hz + w[2] * hz, n[0], n[1], n[2], r, g, b, aux);
-            I.add(a); I.add(bb); I.add(c);
-            I.add(a); I.add(c); I.add(d);
+            triN(a, bb, c);
+            triN(a, c, d);
         }
     }
 
@@ -100,7 +136,10 @@ final class Meshes {
     }
 
     /** Transit bodies, indexed by the kinds in TRANSIT_KINDS. */
-    private static final float[][] TR_V = new float[4][];
+    /** Transit bodies: train, metro, monorail, vessel. */
+    static final int TRANSIT_COUNT = 4;
+
+    private static final float[][] TR_V = new float[TRANSIT_COUNT][];
     private static final int[][] TR_I = new int[4][];
 
     /** Mesh slots: 0 suburban carriage, 1 metro, 2 monorail, 3 vessel. */
@@ -180,6 +219,62 @@ final class Meshes {
      * same packing the world geometry uses; material 0 is flat white, so
      * the vertex colour decides the tint.
      */
+    /** How many pedestrian outfits are modelled. */
+    static final int PED_OUTFITS = 4;
+
+    private static final float[][] pedV = new float[PED_OUTFITS][];
+    private static final int[][] pedI = new int[PED_OUTFITS][];
+
+    static float[] pedVertices(int outfit) { buildPed(outfit); return pedV[outfit]; }
+
+    static int[] pedIndices(int outfit) { buildPed(outfit); return pedI[outfit]; }
+
+    /**
+     * A person.
+     *
+     * <p>There were seventy of them walking the streets at any moment and
+     * not one was ever drawn: the agent simulation ran, they scattered
+     * when you drove at them, they were counted in the telemetry, and the
+     * pavement was empty. Blocky on purpose - this is the fidelity of the
+     * era the brief points at, and at the distance you see a pedestrian
+     * from, a head, a torso, two arms and two legs is the whole of it.
+     */
+    private static void buildPed(int outfit) {
+        if (pedV[outfit] != null) { return; }
+        reset();
+        // Four outfits, unbranded, in colours you actually see on a Mumbai
+        // street: a white shirt, a blue shirt, a green kurta, a red sari.
+        float[][] tops = {
+            {0.88f, 0.88f, 0.86f}, {0.26f, 0.38f, 0.62f},
+            {0.22f, 0.46f, 0.32f}, {0.68f, 0.18f, 0.24f},
+        };
+        float[][] legs = {
+            {0.22f, 0.24f, 0.30f}, {0.18f, 0.19f, 0.22f},
+            {0.34f, 0.30f, 0.24f}, {0.52f, 0.14f, 0.18f},
+        };
+        float[] skin = {0.52f, 0.37f, 0.26f};
+        float[] t = tops[outfit];
+        float[] l = legs[outfit];
+
+        // Legs, slightly apart. Total height about 1.7 m.
+        box(-0.09f, 0.38f, 0, 0.07f, 0.38f, 0.08f, l[0], l[1], l[2], 0);
+        box(0.09f, 0.38f, 0, 0.07f, 0.38f, 0.08f, l[0], l[1], l[2], 0);
+        // Torso.
+        box(0, 1.03f, 0, 0.17f, 0.28f, 0.11f, t[0], t[1], t[2], 0);
+        // Arms.
+        box(-0.22f, 1.00f, 0, 0.05f, 0.25f, 0.06f, t[0], t[1], t[2], 0);
+        box(0.22f, 1.00f, 0, 0.05f, 0.25f, 0.06f, t[0], t[1], t[2], 0);
+        // Hands and head.
+        box(-0.22f, 0.70f, 0, 0.05f, 0.06f, 0.05f, skin[0], skin[1], skin[2], 0);
+        box(0.22f, 0.70f, 0, 0.05f, 0.06f, 0.05f, skin[0], skin[1], skin[2], 0);
+        box(0, 1.44f, 0, 0.10f, 0.13f, 0.10f, skin[0], skin[1], skin[2], 0);
+        // Hair, which is what stops a head reading as a flesh-coloured box.
+        box(0, 1.55f, -0.01f, 0.105f, 0.04f, 0.105f, 0.08f, 0.07f, 0.07f, 0);
+
+        pedV[outfit] = packVertices();
+        pedI[outfit] = packIndices();
+    }
+
     /** Blob shadow sizes: a person, a car, a bus. */
     static final float[] SHADOW_R = {0.48f, 1.55f, 3.30f};
     static final int SHADOW_COUNT = 3;
@@ -212,10 +307,10 @@ final class Meshes {
             int v = vert((float) Math.cos(a) * rad, 0, (float) Math.sin(a) * rad,
                     0, 1, 0, 0.04f, 0.04f, 0.05f, Shaders.SHADOW_AUX + 0.98f);
             if (i == 0) { first = v; }
-            if (prev >= 0) { I.add(centre); I.add(prev); I.add(v); }
+            if (prev >= 0) { triN(centre, prev, v); }
             prev = v;
         }
-        if (first >= 0 && prev >= 0) { I.add(centre); I.add(prev); I.add(first); }
+        if (first >= 0 && prev >= 0) { triN(centre, prev, first); }
         shadowV[size] = packVertices();
         shadowI[size] = packIndices();
     }
@@ -248,11 +343,11 @@ final class Meshes {
                 int c = vert(x1, MARKER_H, z1, nx, 0, nz, 1f, 0.62f, 0.10f, 0.35f);
                 int dd = vert(x0, MARKER_H, z0, nx, 0, nz, 1f, 0.62f, 0.10f, 0.35f);
                 if (pass == 0) {
-                    I.add(a); I.add(b); I.add(c);
-                    I.add(a); I.add(c); I.add(dd);
+                    triN(a, b, c);
+                    triN(a, c, dd);
                 } else {
-                    I.add(a); I.add(c); I.add(b);
-                    I.add(a); I.add(dd); I.add(c);
+                    triN(a, c, b);
+                    triN(a, dd, c);
                 }
             }
         }

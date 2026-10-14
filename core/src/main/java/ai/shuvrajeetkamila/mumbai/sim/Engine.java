@@ -254,6 +254,16 @@ public final class Engine {
         this.mapView.setWorldBounds(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
         this.city = new CityCollision(world);
+        // Traffic and pedestrians stand on bridges too. Without this a car
+        // crossing the Sea Link is placed on the seabed and drives along
+        // underneath its own deck. The reference height is the deck if
+        // there is one close above the terrain, which is what an agent
+        // following a bridged edge is doing.
+        this.agents.setSurface((x, y) -> {
+            double g = world.inBounds(x, y) ? world.height(x, y) : 0;
+            double deck = city.deckAt(x, y, g + 3.0);
+            return deck == Double.NEGATIVE_INFINITY ? g : Math.max(g, deck);
+        });
         this.seabed = (x, z) -> world.inBounds(x, z) ? world.height(x, z) : -40;
         this.heliGround = (x, z) -> {
             if (!world.inBounds(x, z)) { return 0; }

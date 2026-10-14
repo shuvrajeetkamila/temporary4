@@ -192,6 +192,10 @@ final class BuildingMeshTest {
         double size = w.chunkM;
         for (int i = 0; i < m.vertexCount; i++) {
             int o = i * ChunkMesher.STRIDE;
+            // Impostor walls only. A road run belongs to one chunk and is
+            // drawn whole, overhanging the boundary on purpose - clipping
+            // it would put a gap in the street at every chunk seam.
+            if (m.vertices[o + 4] != 0f) { continue; }
             double x = m.vertices[o];
             double z = m.vertices[o + 2];
             assertTrue(x >= -1 && x <= size + 1,

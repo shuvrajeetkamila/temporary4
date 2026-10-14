@@ -79,6 +79,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
     private VehicleGpu markerGpu;
 
+    /** Pedestrians, one buffer per outfit. */
+    private final VehicleGpu[] pedGpu = new VehicleGpu[Meshes.PED_OUTFITS];
+    private final int[] pedCount = new int[Meshes.PED_OUTFITS];
+    private final FloatBuffer[] pedScratch = new FloatBuffer[Meshes.PED_OUTFITS];
+    private static final int MAX_PEDS = 140;
+
     /** Blob shadows, one buffer per size. */
     private final VehicleGpu[] shadowGpu = new VehicleGpu[Meshes.SHADOW_COUNT];
     private final int[] shadowCount = new int[Meshes.SHADOW_COUNT];
@@ -438,6 +444,22 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glDisable(GLES30.GL_BLEND);
         }
 
+        // --- people on the pavement ---------------------------------------------
+        int peds = uploadPeds(e, ox, oy, oz);
+        if (peds > 0) {
+            setupInstanced(e, viewProj, ox, oy, oz, sunDir, sun, sky, fog,
+                    fogDensity, nightFactor);
+            for (int i = 0; i < pedGpu.length; i++) {
+                int n = pedCount[i];
+                if (n <= 0) { continue; }
+                GLES30.glBindVertexArray(pedGpu[i].vao);
+                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES,
+                        pedGpu[i].indexCount, GLES30.GL_UNSIGNED_INT, 0, n);
+                drawn++;
+                tris += n * pedGpu[i].indexCount / 3;
+            }
+        }
+
         // --- traffic, instanced per vehicle type --------------------------------
         int instances = uploadInstances(e);
         if (instances > 0) {
@@ -767,6 +789,11 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             vehGpu[k.ordinal()] = buildVehicleGpu(k);
             vehScratch[k.ordinal()] = GLUtil.floats(MAX_PER_KIND * 4);
         }
+        for (int i = 0; i < Meshes.PED_OUTFITS; i++) {
+            pedGpu[i] = buildInstancedGpu(Meshes.pedVertices(i),
+                    Meshes.pedIndices(i), MAX_PEDS);
+            pedScratch[i] = GLUtil.floats(MAX_PEDS * 4);
+        }
         for (int i = 0; i < Meshes.SHADOW_COUNT; i++) {
             shadowGpu[i] = buildInstancedGpu(Meshes.shadowVertices(i),
                     Meshes.shadowIndices(i), MAX_SHADOWS);
@@ -942,6 +969,53 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         if (e.wanted.stars() <= 0) { return -1f; }
         return (float) ((e.clock.simulatedSeconds() * 2.5) % 1.0);
     }
+
+    /**
+     * Packs every pedestrian in sight into its outfit's instance buffer.
+     *
+     * <p>Frustum-culled and range-limited: a person is 1.7 m of geometry
+     * and there is no point paying for one behind the camera.
+     */
+    private int uploadPeds(Engine e, double ox, double oy, double oz) {
+        for (int i = 0; i < pedCount.length; i++) {
+            pedCount[i] = 0;
+            pedScratch[i].position(0);
+        }
+        int total = 0;
+        for (Agents.Ped p : e.agents.peds()) {
+            if (!p.active) { continue; }
+            float x = (float) (p.x - ox);
+            float z = (float) (p.z - oz);
+            if (x * x + z * z > PED_RANGE_M * PED_RANGE_M) { continue; }
+            if (!frustum.sphereVisible(x, (float) (p.y - oy) + 1.0f, z, 1.6f)) {
+                continue;
+            }
+            int slot = Math.max(0, Math.min(Meshes.PED_OUTFITS - 1, p.outfit));
+            if (pedCount[slot] >= MAX_PEDS) { continue; }
+            FloatBuffer b = pedScratch[slot];
+            b.position(pedCount[slot] * 4);
+            b.put(x);
+            // Knocked down: sunk into the pavement rather than animated,
+            // which is honest about there being no ragdoll for an agent.
+            b.put((float) (p.y - oy) - (p.downTimer > 0 ? 1.25f : 0f));
+            b.put(z);
+            b.put((float) p.heading);
+            pedCount[slot]++;
+            total++;
+        }
+        for (int i = 0; i < pedGpu.length; i++) {
+            int n = pedCount[i];
+            if (n <= 0) { continue; }
+            pedScratch[i].position(0);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, pedGpu[i].instVbo);
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, n * 16,
+                    pedScratch[i]);
+        }
+        return total;
+    }
+
+    /** How far out a pedestrian is worth drawing, metres. */
+    private static final float PED_RANGE_M = 150f;
 
     /** Which blob size a vehicle kind gets. */
     private static int shadowSlot(VehicleKind k) {

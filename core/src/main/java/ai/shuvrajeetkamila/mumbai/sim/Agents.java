@@ -84,6 +84,30 @@ public final class Agents {
     public int policeHit;
 
     /** Contact distances for the crime test, metres. */
+    /** Pedestrian outfits modelled. Keep in step with Meshes.PED_OUTFITS. */
+    public static final int OUTFITS = 4;
+
+    /**
+     * How high the ground is for an agent.
+     *
+     * <p>Defaults to the elevation grid, which is wrong on a bridge: a
+     * car crossing the Sea Link was placed at sea level and drove along
+     * under its own deck. The {@code Engine} replaces this with one that
+     * knows about decks.
+     */
+    public interface Surface {
+        double heightAt(double x, double z);
+    }
+
+    private Surface surface;
+
+    public void setSurface(Surface s) { this.surface = s; }
+
+    private double groundAt(double x, double z) {
+        Surface s = surface;
+        return s != null ? s.heightAt(x, z) : world.height(x, z);
+    }
+
     private static final double HIT_PED_M = 2.3;
     private static final double HIT_CAR_M = 3.4;
 
@@ -450,7 +474,7 @@ public final class Agents {
         double off = LANE_OFFSET + (c.parked ? PARK_OFFSET : 0);
         c.x = x + dz * off;
         c.z = z - dx * off;
-        c.y = world.height(c.x, c.z);
+        c.y = groundAt(c.x, c.z);
         c.heading = Math.atan2(dx, -dz);
     }
 
@@ -582,7 +606,7 @@ public final class Agents {
         c.x += c.shoveX * dt;
         c.z += c.shoveZ * dt;
         c.heading = MathUtil.wrapPi(c.heading + c.spin * dt);
-        c.y = world.height(c.x, c.z);
+        c.y = groundAt(c.x, c.z);
         double decay = Math.exp(-2.4 * dt);
         c.shoveX *= decay;
         c.shoveZ *= decay;
@@ -665,10 +689,13 @@ public final class Agents {
         if (world.slope(x, z) > 0.45) { return; }
         p.x = x;
         p.z = z;
-        p.y = world.height(x, z);
+        p.y = groundAt(x, z);
         p.heading = rng.nextDouble() * Math.PI * 2;
         p.speed = 0.9 + rng.nextDouble() * 0.7;
-        p.outfit = rng.nextInt(8);
+        // Must match the number of pedestrian meshes the renderer has.
+        // It was eight against four models, so five eighths of the city
+        // wore the same clothes.
+        p.outfit = rng.nextInt(OUTFITS);
         p.phase = rng.nextDouble() * 6.28;
         p.wanderTimer = 2 + rng.nextDouble() * 6;
         p.fleeTimer = 0;
@@ -716,7 +743,7 @@ public final class Agents {
         }
         p.x = nx;
         p.z = nz;
-        p.y = world.height(nx, nz);
+        p.y = groundAt(nx, nz);
         p.phase += dt * pace * 2.1;
     }
 

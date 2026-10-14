@@ -108,6 +108,10 @@ This matters more than anything above.
   ring extruded to the roof, so a balcony or an archway is as solid as
   the wall it is on; pedestrians are not pushed out of walls, only the
   player is; and traffic does not collide with traffic, only with you.
+- **Pedestrians are drawn** now, in four outfits. They do not animate:
+  there is no walk cycle, so a person slides along facing the way they
+  are going, and one who has been knocked down sinks into the pavement
+  rather than falling over.
 - **Shadows are blobs**, one dark ellipse on the ground under each body,
   faded by sun elevation and by night. Buildings cast none. There is no
   shadow map and no dynamic light anywhere in the renderer.

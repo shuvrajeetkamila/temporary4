@@ -30,6 +30,10 @@ android {
         jniLibs { useLegacyPackaging false }
     }
 
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
@@ -51,5 +55,14 @@ android {
 }
 
 dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
     implementation project(':core')
+}
+
+// Mesh winding is checked here because the prop meshes live in this module.
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full' }
 }
