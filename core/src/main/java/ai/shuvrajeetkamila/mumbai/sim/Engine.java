@@ -86,6 +86,18 @@ public final class Engine {
     public final AeroplanePhysics plane = new AeroplanePhysics();
 
     public ControlProfile profile = ControlProfile.ON_FOOT;
+
+    /**
+     * The transit service the player is riding, or -1.
+     *
+     * <p>Riding is not driving. You do not get a control profile: you
+     * are a passenger, the service runs its own timetable, and the only
+     * thing you can do is get off at the next station. The player's body
+     * is carried along with the train so that everything that works off
+     * the player's position - streaming, traffic, the radar - keeps
+     * working while aboard.
+     */
+    public int aboard = -1;
     public Quality quality = Quality.BALANCED;
     public Quality baseQuality = Quality.BALANCED;
     public int thermalStatus;
@@ -677,8 +689,10 @@ public final class Engine {
 
         if (in.attack) { swingBaton(); }
         if (in.enterExit) {
-            if (profile == ControlProfile.ON_FOOT) { tryEnterVehicle(); }
-            else { exitVehicle(); }
+            if (aboard >= 0) { alightTransit(); }
+            else if (profile == ControlProfile.ON_FOOT) {
+                if (!boardTransit()) { tryEnterVehicle(); }
+            } else { exitVehicle(); }
         }
 
         switch (profile) {
@@ -686,7 +700,7 @@ public final class Engine {
             case BOAT: stepBoat(dt, in); break;
             case HELICOPTER: stepHeli(dt, in); break;
             case AEROPLANE: stepPlane(dt, in); break;
-            default: stepHuman(dt, in); break;
+            default: if (aboard < 0) { stepHuman(dt, in); } break;
         }
 
         resolveWalls(dt);
@@ -709,6 +723,7 @@ public final class Engine {
         missions.update(dt, b.position.x, b.position.z,
                 Math.hypot(b.velocity.x, b.velocity.z), drivingKind());
         transit.update(dt, b.position.x, b.position.z, quality.medRadius);
+        rideTransit();
         // Before updateWanted, which clears the collision counters the
         // impact sound is triggered from.
         updateAudio(b, in);
@@ -957,6 +972,59 @@ public final class Engine {
      * stationary rather than deleted, so it is still standing there when you
      * turn round.
      */
+    /**
+     * Get aboard the train, Metro, monorail or ferry standing here.
+     *
+     * @return true if there was one to board
+     */
+    public boolean boardTransit() {
+        if (profile != ControlProfile.ON_FOOT || aboard >= 0) { return false; }
+        int i = transit.boardableAt(human.position.x, human.position.z);
+        if (i < 0) { return false; }
+        aboard = i;
+        return true;
+    }
+
+    /**
+     * Get off. Only at a station: stepping off a train at 80 km/h is a
+     * ragdoll feature and it is not built.
+     *
+     * @return true if the player got off
+     */
+    public boolean alightTransit() {
+        if (aboard < 0) { return false; }
+        Transit.Service sv = transit.services()[aboard];
+        if (sv.active && !sv.atStop) { return false; }
+        aboard = -1;
+        // Put the body back on the ground beside the train rather than
+        // inside it. Across the sleepers is the wrong side on a railway,
+        // but every platform in the world is beside the track and this
+        // is where the player was standing when they got on.
+        double side = 3.4;
+        double ex = sv.x + Math.cos(sv.heading) * side;
+        double ez = sv.z + Math.sin(sv.heading) * side;
+        double gy = world.inBounds(ex, ez) ? world.height(ex, ez) : 0;
+        human.reset();
+        human.position.set(ex, gy + human.height * 0.5, ez);
+        return true;
+    }
+
+    /** Carry the player along with the service they are riding. */
+    private void rideTransit() {
+        if (aboard < 0) { return; }
+        Transit.Service sv = transit.services()[aboard];
+        if (!sv.active) {
+            // The service was recycled out from under the player - it
+            // ran out of the simulated radius. Put them down where it
+            // last was rather than leaving them attached to a ghost.
+            alightTransit();
+            return;
+        }
+        double gy = sv.y;
+        human.reset();
+        human.position.set(sv.x, gy + human.height * 0.5, sv.z);
+    }
+
     public boolean exitVehicle() {
         if (profile != ControlProfile.CAR) { return leaveCraft(); }
         // Refuse at speed. Stepping out of a moving car is a ragdoll feature,
@@ -1259,7 +1327,20 @@ public final class Engine {
         if (profile == ControlProfile.ON_FOOT) {
             String what = nearestEnterableDistance() <= ENTER_RADIUS_M
                     ? nearestEnterableLabel() : null;
-            t.prompt = what == null ? "" : "ENTER - " + what;
+            if (aboard >= 0) {
+                Transit.Service riding = transit.services()[aboard];
+                t.prompt = riding.atStop
+                        ? "EXIT to get off"
+                        : "riding the " + transit.labelFor(riding);
+            } else {
+                int tr = transit.boardableAt(b.position.x, b.position.z);
+                if (tr >= 0) {
+                    t.prompt = "ENTER - board the "
+                            + transit.labelFor(transit.services()[tr]);
+                } else {
+                    t.prompt = what == null ? "" : "ENTER - " + what;
+                }
+            }
         } else if (profile == ControlProfile.CAR) {
             t.prompt = car.groundSpeed() <= 3.0 ? "EXIT to get out" : "";
         } else if (occupiedCraft >= 0) {

@@ -37,6 +37,31 @@ public final class Transit {
     /** Dwell at a terminus before setting off the other way, seconds. */
     public static final double TURNAROUND_S = 14.0;
 
+    /** How long a service holds at an intermediate stop, seconds. */
+    public static final double STOP_DWELL_S = 16.0;
+
+    /** How close you have to be standing to get aboard, metres. */
+    public static final double BOARD_M = 9.0;
+
+    /**
+     * Distance between stops, metres, by mode.
+     *
+     * <p>Real spacings. Churchgate to Marine Lines is 1.2 km and the
+     * suburban average over the Western line is about 1.6; the Metro
+     * runs a little tighter and the monorail tighter still. A ferry has
+     * no intermediate calls - it runs terminal to terminal - so it gets
+     * no stops beyond the two ends of its route.
+     */
+    static double stopSpacing(int cls) {
+        switch (cls) {
+            case WorldData.CLS_RAIL: return 1600.0;
+            case WorldData.CLS_LIGHT_RAIL:
+            case WorldData.CLS_SUBWAY: return 1150.0;
+            case WorldData.CLS_MONORAIL: return 900.0;
+            default: return 0.0;
+        }
+    }
+
     /** One train or vessel. */
     public static final class Service {
         public boolean active;
@@ -51,6 +76,10 @@ public final class Transit {
         /** +1 towards the end of the route, -1 back towards the start. */
         public int dir = 1;
         public double dwell;
+        /** Which stop on the line the service is running towards. */
+        public int nextStop = -1;
+        /** True while held at a stop with the doors open. */
+        public boolean atStop;
         public int carriages = 1;
         /** Nose position and heading, refreshed each step. */
         public double x, y, z, heading;
@@ -64,6 +93,9 @@ public final class Transit {
 
     /** Cached route lengths, so a step does not re-walk the polyline. */
     private final double[] routeLength;
+
+    /** Where the stations are on each route, as distance along it. */
+    private final double[][] stopS;
 
     /** Routes worth running a service on, by index into the world's list. */
     private final int[] usable;
@@ -91,11 +123,93 @@ public final class Transit {
         }
         usable = ok;
         usableCount = m;
+
+        // Stops. Evenly spaced along each alignment at the real spacing
+        // for the mode, kept clear of both termini by a train length so
+        // a rake holding at the first stop is not hanging off the end of
+        // its own line.
+        stopS = new double[n][];
+        for (int i = 0; i < m; i++) {
+            int r = ok[i];
+            double spacing = stopSpacing(world.transitClass(r));
+            double len = routeLength[r];
+            double clear = RAIL_CARS * (CAR_LEN + CAR_GAP) + 10;
+            if (spacing <= 0 || len < 2 * clear + spacing) {
+                stopS[r] = new double[0];
+                continue;
+            }
+            int count = (int) Math.floor((len - 2 * clear) / spacing);
+            if (count < 1) { stopS[r] = new double[0]; continue; }
+            double[] st = new double[count];
+            double first = (len - (count - 1) * spacing) * 0.5;
+            for (int k = 0; k < count; k++) { st[k] = first + k * spacing; }
+            stopS[r] = st;
+        }
         services = new Service[24];
         for (int i = 0; i < services.length; i++) { services[i] = new Service(); }
     }
 
     public Service[] services() { return services; }
+
+    /** The first stop ahead of {@code s} in the direction of travel. */
+    private static int nearestStopAhead(double[] stops, double s, int dir) {
+        int best = -1;
+        double bestGap = Double.MAX_VALUE;
+        for (int i = 0; i < stops.length; i++) {
+            double gap = (stops[i] - s) * dir;
+            if (gap > 0.5 && gap < bestGap) { bestGap = gap; best = i; }
+        }
+        return best;
+    }
+
+    /** How many stations are on a route. */
+    public int stopCount(int route) {
+        return route < 0 || route >= stopS.length || stopS[route] == null
+                ? 0 : stopS[route].length;
+    }
+
+    /** Where a station is, in world metres. */
+    public double[] stopPoint(int route, int i) {
+        return pointAt(route, stopS[route][i]);
+    }
+
+    /**
+     * The service a player standing here could board, or -1.
+     *
+     * <p>Only while it is actually held at a station with its doors
+     * open. You cannot flag down a running train, and a train that has
+     * reversed at a terminus is not boarding either - it is turning
+     * round.
+     */
+    public int boardableAt(double px, double pz) {
+        int best = -1;
+        double bestD2 = BOARD_M * BOARD_M;
+        for (int i = 0; i < services.length; i++) {
+            Service sv = services[i];
+            if (!sv.active || !sv.atStop || sv.dwell <= 0) { continue; }
+            // Anywhere along the train, not just at the nose: a nine car
+            // rake is 195 m long and you board the door in front of you.
+            double trainLen = sv.carriages * (CAR_LEN + CAR_GAP);
+            for (double back = 0; back <= trainLen; back += 12.0) {
+                double[] q = pointAt(sv.route, sv.s - back * sv.dir);
+                double dx = q[0] - px, dz = q[1] - pz;
+                double d2 = dx * dx + dz * dz;
+                if (d2 < bestD2) { bestD2 = d2; best = i; }
+            }
+        }
+        return best;
+    }
+
+    /** Human-readable mode, for the boarding prompt. */
+    public String labelFor(Service sv) {
+        switch (sv.cls) {
+            case WorldData.CLS_RAIL: return "local train";
+            case WorldData.CLS_LIGHT_RAIL:
+            case WorldData.CLS_SUBWAY: return "Metro";
+            case WorldData.CLS_MONORAIL: return "monorail";
+            default: return "ferry";
+        }
+    }
 
     public int routeCount() { return usableCount; }
 
@@ -150,6 +264,8 @@ public final class Transit {
             sv.carriages = carriagesFor(cls);
             sv.dir = rng.nextBoolean() ? 1 : -1;
             sv.dwell = 0;
+            sv.nextStop = -1;
+            sv.atStop = false;
             // Start somewhere the whole consist fits whichever way it is
             // pointing: running forwards it occupies [s - trainLen, s],
             // backwards [s, s + trainLen], so the safe band for either is
@@ -196,6 +312,38 @@ public final class Transit {
             place(sv);
             return;
         }
+        sv.atStop = false;
+
+        // Slow for the stop ahead, and hold there when it arrives. A
+        // service that only ever stopped at the ends of its line was not
+        // a railway, it was a shuttle, and there was nowhere to get on.
+        double[] stops = stopS[sv.route];
+        if (stops.length > 0) {
+            if (sv.nextStop < 0 || sv.nextStop >= stops.length) {
+                sv.nextStop = nearestStopAhead(stops, sv.s, sv.dir);
+            }
+            if (sv.nextStop >= 0) {
+                double togo = (stops[sv.nextStop] - sv.s) * sv.dir;
+                if (togo <= 0.5) {
+                    sv.s = stops[sv.nextStop];
+                    sv.speed = 0;
+                    sv.dwell = STOP_DWELL_S;
+                    sv.atStop = true;
+                    sv.nextStop += sv.dir;
+                    if (sv.nextStop < 0 || sv.nextStop >= stops.length) {
+                        sv.nextStop = -1;
+                    }
+                    place(sv);
+                    return;
+                }
+                // Brake at a comfortable rate rather than arriving at
+                // line speed and stopping dead.
+                double brakeable = Math.sqrt(Math.max(0, 2 * 0.8 * togo));
+                if (brakeable < sv.targetSpeed) {
+                    sv.speed = Math.min(sv.speed, Math.max(1.5, brakeable));
+                }
+            }
+        }
 
         double rate = sv.vessel ? 0.35 : 0.9;
         sv.speed += Math.max(-rate * dt * 2.2,
@@ -219,11 +367,13 @@ public final class Transit {
         if (sv.dir > 0 && sv.s >= len - 2.0) {
             sv.s = len - 2.0 - trainLen;
             sv.dir = -1;
+            sv.nextStop = -1;
             sv.dwell = TURNAROUND_S;
             sv.speed = 0;
         } else if (sv.dir < 0 && sv.s <= 2.0) {
             sv.s = 2.0 + trainLen;
             sv.dir = 1;
+            sv.nextStop = -1;
             sv.dwell = TURNAROUND_S;
             sv.speed = 0;
         }

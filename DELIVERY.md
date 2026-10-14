@@ -220,7 +220,17 @@ This matters more than anything above.
     driver hands out again for different objects, so the sea sampled
     something that was no longer a coastline and the terrain drew
     whatever owned its name now. Both are reset and re-streamed.
-- **Transit has no stations or timetable.** Services run between the ends
+- **Transit can now be ridden.** Stations are spaced along every line
+  at the real spacing for the mode - 1.6 km for suburban rail, 1.15 km
+  for the Metro, 900 m for the monorail, terminals only for ferries -
+  and a service holds at each one for sixteen seconds with its doors
+  open. Walk up to a standing train, Metro, monorail or ferry and the
+  prompt offers to board it; you ride to the next station and get off
+  there. You cannot flag down a moving service and you cannot step off
+  between stations. What is still missing: the 380 OSM platform ways
+  are not modelled, so there is no platform structure to stand on -
+  the stops are points on the alignment, not built stations - and
+  there is no timetable or published calling pattern. Services run between the ends
   of their line with a dwell at each terminus; they do not stop at
   platforms, you cannot board one, and the 380 OSM platform ways are not
   modelled. The metro is drawn 12 m below the street with no tunnel
