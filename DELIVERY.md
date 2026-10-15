@@ -9,9 +9,10 @@ What this build is, what it is not, and what has actually been measured.
 | Gate | Count | Where it runs |
 |---|---:|---|
 | Geographic checkpoints (Python, independent projection) | 51 | `tools/verify_world.py`, before the APK is built |
-| Total world gates (files, provenance, extent, projection, chunks, coverage, network, places, heights) | 123 | same |
+| Total world gates (files, provenance, extent, projection, chunks, coverage, network, places, heights) | 145 | same |
 | Geographic checkpoints (Java, through the game's own loader) | 51 | `core/src/test/.../CoverageTest` |
-| Core tests overall | 111 | `gradle :core:test` |
+| Core tests overall | 474 | `gradle :core:test` |
+| Android-module tests (shader source, HUD, meshes) | 26 | `gradle :android:test` |
 
 The Python verifier re-derives the ENU projection from the WGS84 constants
 rather than importing `aoi.py`, so a bug in the projection cannot validate
@@ -109,12 +110,40 @@ This matters more than anything above.
   deep water all push back. What is *not* modelled: no interiors, so
   every building is a sealed exterior; collision is against the footprint
   ring extruded to the roof, so a balcony or an archway is as solid as
-  the wall it is on; pedestrians are not pushed out of walls, only the
-  player is; and traffic does not collide with traffic, only with you.
-- **Pedestrians are drawn** now, in four outfits. They do not animate:
-  there is no walk cycle, so a person slides along facing the way they
-  are going, and one who has been knocked down sinks into the pavement
-  rather than falling over.
+  the wall it is on; and pedestrians are not pushed out of walls, only
+  the player is.
+- **Traffic is solid to traffic.** Cars brake for the car in front, so a
+  queue forms at a junction instead of a dozen vehicles occupying the
+  same two metres, and anything that still ends a step overlapping is
+  separated and bounced with a mass-weighted impulse - a bus moves an
+  autorickshaw and an autorickshaw does not move a bus. The overlap test
+  is each car's own box in its own frame rather than a circle, because a
+  circle that covers a five metre taxi end to end is wider than the gap
+  between the lanes and would have shoved every oncoming car off the
+  road.
+- **Vehicles take damage.** It accrues from the closing speed of an
+  impact, above walking pace so that nudging through a queue is free,
+  and it costs engine torque and nothing else - a car that steers worse
+  every time you clip a bollard is a car you cannot drive to the end of
+  a mission, and there is nowhere to repair one. Damage belongs to the
+  vehicle rather than the driver, so you cannot fix a wreck by getting
+  out and back in. There is no deformation, no smoke and no part loss:
+  a wrecked car looks exactly like a new one and simply will not pull.
+- **Pedestrians are drawn** in four outfits with a walk cycle. One who
+  has been knocked down sinks into the pavement rather than falling
+  over - there is no ragdoll.
+- **The arterials are lit.** A column every 38 m, alternating sides,
+  on roads of class 4 and better and only on the nearest level of
+  detail - at 16 cm across a column is thinner than a pixel by the
+  time the medium mesh takes over, and would do nothing but alias. The
+  head is tagged rather than textured so it does not go dim in shadow
+  or at dusk; it is dull metal by day and burns at night. Two things
+  it is not: nothing collides with a lamp, so you drive through them,
+  and the renderer has no dynamic lights, so a lamp throws nothing
+  onto the road beneath it. Lamps cost about an eighth of the
+  triangles in a near-field chunk, which is the most expensive piece
+  of scenery in the city and was judged worth it for what an arterial
+  looks like after dark.
 - **Shadows are blobs**, one dark ellipse on the ground under each body,
   faded by sun elevation and by night. Buildings cast none. There is no
   shadow map and no dynamic light anywhere in the renderer.

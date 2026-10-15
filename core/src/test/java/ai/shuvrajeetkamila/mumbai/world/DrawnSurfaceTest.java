@@ -474,4 +474,82 @@ final class DrawnSurfaceTest {
                 "not one road carried a centre station, so no road in"
                         + " the city has a line down the middle");
     }
+
+    // ---- street lighting -----------------------------------------------
+
+    @Test
+    @DisplayName("street lights go on arterials, up close, and not on bridges")
+    void lightingGoesWhereLightingGoes() {
+        assertTrue(ChunkMesher.isLit(2, false, ChunkMesher.LOD_HIGH),
+                "a primary road is unlit");
+        assertTrue(ChunkMesher.isLit(ChunkMesher.LAMP_MAX_CLASS, false,
+                        ChunkMesher.LOD_HIGH),
+                "the lowest lit class is not lit");
+        assertTrue(!ChunkMesher.isLit(ChunkMesher.LAMP_MAX_CLASS + 1, false,
+                        ChunkMesher.LOD_HIGH),
+                "every lane and alley in the city is carrying columns");
+        assertTrue(!ChunkMesher.isLit(2, true, ChunkMesher.LOD_HIGH),
+                "lamps were planted on a bridge deck, where the ground"
+                        + " they stand on is the seabed");
+        for (int lod : new int[]{ChunkMesher.LOD_MED, ChunkMesher.LOD_LOW}) {
+            assertTrue(!ChunkMesher.isLit(2, false, lod),
+                    "a 16 cm column is being meshed at detail " + lod
+                            + ", where it is thinner than a pixel and"
+                            + " can only alias");
+        }
+    }
+
+    @Test
+    @DisplayName("a lamp head is above the road and clear of the carriageway")
+    void lampsStandBesideTheRoad() throws Exception {
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        int heads = 0;
+        int chunks = 0;
+        double lowest = Double.MAX_VALUE;
+        for (int c = 0; c < w.chunkCount() && chunks < 10; c += 37) {
+            ChunkFeatures f = features(w, c);
+            if (f == null || f.roadCount() == 0) { continue; }
+            chunks++;
+            ChunkMesher.Mesh m = mesher.build(f, ChunkMesher.LOD_HIGH);
+            for (int v = 0; v < m.vertexCount; v++) {
+                int o = v * STRIDE;
+                if (m.vertices[o + 9] < ChunkMesher.LAMP_AUX - 0.5f) {
+                    continue;
+                }
+                heads++;
+                double wx = f.originX + m.vertices[o];
+                double wz = f.originZ + m.vertices[o + 2];
+                double ground = w.inBounds(wx, wz) && w.isLand(wx, wz)
+                        ? w.height(wx, wz) : 0;
+                lowest = Math.min(lowest, m.vertices[o + 1] - ground);
+            }
+            // The columns themselves must be there too, or the heads
+            // are floating.
+            assertTrue(heads == 0 || m.vertexCount > 0, "empty mesh");
+        }
+        assertTrue(chunks > 0, "no chunk with roads was meshed");
+        assertTrue(heads > 0,
+                "not one street light was emitted anywhere in the"
+                        + " sampled chunks");
+        // Head height is measured against the true ground, while the
+        // column stands on the drawn ground, so allow the LOD error.
+        assertTrue(lowest > ChunkMesher.LAMP_HEIGHT_M - 6.0,
+                "a lamp head came out " + lowest + " m above the ground,"
+                        + " which is not the top of a column");
+    }
+
+    @Test
+    @DisplayName("the lamp tag cannot be mistaken for a shadow or a beacon")
+    void theLampTagIsItsOwn() {
+        // The shadow tag carries a rim fraction in its own decimals, so
+        // it occupies a whole unit of the range, and the fragment stage
+        // tests greater-than rather than equality. A lamp has to sit
+        // clear of both.
+        assertTrue(ChunkMesher.LAMP_AUX > 71.5f,
+                "the lamp tag overlaps the shadow tag's range and every"
+                        + " lamp head will be drawn as a blob shadow");
+        assertTrue(ChunkMesher.LAMP_AUX > 61.0f,
+                "the lamp tag overlaps the beacon tag");
+    }
 }

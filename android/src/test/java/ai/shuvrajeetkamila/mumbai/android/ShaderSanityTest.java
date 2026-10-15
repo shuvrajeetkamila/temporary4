@@ -272,4 +272,23 @@ final class ShaderSanityTest {
                         + " angle it will flicker between fragments"
                         + " instead of staying one pixel wide");
     }
+
+    @Test
+    @DisplayName("the lamp branch is tested before the ones below it")
+    void lampsAreNotDrawnAsShadows() {
+        String fs = Shaders.SCENE_FS;
+        int lamp = fs.indexOf("mediump vec3 lamp = mix(vAlbedo");
+        int shadow = fs.indexOf("mediump float rim = vAux");
+        int beacon = fs.indexOf("mediump float off = vAlbedo.b");
+        assertTrue(lamp > 0, "the street lamp branch has gone");
+        assertTrue(shadow > 0 && beacon > 0, "a tagged branch has gone");
+        // All three are greater-than tests on the same value, and the
+        // lamp tag is the highest, so whichever is written first wins.
+        assertTrue(lamp < shadow,
+                "the lamp branch is below the shadow branch, so every"
+                        + " lamp head in the city will be drawn as a"
+                        + " blob shadow and discarded");
+        assertTrue(lamp < beacon,
+                "the lamp branch is below the beacon branch");
+    }
 }

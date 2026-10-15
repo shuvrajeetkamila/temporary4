@@ -464,6 +464,31 @@ public final class ChunkMesher {
      */
     static final float UNMARKED_V = 64.0f;
 
+    /**
+     * Aux tag for a lamp head.
+     *
+     * <p>Above the shadow and beacon tags, and tested before them. A
+     * lamp is a light source rather than a surface: it must not go dim
+     * in shadow or at dusk, so the fragment stage short-circuits on
+     * this value instead of lighting and texturing it.
+     */
+    public static final float LAMP_AUX = 80.0f;
+
+    /** Spacing of street lights along a lit road, m. */
+    static final float LAMP_SPACING_M = 38.0f;
+
+    /** Height of a street light column, m. */
+    static final float LAMP_HEIGHT_M = 8.2f;
+
+    /** Highest road class that gets street lighting. */
+    static final int LAMP_MAX_CLASS = 4;
+
+    /** Whether a road of this class is lit. */
+    static boolean isLit(int cls, boolean bridge, int lod) {
+        return lod == LOD_HIGH && !bridge
+                && cls >= 0 && cls <= LAMP_MAX_CLASS;
+    }
+
     /** Half-width below which a road gets no centre line, m. */
     static final float MARKING_MIN_HALF_M = 3.0f;
 
@@ -676,7 +701,66 @@ public final class ChunkMesher {
                 prevR = ri;
                 prevC = ci;
             }
+            if (isLit(cls, bridge, lod)) {
+                streetLights(f, r, ox, oz, lod, half);
+            }
         }
+    }
+
+    /**
+     * Columns down both sides of a lit road.
+     *
+     * <p>The city had no street furniture of any kind. After dark an
+     * arterial was a grey ribbon between lit windows with nothing
+     * standing beside it, which is the single clearest sign that a
+     * road is scenery rather than infrastructure.
+     *
+     * <p>Only on the nearest level of detail, and only on roads of
+     * class {@value #LAMP_MAX_CLASS} and better. A column is 16 cm
+     * across; at the range the medium mesh covers it is thinner than a
+     * pixel and would do nothing but alias.
+     */
+    private void streetLights(ChunkFeatures f, int r, double ox, double oz,
+                              int lod, float half) {
+        int s = f.roadOffset[r];
+        int e = f.roadOffset[r + 1];
+        double since = LAMP_SPACING_M * 0.5;
+        int n = 0;
+        for (int k = s; k < e - 1; k++) {
+            float x0 = f.roadXZ[k * 2], z0 = f.roadXZ[k * 2 + 1];
+            float x1 = f.roadXZ[(k + 1) * 2], z1 = f.roadXZ[(k + 1) * 2 + 1];
+            double dx = x1 - x0, dz = z1 - z0;
+            double len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 1e-4) { continue; }
+            double nx = dz / len, nz = -dx / len;
+            double t = LAMP_SPACING_M - since;
+            while (t <= len) {
+                // Alternating sides, so a single file of lights down one
+                // kerb does not read as a fence.
+                double sgn = (n++ & 1) == 0 ? 1.0 : -1.0;
+                double off = half + 0.8;
+                double px = x0 + dx * t / len + nx * off * sgn;
+                double pz = z0 + dz * t / len + nz * off * sgn;
+                lamp(px, pz, lodGround(ox, oz, lod, px, pz));
+                t += LAMP_SPACING_M;
+            }
+            since = (since + len) % LAMP_SPACING_M;
+        }
+    }
+
+    /** One column and its head. */
+    private void lamp(double x, double z, double ground) {
+        // No lid on the column: the head is wider than the column on
+        // both axes and sits directly on it, so the top face can never
+        // be seen from anywhere. That is a tenth of the triangles in
+        // the most numerous object in the city.
+        walls(x, z, 0.08, 0.08, ground, ground + LAMP_HEIGHT_M,
+                0.30f, 0.31f, 0.33f, (float) TextureLibrary.MAT_CONCRETE);
+        // The head is tagged rather than textured: it is a light, and a
+        // light must not go dim in shadow or at dusk.
+        prism(x, z, 0.26, 0.17,
+                ground + LAMP_HEIGHT_M, ground + LAMP_HEIGHT_M + 0.18,
+                1.0f, 0.84f, 0.58f, LAMP_AUX);
     }
 
     private double groundAt(double ox, double oz, float[] xz, int i) {
@@ -907,8 +991,8 @@ public final class ChunkMesher {
         }
     }
 
-    /** An axis-aligned box: four walls and a lid. */
-    private void prism(double cx, double cz, double hx, double hz,
+    /** The four walls of an axis-aligned box, with no lid. */
+    private void walls(double cx, double cz, double hx, double hz,
                        double y0, double y1,
                        float r, float g, float b, float mat) {
         float x0 = (float) (cx - hx), x1 = (float) (cx + hx);
@@ -917,6 +1001,15 @@ public final class ChunkMesher {
         quad(x1, z0, x1, z1, y0, y1, 1, 0, r * 0.96f, g * 0.96f, b * 0.96f, mat, y0);
         quad(x1, z1, x0, z1, y0, y1, 0, 1, r * 0.92f, g * 0.92f, b * 0.92f, mat, y0);
         quad(x0, z1, x0, z0, y0, y1, -1, 0, r * 0.96f, g * 0.96f, b * 0.96f, mat, y0);
+    }
+
+    /** An axis-aligned box: four walls and a lid. */
+    private void prism(double cx, double cz, double hx, double hz,
+                       double y0, double y1,
+                       float r, float g, float b, float mat) {
+        walls(cx, cz, hx, hz, y0, y1, r, g, b, mat);
+        float x0 = (float) (cx - hx), x1 = (float) (cx + hx);
+        float z0 = (float) (cz - hz), z1 = (float) (cz + hz);
         int a = push(x0, (float) y1, z0, 0, 1, 0, r, g, b, mat);
         int c = push(x1, (float) y1, z0, 0, 1, 0, r, g, b, mat);
         int d = push(x1, (float) y1, z1, 0, 1, 0, r, g, b, mat);

@@ -182,6 +182,20 @@ final class Shaders {
             + "  mediump float hemi = 0.5 + 0.5 * n.y;\n"
             + "  mediump vec3 ambient = mix(vec3(0.22, 0.20, 0.18), uSkyColour, hemi) * 0.55;\n"
             + "  mediump vec3 albedo = vAlbedo;\n"
+            + "  if (vAux > " + (ai.shuvrajeetkamila.mumbai.world.ChunkMesher
+                    .LAMP_AUX - 0.5f) + ") {\n"
+            // A street lamp head. Tested before the shadow and beacon
+            // tags because its value is above both. Unlit and
+            // untextured for the same reason the beacon is: a lamp is
+            // a light source, not a surface, so it must not go dim in
+            // shadow or at dusk. Dull metal by day, burning by night,
+            // and the city has no dynamic lights so it throws nothing
+            // onto the road beneath it.
+            + "    mediump vec3 lamp = mix(vAlbedo * 0.30, vAlbedo * 2.4, uNight);\n"
+            + "    highp float lf = clamp(1.0 - exp(-vDepth * uFogDensity), 0.0, 1.0);\n"
+            + "    fragColour = vec4(mix(lamp, uFogColour, lf), 1.0);\n"
+            + "    return;\n"
+            + "  }\n"
             + "  if (vAux > " + (SHADOW_AUX - 0.5f) + ") {\n"
             // A blob shadow. Not a surface: it is multiplied over whatever
             // is already there, faded to nothing at the rim so the edge is

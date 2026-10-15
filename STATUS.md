@@ -142,32 +142,42 @@ no backend.
 11. **Collision is footprint-ring extruded.** Balconies, archways and
     overhangs are solid; you cannot walk under a building that you
     should be able to walk under.
-12. **Traffic does not collide with traffic.** Cars pass through each
-    other; only the player is solid to them.
-13. **Pedestrians are not pushed out of walls.**
-14. **No ragdoll.** A knocked-down pedestrian sinks into the pavement
+12. **Traffic collides with traffic, pedestrians do not.** Cars queue
+    behind each other and bounce off each other with an oriented-box
+    test and a mass-weighted impulse. Pedestrians still walk through
+    one another and are not pushed out of walls.
+13. **No ragdoll.** A knocked-down pedestrian sinks into the pavement
     instead of falling properly.
-15. **Some OSM footprints are self-intersecting bow-ties** and mesh
+14. **Some OSM footprints are self-intersecting bow-ties** and mesh
     accordingly.
+15. **Vehicle damage is a single number.** It costs engine torque and
+    survives getting out and back in, but there is no deformation, no
+    smoke, no part loss and no effect on steering or brakes.
 
 ### Rendering gaps
 
-16. **Buildings cast no shadows.** There are blob shadows under moving
+16. **Street lights are scenery.** Columns stand along every arterial
+    and their heads burn after dark, but nothing collides with them -
+    you drive straight through - and the renderer has no dynamic
+    lights, so a lamp throws nothing onto the road beneath it.
+17. **Buildings cast no shadows.** There are blob shadows under moving
     bodies and nothing else — no shadow map, no dynamic lights at
     night beyond emissive windows.
-17. **The sea shader uses `discard`,** which costs early-Z on
+18. **The sea shader uses `discard`,** which costs early-Z on
     tile-based mobile GPUs. Worth replacing with a stencil or a
     geometry cut if a real device shows it mattering.
 
 ### Game gaps
 
-18. **Three mission types only** — taxi, delivery, race. No mission
+19. **Three mission types only** — taxi, delivery, race. No mission
     chain, no story, no characters, no named contacts.
-19. **No vehicle damage model.** Crashes transfer momentum but leave no
-    deformation, no smoke and no mechanical consequence.
-20. **No pause or settings screen.** Quality cycles through one button;
+20. **No lane discipline at junctions.** Traffic queues behind the car
+    in front and will not drive through it, but there are no signals,
+    no give-way rules and no turn priority: at a crossroads the cars
+    that arrive first simply get there first.
+21. **No pause or settings screen.** Quality cycles through one button;
     nothing else is configurable in-app.
-21. **No in-game map markers you can set,** and no waypoint routing.
+22. **No in-game map markers you can set,** and no waypoint routing.
 
 ---
 
@@ -177,8 +187,9 @@ The three that would change the game most, in order:
 
 1. **Put it on a real phone.** Every performance number here is
    unmeasured, and items 1–2 cannot be closed any other way.
-2. **Vehicle damage and traffic-to-traffic collision** (items 12, 19) —
-   together these are what make a crash feel like a crash.
-3. **A mission chain** (item 18) — the systems for money, wanted level,
+2. **A mission chain** (item 19) — the systems for money, wanted level,
    checkpoints and delivery already exist; what is missing is a reason
    to use them in sequence.
+3. **Junction priority** (item 20) — traffic now queues and crashes,
+   which is most of the way to a living road; what is missing is any
+   rule about who goes first.

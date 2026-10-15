@@ -412,6 +412,81 @@ anything was changed.
     fragment shader samples the same land mask the boat physics uses and
     discards on land; the transform rebases with the floating origin.
 
+### Round three — "white land", and the edges
+
+The report was that the white land persists, that changing the graphics
+setting fixes it sometimes and not always, and that the edges of the
+island and the road infrastructure are not cohesive. Five separate
+faults, all measured before anything was changed.
+
+24. **The streamer asked for five times the ground it may hold.** The
+    streaming radius came from the quality tier — 22 km at HIGH — and
+    the resident cap is 420 tiles. A disc of 22 km is about 1,500
+    chunks of 1,024 m, so the nearest 420 loaded and the remaining
+    thousand silently never did: no ground at all past roughly 11 km.
+    What showed through depended on what was behind it, which is the
+    whole sequence of reports — water, then white, then white land —
+    from one fault. At LOW the radius is 9 km, which is 250 chunks and
+    fits, which is exactly why cycling the graphics button helped
+    sometimes and not others: it was not fixing anything, it was
+    choosing a tier whose view distance the budget could meet.
+    **Fixed:** the outer ring is clamped to
+    `sqrt(MAX_RESIDENT·0.9/π)·chunkM` ≈ 11.2 km, and the renderer takes
+    its far plane, fog floor and sea extent from the streamer rather
+    than from the tier, so the streamed edge is always inside the haze.
+    `NoWhiteGroundTest` walks every chunk inside the radius at 1,800 m
+    altitude and at 144 km/h and fails if one is missing.
+
+25. **A hole between two definitions of land, right round the coast.**
+    The sea is discarded wherever the land mask says land. The mask is
+    built at 40 m and calls a texel land if any 20 m cell in it is. The
+    terrain mesh dropped a cell whose own corners were all sea, sampled
+    every 32 m at full detail and **128 m at the lowest** — so every
+    islet, sandbar, jetty and ragged headland narrower than a cell had
+    the sea discarded over it and no terrain put in its place. Measured
+    over a seventh of the coastal chunks: 4,596 such cells at full
+    detail, 1,063 at medium, 236 at the lowest — about **2.1 % of every
+    cell where the sea is discarded**, and the lowest detail is most of
+    what is on screen. A broken white fringe all the way round
+    Salsette, and a different fault from 24, which is why fixing 24 did
+    not finish it. **Fixed:** the mesh asks the mask's question, over
+    the cell grown by one mask texel.
+
+26. **A two metre step all the way round the island at high water.**
+    Cells with any land in them are kept and drawn by the terrain, and
+    their sea corners sat flat at chart datum while the sea beside them
+    rode the tide and a metre and a half of swell. **Fixed:** the
+    terrain's vertex stage puts those corners on the same wave, five
+    centimetres proud so the join cannot fight for the depth buffer,
+    and the fragment stage shades them with the sea's own constants. A
+    test compares the two wave functions character by character.
+
+27. **Every crossroads was a patch of two surfaces fighting.** Two
+    ribbons laid at the same height over the same ground are coplanar;
+    in a city of 105,000 ways that is a flickering speckle at every
+    junction in view. **Fixed:** roads are separated by class over a
+    ten centimetre band, which reads as a kerb lip and is also right
+    physically — where a trunk road meets a lane, the trunk road
+    carries through.
+
+28. **Corners pinched, and junctions had a hole in the middle.** The
+    ribbon edge was offset perpendicular to the average of the two
+    segments at a vertex without dividing by the cosine of half the
+    turn, so the road was narrower than the road — a quarter narrower
+    at a sixty degree bend, which is a row of bites out of the kerb
+    round every flyover. And OSM splits a street into a way per
+    attribute change, the compiler splits again at each chunk border,
+    and the resulting ribbons stopped dead at the shared node: four
+    square ends leave an unpaved notch in the middle of a crossroads
+    and a hairline of bare ground across the carriageway at every chunk
+    border. **Fixed:** mitred corners, capped so a hairpin cannot throw
+    a spike; and each end runs about half a lane past its last point so
+    they overlap rather than abut.
+
+Two things were added in the same pass rather than fixed: traffic is
+now solid to traffic, and vehicles accumulate crash damage that costs
+engine torque. Both are described in `DELIVERY.md`.
+
 ## Suggested order
 
 1 → 7 → 2 → 3 (the collision family; 7 is nearly free once 1 exists, and
