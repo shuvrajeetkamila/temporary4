@@ -76,6 +76,14 @@ public final class Telemetry {
     public volatile int money;
     /** What to do next, or a hint when idle. */
     public volatile String objective = "";
+    /**
+     * The standing contract, e.g. "Fort taxi stand: 2 more fares".
+     *
+     * <p>Separate from {@link #objective}, which is the current leg of
+     * the job in hand. One says where to drive right now, the other
+     * says why.
+     */
+    public volatile String contract = "";
     /** Transient congratulation or failure message. */
     public volatile String banner = "";
     /** Seconds left on a timed job, or 0 when untimed or idle. */

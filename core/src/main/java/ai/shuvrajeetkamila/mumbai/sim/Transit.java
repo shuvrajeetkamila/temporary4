@@ -62,6 +62,25 @@ public final class Transit {
         }
     }
 
+    /**
+     * Headway for a class of line, seconds.
+     *
+     * <p>A timetable the player can read: trains leave at a fixed
+     * interval from a fixed phase, so the board at a station can say
+     * when the next one is and be right when it turns up. Roughly the
+     * real peak intervals - the suburban network is famously every
+     * three minutes and the monorail famously is not.
+     */
+    public static double headway(int cls) {
+        switch (cls) {
+            case WorldData.CLS_RAIL: return 210.0;
+            case WorldData.CLS_LIGHT_RAIL:
+            case WorldData.CLS_SUBWAY: return 300.0;
+            case WorldData.CLS_MONORAIL: return 600.0;
+            default: return 1200.0;
+        }
+    }
+
     /** One train or vessel. */
     public static final class Service {
         public boolean active;
@@ -200,6 +219,77 @@ public final class Transit {
             }
         }
         return best;
+    }
+
+    /** Cached line names, built on first use. */
+    private String[] nameCache;
+
+    /**
+     * A name for a line, built from where it actually goes.
+     *
+     * <p>"Local train" told you the mode and nothing else, and there is
+     * no route name in the data - OSM splits railways at every signal
+     * and the compiler chains the fragments, so whatever name a
+     * fragment carried is long gone by the time there is a line. The
+     * terminals are the honest thing to name it after, and they are
+     * derived rather than invented: the nearest named place to each
+     * end of the alignment.
+     */
+    public String routeName(int route) {
+        if (route < 0 || route >= world.transitCount()) { return ""; }
+        if (nameCache == null) { nameCache = new String[world.transitCount()]; }
+        String cached = nameCache[route];
+        if (cached != null) { return cached; }
+
+        int cls = world.transitClass(route);
+        String mode;
+        switch (cls) {
+            case WorldData.CLS_RAIL: mode = "Local"; break;
+            case WorldData.CLS_LIGHT_RAIL:
+            case WorldData.CLS_SUBWAY: mode = "Metro"; break;
+            case WorldData.CLS_MONORAIL: mode = "Monorail"; break;
+            default: mode = "Ferry"; break;
+        }
+        int n = world.transitPointCount(route);
+        String out = mode;
+        if (n >= 2) {
+            String a = placeNear(world.transitX(route, 0),
+                    world.transitZ(route, 0));
+            String b = placeNear(world.transitX(route, n - 1),
+                    world.transitZ(route, n - 1));
+            if (a != null && b != null && !a.equals(b)) {
+                out = mode + " - " + a + " / " + b;
+            } else if (a != null) {
+                out = mode + " - " + a;
+            } else if (b != null) {
+                out = mode + " - " + b;
+            }
+        }
+        nameCache[route] = out;
+        return out;
+    }
+
+    private String placeNear(double x, double z) {
+        ai.shuvrajeetkamila.mumbai.world.Places p = world.places();
+        if (p == null) { return null; }
+        ai.shuvrajeetkamila.mumbai.world.Places.Place q =
+                p.nearest(x, z, 1500);
+        return q == null ? null : q.name;
+    }
+
+    /**
+     * Seconds until the next departure from a station on this line.
+     *
+     * <p>A pure function of the clock, like the traffic lights: the
+     * board at a platform nobody is standing on is still right. The
+     * phase is scattered by the route index so the whole network does
+     * not leave at once.
+     */
+    public static double nextDeparture(int route, int cls, double clock) {
+        double h = headway(cls);
+        double phase = (route * 0.6180339887) % 1.0;
+        double t = clock / h + phase;
+        return (1.0 - (t - Math.floor(t))) * h;
     }
 
     /** Human-readable mode, for the boarding prompt. */
@@ -409,9 +499,14 @@ public final class Transit {
         if (sv.vessel) { return 0.0; }
         double ground = world.height(sv.x, sv.z);
         switch (sv.cls) {
-            case WorldData.CLS_SUBWAY: return ground - 12.0;
-            case WorldData.CLS_MONORAIL: return ground + 8.5;
-            default: return ground + 0.9;
+            // One table, in TransitStops, because the platforms are
+            // built from it too. Mumbai's Metro is a viaduct, not a
+            // street tram - Line 1 runs above the Andheri-Ghatkopar
+            // road the whole way - and it was falling through to the
+            // surface case and ploughing along the carriageway.
+            default: return ground
+                    + ai.shuvrajeetkamila.mumbai.world.TransitStops
+                            .railHeight(sv.cls);
         }
     }
 

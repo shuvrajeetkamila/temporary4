@@ -105,6 +105,9 @@ public final class Missions {
     /** Best race time in whole seconds, 0 if none finished. */
     public int bestRaceSec;
 
+    /** The ladder of contracts, and where the player is on it. */
+    public final Career career = new Career();
+
     public Job active;
 
     /** Transient on-screen message, e.g. "Fare complete  +Rs 212". */
@@ -176,6 +179,7 @@ public final class Missions {
             bannerTimer -= dt;
             if (bannerTimer <= 0) { banner = ""; }
         }
+        career.update(dt);
         if (cooldown > 0) { cooldown -= dt; }
 
         if (havePrev && active != null) {
@@ -206,9 +210,7 @@ public final class Missions {
             return;
         }
 
-        hint = want == null
-                ? "Find a taxi, a tempo or a fast car to start earning"
-                : "";
+        hint = want == null ? needHint() : "";
         if (want != null && cooldown <= 0) {
             Job j = generate(want, px, pz);
             if (j != null) {
@@ -220,6 +222,25 @@ public final class Missions {
                 hint = "No work around here - drive towards the city";
                 cooldown = 3.0;
             }
+        }
+    }
+
+    /**
+     * What to go and find, given what the ladder is asking for.
+     *
+     * <p>A generic "find a taxi, a tempo or a fast car" is no help when
+     * the contract in hand only counts fares.
+     */
+    private String needHint() {
+        Career.Chapter c = career.current();
+        if (c == null || c.anyKind()) {
+            return "Find a taxi, a tempo or a fast car to start earning";
+        }
+        switch (c.kind) {
+            case TAXI: return "Find a kaali-peeli - " + career.objective();
+            case DELIVERY: return "Find a tempo or an auto - "
+                    + career.objective();
+            default: return "Find something quick - " + career.objective();
         }
     }
 
@@ -267,6 +288,11 @@ public final class Missions {
         }
         money += paid;
         jobsDone++;
+        // And the ladder. Paid separately and announced separately, so
+        // finishing a chapter reads as an event rather than as a
+        // slightly larger fare.
+        int bonus = career.record(active.kind);
+        if (bonus > 0) { money += bonus; }
         switch (active.kind) {
             case TAXI: faresDone++; break;
             case DELIVERY: deliveriesDone++; break;

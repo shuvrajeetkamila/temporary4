@@ -43,6 +43,7 @@ final class Hud extends View {
     private final Paint starOn = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint starOff = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint damageBar = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint contractPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint damageLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path starPath = new android.graphics.Path();
     private final android.graphics.Path arrowPath = new android.graphics.Path();
@@ -115,6 +116,8 @@ final class Hud extends View {
         starOn.setColor(0xFFFFC421);
         starOn.setStyle(Paint.Style.FILL);
         damageBar.setStyle(Paint.Style.FILL);
+        contractPaint.setColor(0xFFBFC9D2);
+        contractPaint.setTextSize(11 * d);
         damageLabel.setColor(0xFFB9C2C8);
         damageLabel.setTextSize(9 * d);
         starOff.setColor(0x33FFFFFF);
@@ -351,6 +354,20 @@ final class Hud extends View {
                         objective);
                 objective.setColor(0xFFF2F2F2);
             }
+        }
+
+        // --- the standing contract, under the job line -----------------------
+        // Dimmer and smaller than the objective on purpose: the
+        // objective is where to drive now, this is why.
+        if (!s.contract.isEmpty()) {
+            float top = (s.wantedStars > 0 ? 62 * d : 38 * d)
+                    + (s.objective.isEmpty() ? 0 : 26 * d)
+                    + (s.jobTimeLeft > 0 ? 20 * d : 0);
+            float conW = contractPaint.measureText(s.contract);
+            float conX = getWidth() - conW - 12 * d;
+            rect.set(conX - 7 * d, top, getWidth() - 6 * d, top + 18 * d);
+            canvas.drawRoundRect(rect, 3 * d, 3 * d, panel);
+            canvas.drawText(s.contract, conX, top + 12.5f * d, contractPaint);
         }
 
         // --- job banner, upper centre ----------------------------------------

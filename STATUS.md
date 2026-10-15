@@ -125,12 +125,17 @@ no backend.
    context; 14.3 % carry an OSM tag. No better free source exists for
    Mumbai — Copernicus GLO-30 was tried and cannot resolve dense urban
    morphology.
-6. **No station structures.** Transit stops are points on the
-   alignment; the 380 OSM platform ways are not modelled, so there is
-   no platform to stand on and no shelter, signage or footbridge.
-7. **No timetable.** Services run a fixed dwell and a fixed spacing;
-   there are no published calling patterns, no line names on the map
-   and no departure boards.
+6. **Stations are a platform and nothing else.** Every surface and
+   elevated station now has a platform either side at the height its
+   line runs at, and standing on one tells you the line and the next
+   departure. There is still no shelter, no signage, no footbridge and
+   no concourse, and the 380 OSM platform ways are not used - the
+   platforms are derived from the alignment.
+7. **The timetable is a headway, not a calling pattern.** Each line
+   departs on a fixed interval from a fixed phase, so a board is
+   always right, but there are no real timings, no fast/slow services
+   and no destinations beyond the two terminals the line is named
+   after.
 8. **No music and no voices.** Everything audible is synthesised.
 9. **Upper Thane and Vasai Creek are land,** because OSM maps them as
    intertidal mudflat. Not navigable in this build.
@@ -146,8 +151,9 @@ no backend.
     behind each other and bounce off each other with an oriented-box
     test and a mass-weighted impulse. Pedestrians still walk through
     one another and are not pushed out of walls.
-13. **No ragdoll.** A knocked-down pedestrian sinks into the pavement
-    instead of falling properly.
+13. **A knockdown is not a ragdoll.** A body topples about its feet,
+    slides and gets up, but there are no joints and no limb physics:
+    everyone falls the same way, and they fall through each other.
 14. **Some OSM footprints are self-intersecting bow-ties** and mesh
     accordingly.
 15. **Vehicle damage is a single number.** It costs engine torque and
@@ -170,12 +176,15 @@ no backend.
 
 ### Game gaps
 
-19. **Three mission types only** — taxi, delivery, race. No mission
-    chain, no story, no characters, no named contacts.
-20. **No lane discipline at junctions.** Traffic queues behind the car
-    in front and will not drive through it, but there are no signals,
-    no give-way rules and no turn priority: at a crossroads the cars
-    that arrive first simply get there first.
+19. **A contract ladder, not a story.** Seven chapters of escalating
+    work that force the player through every kind of vehicle, with
+    bonuses and named contacts. There is no narrative, no dialogue,
+    no cutscenes and no characters - the contacts are roles, not
+    people.
+20. **Signals, but no give-way.** 14,921 junctions have working two-
+    phase lights that the traffic obeys. The other 28,592 junctions
+    are uncontrolled and have no priority rule at all, and nothing
+    anywhere indicates or respects a turn.
 21. **No pause or settings screen.** Quality cycles through one button;
     nothing else is configurable in-app.
 22. **No in-game map markers you can set,** and no waypoint routing.
@@ -188,9 +197,8 @@ The three that would change the game most, in order:
 
 1. **Put it on a real phone.** Every performance number here is
    unmeasured, and items 1–2 cannot be closed any other way.
-2. **A mission chain** (item 19) — the systems for money, wanted level,
-   checkpoints and delivery already exist; what is missing is a reason
-   to use them in sequence.
-3. **Junction priority** (item 20) — traffic now queues and crashes,
-   which is most of the way to a living road; what is missing is any
-   rule about who goes first.
+2. **Give-way at the unsignalled junctions** (item 20) — three in four
+   junctions still have no priority rule.
+3. **Make the street furniture solid** (item 16) — lamp posts, kerbs
+   and now signal masts and platforms are all scenery you drive
+   through.

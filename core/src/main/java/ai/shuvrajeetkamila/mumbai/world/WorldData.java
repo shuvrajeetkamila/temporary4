@@ -100,6 +100,23 @@ public final class WorldData {
 
     public int edgeCount() { return graphEdge.length / 2; }
 
+    private volatile TransitStops stopCache;
+
+    /** The station list, derived from the transit alignments on first use. */
+    public TransitStops transitStops() {
+        TransitStops t = stopCache;
+        if (t == null) {
+            synchronized (this) {
+                t = stopCache;
+                if (t == null) {
+                    t = new TransitStops(this);
+                    stopCache = t;
+                }
+            }
+        }
+        return t;
+    }
+
     private volatile Junctions junctionCache;
 
     /**

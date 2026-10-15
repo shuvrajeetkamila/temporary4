@@ -26,6 +26,7 @@ import ai.shuvrajeetkamila.mumbai.render.Sky;
 import ai.shuvrajeetkamila.mumbai.render.Weather;
 import ai.shuvrajeetkamila.mumbai.world.CityCollision;
 import ai.shuvrajeetkamila.mumbai.world.Junctions;
+import ai.shuvrajeetkamila.mumbai.world.TransitStops;
 import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
@@ -328,6 +329,9 @@ public final class Engine {
         progress.hour = saved.hour;
         progress.weather = saved.weather;
         weather.enabled = saved.weather;
+        progress.chapter = saved.chapter;
+        progress.chapterDone = saved.chapterDone;
+        missions.career.restore(saved.chapter, saved.chapterDone);
         missions.money = progress.money;
         wanted.timesBusted = progress.timesBusted;
         timeOfDay = progress.hour;
@@ -351,6 +355,8 @@ public final class Engine {
         progress.z = b.position.z;
         progress.hour = timeOfDay;
         progress.weather = weather.enabled;
+        progress.chapter = missions.career.chapter;
+        progress.chapterDone = missions.career.done;
         store.write(progress.toString());
     }
 
@@ -1365,14 +1371,28 @@ public final class Engine {
                 Transit.Service riding = transit.services()[aboard];
                 t.prompt = riding.atStop
                         ? "EXIT to get off"
-                        : "riding the " + transit.labelFor(riding);
+                        : "riding " + transit.routeName(riding.route);
             } else {
                 int tr = transit.boardableAt(b.position.x, b.position.z);
                 if (tr >= 0) {
-                    t.prompt = "ENTER - board the "
-                            + transit.labelFor(transit.services()[tr]);
+                    t.prompt = "ENTER - board "
+                            + transit.routeName(transit.services()[tr].route);
                 } else {
                     t.prompt = what == null ? "" : "ENTER - " + what;
+                }
+            }
+            // Standing on a platform with no train in: say which line
+            // it is and when the next one is due. A station with no
+            // board is just a slab.
+            if (aboard < 0 && t.prompt.isEmpty()) {
+                TransitStops.Stop st = world.transitStops()
+                        .nearest(b.position.x, b.position.z, 26);
+                if (st != null) {
+                    int secs = (int) Math.ceil(Transit.nextDeparture(
+                            st.route, st.cls, clock.simulatedSeconds()));
+                    t.prompt = transit.routeName(st.route) + "  -  next in "
+                            + (secs / 60) + ":"
+                            + (secs % 60 < 10 ? "0" : "") + (secs % 60);
                 }
             }
         } else if (profile == ControlProfile.CAR) {
@@ -1468,7 +1488,11 @@ public final class Engine {
         }
         telemetry.money = missions.money;
         telemetry.objective = missions.objective();
-        telemetry.banner = missions.banner;
+        telemetry.contract = missions.career.objective();
+        // A finished chapter outranks a finished job: the bonus is the
+        // bigger news and they land on the same frame.
+        telemetry.banner = missions.career.bannerTimer > 0
+                ? missions.career.banner : missions.banner;
         telemetry.jobsDone = missions.jobsDone;
         telemetry.wantedStars = wanted.stars();
         telemetry.policeUnits = agents.policeCount();

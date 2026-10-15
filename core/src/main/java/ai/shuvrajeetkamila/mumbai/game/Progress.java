@@ -37,6 +37,10 @@ public final class Progress {
     /** Whether the player wants weather. Persisted like everything else. */
     public boolean weather = true;
 
+    /** How far up the contract ladder, and how far into that chapter. */
+    public int chapter;
+    public int chapterDone;
+
     public int jobsDone() { return faresDone + deliveriesDone + racesWon; }
 
     /** Records a finished job of this kind. */
@@ -69,6 +73,8 @@ public final class Progress {
         b.append("z=").append(z).append('\n');
         b.append("hour=").append(hour).append('\n');
         b.append("weather=").append(weather ? 1 : 0).append('\n');
+        b.append("chapter=").append(chapter).append('\n');
+        b.append("chapterDone=").append(chapterDone).append('\n');
         return b.toString();
     }
 
@@ -94,6 +100,9 @@ public final class Progress {
                     case "z": p.z = Double.parseDouble(v); break;
                     case "hour": p.hour = Double.parseDouble(v); break;
                     case "weather": p.weather = !"0".equals(v); break;
+                    case "chapter": p.chapter = Integer.parseInt(v); break;
+                    case "chapterDone":
+                        p.chapterDone = Integer.parseInt(v); break;
                     default: break;
                 }
             } catch (NumberFormatException ignored) {

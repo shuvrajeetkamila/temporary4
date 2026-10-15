@@ -105,6 +105,7 @@ public final class ChunkMesher {
         // range there are few enough of them to be nearly free.
         roads(f, ox, oz, lod);
         signals(ox, oz, size, lod);
+        platforms(ox, oz, size, lod);
         buildings(f, ox, oz, lod);
 
         float minY = Float.MAX_VALUE;
@@ -457,6 +458,100 @@ public final class ChunkMesher {
             // Phase 0 head above, phase 1 below it.
             head(mx, mz, g + SIGNAL_H_M, 0f, off);
             head(mx, mz, g + SIGNAL_H_M - 0.46, 1f, off);
+        }
+    }
+
+    /** Length of a station platform, m. Long enough for a nine-car rake. */
+    static final float PLATFORM_LEN_M = 190.0f;
+
+    /** Width of each platform face, m. */
+    static final float PLATFORM_W_M = 5.5f;
+
+    /** Height of the platform above the running rail, m. */
+    static final float PLATFORM_H_M = 1.0f;
+
+    /**
+     * A platform either side of the line at every station.
+     *
+     * <p>The stops were points on an alignment: a train halted for
+     * sixteen seconds in the middle of nowhere and you boarded it off
+     * the ballast. A platform is the smallest thing that makes a
+     * station a place.
+     *
+     * <p>Built at the height the line runs at rather than at the
+     * ground, so an elevated Metro gets its platform on the viaduct
+     * and a bored line gets one in the tunnel - and nothing is drawn
+     * for the underground ones, because a slab twelve metres down is
+     * geometry nobody will ever see from the street.
+     */
+    private void platforms(double ox, double oz, double size, int lod) {
+        if (lod == LOD_LOW) { return; }
+        for (TransitStops.Stop st : world.transitStops()
+                .inBox(ox - 100, oz - 100, ox + size + 100, oz + size + 100)) {
+            if (TransitStops.gradeOf(st.cls) == TransitStops.Grade.UNDERGROUND) {
+                continue;
+            }
+            double lx = st.x - ox;
+            double lz = st.z - oz;
+            double ground = world.isLand(st.x, st.z)
+                    ? world.height(st.x, st.z) : 0.0;
+            double rail = ground + TransitStops.railHeight(st.cls);
+            // Along the line, and across it.
+            double fx = Math.sin(st.bearing), fz = -Math.cos(st.bearing);
+            double nx = fz, nz = -fx;
+            double halfLen = PLATFORM_LEN_M * 0.5;
+            double gap = 3.1;
+            for (int side = -1; side <= 1; side += 2) {
+                double cx = lx + nx * (gap + PLATFORM_W_M * 0.5) * side;
+                double cz = lz + nz * (gap + PLATFORM_W_M * 0.5) * side;
+                slab(cx, cz, fx, fz, nx, nz, halfLen, PLATFORM_W_M * 0.5,
+                        rail - 0.2, rail + PLATFORM_H_M);
+            }
+        }
+    }
+
+    /**
+     * An oriented slab: a top face and four sides.
+     *
+     * <p>{@code prism} is axis-aligned, and a platform that does not
+     * lie along its own railway is not a platform.
+     */
+    private void slab(double cx, double cz, double fx, double fz,
+                      double nx, double nz, double halfLen, double halfWid,
+                      double y0, double y1) {
+        float[] px = new float[4];
+        float[] pz = new float[4];
+        double[][] corner = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        for (int i = 0; i < 4; i++) {
+            px[i] = (float) (cx + fx * halfLen * corner[i][0]
+                    + nx * halfWid * corner[i][1]);
+            pz[i] = (float) (cz + fz * halfLen * corner[i][0]
+                    + nz * halfWid * corner[i][1]);
+        }
+        float mat = (float) TextureLibrary.MAT_CONCRETE;
+        int[] top = new int[4];
+        for (int i = 0; i < 4; i++) {
+            top[i] = push(px[i], (float) y1, pz[i], 0, 1, 0,
+                    0.58f, 0.57f, 0.55f, mat);
+        }
+        triN(top[0], top[1], top[2]);
+        triN(top[0], top[2], top[3]);
+        for (int i = 0; i < 4; i++) {
+            int j = (i + 1) % 4;
+            double ex = px[j] - px[i], ez = pz[j] - pz[i];
+            double el = Math.hypot(ex, ez);
+            if (el < 1e-5) { continue; }
+            float wnx = (float) (ez / el), wnz = (float) (-ex / el);
+            int a = push(px[i], (float) y0, pz[i], wnx, 0, wnz,
+                    0.46f, 0.45f, 0.44f, mat);
+            int b = push(px[j], (float) y0, pz[j], wnx, 0, wnz,
+                    0.46f, 0.45f, 0.44f, mat);
+            int c = push(px[j], (float) y1, pz[j], wnx, 0, wnz,
+                    0.50f, 0.49f, 0.48f, mat);
+            int dd = push(px[i], (float) y1, pz[i], wnx, 0, wnz,
+                    0.50f, 0.49f, 0.48f, mat);
+            triN(a, b, c);
+            triN(a, c, dd);
         }
     }
 
