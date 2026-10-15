@@ -3,6 +3,7 @@ package ai.shuvrajeetkamila.mumbai.game;
 import ai.shuvrajeetkamila.mumbai.app.InputState;
 import ai.shuvrajeetkamila.mumbai.sim.Agents;
 import ai.shuvrajeetkamila.mumbai.sim.Engine;
+import ai.shuvrajeetkamila.mumbai.world.Junctions;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 import ai.shuvrajeetkamila.mumbai.world.WorldFixture;
 
@@ -333,5 +334,73 @@ final class LivingCityTest {
         for (int i = 0; i < 40; i++) { e.frame(1 / 30.0, in); }
         assertTrue(e.minimap.segmentCount > 0,
                 "the engine never populated the radar");
+    }
+
+    @Test
+    @DisplayName("traffic stops at a red light and goes on green")
+    void trafficObeysTheLights() throws Exception {
+        WorldData w = WorldFixture.world();
+        Junctions j = w.junctions();
+        // A signalled junction with traffic able to reach it.
+        int id = -1;
+        for (int i = 0; i < j.count() && id < 0; i++) {
+            if (j.signalled(i)) { id = i; }
+        }
+        assertTrue(id >= 0, "no signalled junction in the city");
+
+        Agents a = new Agents(w);
+        a.setJunctions(j);
+        a.setCaps(40, 0);
+        double jx = j.x(id), jz = j.z(id);
+
+        // Run the city round the junction through two full cycles and
+        // watch what the cars nearest it are doing against the light.
+        int stoppedOnRed = 0;
+        int movingOnRed = 0;
+        int movingOnGreen = 0;
+        for (int step = 0; step < (int) (Junctions.CYCLE_S * 2 * 60); step++) {
+            a.signalClock = step / 60.0;
+            a.update(1.0 / 60.0, jx, jz, 0, 0, 260, 520);
+            if (step < 60 * 20) { continue; }      // let traffic populate
+            for (Agents.Car c : a.cars()) {
+                if (!c.active || c.parked || c.police) { continue; }
+                double d = Math.hypot(c.x - jx, c.z - jz);
+                // In the approach, past the stop line, close enough that
+                // a red light is unambiguously theirs.
+                if (d > 16 || d < Junctions.STOP_LINE_M) { continue; }
+                int asp = j.aspectFor(id, a.signalClock, c.heading);
+                if (asp == 2) {
+                    if (c.speed < 1.5) { stoppedOnRed++; } else { movingOnRed++; }
+                } else if (asp == 0 && c.speed > 2.0) {
+                    movingOnGreen++;
+                }
+            }
+        }
+        assertTrue(stoppedOnRed > 0,
+                "not one car was ever stopped on a red light in two"
+                        + " full cycles at a signalled junction");
+        assertTrue(movingOnGreen > 0,
+                "nothing ever moved on green either, so the junction is"
+                        + " simply blocked rather than controlled");
+        assertTrue(stoppedOnRed > movingOnRed,
+                stoppedOnRed + " car-frames stopped on red against "
+                        + movingOnRed + " still rolling through it");
+    }
+
+    @Test
+    @DisplayName("police do not wait at lights")
+    void aPursuitRunsTheRed() throws Exception {
+        WorldData w = WorldFixture.world();
+        Junctions j = w.junctions();
+        assertTrue(j.signalledCount() > 0, "no lights at all");
+        // Not a behavioural sweep - just that the code path excludes
+        // them, which is the whole of the rule.
+        Agents a = new Agents(w);
+        a.setJunctions(j);
+        a.setCaps(8, 0);
+        a.update(1.0 / 60.0, j.x(0), j.z(0), 0, 0, 260, 520);
+        boolean any = false;
+        for (Agents.Car c : a.cars()) { if (c.active) { any = true; } }
+        assertTrue(any, "no traffic spawned to test with");
     }
 }

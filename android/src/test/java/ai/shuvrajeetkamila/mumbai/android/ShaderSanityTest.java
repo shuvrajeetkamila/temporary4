@@ -1,6 +1,8 @@
 package ai.shuvrajeetkamila.mumbai.android;
 
 import org.junit.jupiter.api.DisplayName;
+import ai.shuvrajeetkamila.mumbai.world.Junctions;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -290,5 +292,34 @@ final class ShaderSanityTest {
                         + " blob shadow and discarded");
         assertTrue(lamp < beacon,
                 "the lamp branch is below the beacon branch");
+    }
+
+    @Test
+    @DisplayName("the shader works out the same aspect the traffic obeys")
+    void theLightsAgreeWithTheTraffic() {
+        String fs = Shaders.SCENE_FS;
+        // The cycle constants are injected from Junctions rather than
+        // typed into the shader, because a light the cars obey and a
+        // light the driver sees disagreeing would make the traffic look
+        // like it was running reds.
+        assertTrue(fs.contains("uSignal / "
+                        + (float) Junctions.CYCLE_S),
+                "the shader's signal cycle is not Junctions.CYCLE_S");
+        assertTrue(fs.contains("local < " + (float) Junctions.GREEN_S),
+                "the shader's green period is not Junctions.GREEN_S");
+        assertTrue(fs.contains("half2 = "
+                        + (float) (Junctions.GREEN_S + Junctions.AMBER_S)),
+                "the shader's half cycle is not green plus amber");
+
+        // And the branch has to be tested before the three tags below
+        // it, since all four are greater-than tests on the same value.
+        int sig = fs.indexOf("highp float cyc = fract(uSignal");
+        int lamp = fs.indexOf("mediump vec3 lamp = mix(vAlbedo");
+        int shadow = fs.indexOf("mediump float rim = vAux");
+        int beacon = fs.indexOf("mediump float off = vAlbedo.b");
+        assertTrue(sig > 0, "the traffic signal branch has gone");
+        assertTrue(sig < lamp && sig < shadow && sig < beacon,
+                "the signal branch is below a lower tag, so every"
+                        + " signal head will be drawn as something else");
     }
 }

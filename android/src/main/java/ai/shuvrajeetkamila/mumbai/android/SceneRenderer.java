@@ -53,7 +53,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
     private int uSceneViewProj, uSceneOrigin, uSceneCam, uSceneSunDir;
     private int uSceneSunCol, uSceneSky, uSceneFogCol, uSceneFogDen, uSceneWet;
-    private int uSceneAtlas, uSceneMatScale, uSceneNight;
+    private int uSceneAtlas, uSceneMatScale, uSceneNight, uSceneSignal;
     // The coastal strip is lifted onto the sea by the terrain's vertex
     // stage, so the terrain program carries the same wave set the sea does.
     private int uSceneWaveAmp, uSceneWaveK, uSceneWaveDirX, uSceneWaveDirZ;
@@ -185,6 +185,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uSceneAtlas = GLES30.glGetUniformLocation(sceneProg, "uAtlas");
         uSceneMatScale = GLES30.glGetUniformLocation(sceneProg, "uMatScale");
         uSceneNight = GLES30.glGetUniformLocation(sceneProg, "uNight");
+        uSceneSignal = GLES30.glGetUniformLocation(sceneProg, "uSignal");
 
         uInstViewProj = GLES30.glGetUniformLocation(instProg, "uViewProj");
         uInstCam = GLES30.glGetUniformLocation(instProg, "uCamera");
@@ -440,6 +441,12 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUniform1fv(uSceneMatScale, TextureLibrary.MAT_COUNT,
                 TextureLibrary.SCALE_M, 0);
         GLES30.glUniform1f(uSceneNight, nightFactor);
+        // The signal clock. Wrapped to a whole number of cycles so
+        // a long session cannot lose precision in the fraction, and
+        // taken from the same simulated seconds the traffic uses.
+        GLES30.glUniform1f(uSceneSignal, (float)
+                (e.clock.simulatedSeconds()
+                        % ai.shuvrajeetkamila.mumbai.world.Junctions.CYCLE_S));
         // The coastal strip is lifted onto the sea surface by the vertex
         // stage, so the terrain needs the same wave set the sea has.
         e.ocean.waveParameters(waveParams);
@@ -1158,16 +1165,19 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             FloatBuffer b = pedScratch[slot];
             b.position(pedCount[slot] * GAIT_FLOATS);
             b.put(x);
-            // Knocked down: sunk into the pavement rather than animated,
-            // which is honest about there being no ragdoll for an agent.
-            b.put((float) (p.y - oy) - (p.downTimer > 0 ? 1.25f : 0f));
+            b.put((float) (p.y - oy));
             b.put(z);
             b.put((float) p.heading);
             // Stride grows with speed and stops when they do, so somebody
             // standing at a corner stands still instead of marching on
             // the spot.
             b.put((float) p.phase);
-            b.put(p.downTimer > 0 ? 0f
+            // The second gait component is the stride amplitude when it
+            // is positive. Negative means the body has gone over, by
+            // that many radians - there was no room in the instance for
+            // another channel and a walking stride is never negative,
+            // so the sign carries it.
+            b.put(p.topple > 1e-3 ? (float) -p.topple
                     : (float) Math.min(1.0, p.speed / 1.6));
             pedCount[slot]++;
             total++;

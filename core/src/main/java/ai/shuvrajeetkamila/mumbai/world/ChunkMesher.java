@@ -104,6 +104,7 @@ public final class ChunkMesher {
         // of blocks; the arterials are what make it legible, and at long
         // range there are few enough of them to be nearly free.
         roads(f, ox, oz, lod);
+        signals(ox, oz, size, lod);
         buildings(f, ox, oz, lod);
 
         float minY = Float.MAX_VALUE;
@@ -426,6 +427,46 @@ public final class ChunkMesher {
      * properly where OSM marks a bridge.
      */
     /**
+     * Masts at every signalled junction inside this chunk.
+     *
+     * <p>Two heads on each: one facing along the junction's principal
+     * axis and one across it, so a driver on either street can see the
+     * light that applies to them. The heads carry the junction's phase
+     * offset in their albedo, so the fragment stage can work out the
+     * aspect from the clock without the mesh being rebuilt - a signal
+     * that changed colour by remeshing the chunk would be absurd.
+     */
+    private void signals(double ox, double oz, double size, int lod) {
+        if (lod != LOD_HIGH) { return; }
+        Junctions j = world.junctions();
+        int[] ids = j.inBox(ox, oz, ox + size, oz + size);
+        for (int id : ids) {
+            if (!j.signalled(id)) { continue; }
+            double lx = j.x(id) - ox;
+            double lz = j.z(id) - oz;
+            double a = j.axisOf(id);
+            // The mast stands off to the near side of the junction
+            // rather than in the middle of it.
+            double mx = lx + Math.cos(a) * 6.5;
+            double mz = lz + Math.sin(a) * 6.5;
+            double g = lodGround(ox, oz, lod, mx, mz);
+            walls(mx, mz, 0.09, 0.09, g, g + SIGNAL_H_M,
+                    0.26f, 0.27f, 0.28f,
+                    (float) TextureLibrary.MAT_CONCRETE);
+            float off = (float) j.offsetOf(id);
+            // Phase 0 head above, phase 1 below it.
+            head(mx, mz, g + SIGNAL_H_M, 0f, off);
+            head(mx, mz, g + SIGNAL_H_M - 0.46, 1f, off);
+        }
+    }
+
+    /** One signal head. Albedo carries the phase and the offset. */
+    private void head(double x, double z, double y, float phase, float off) {
+        prism(x, z, 0.21, 0.21, y, y + 0.40,
+                phase, off, 0.0f, SIGNAL_AUX);
+    }
+
+    /**
      * Half-width to use at a bend so the ribbon stays the width of the
      * road.
      *
@@ -482,6 +523,22 @@ public final class ChunkMesher {
 
     /** Highest road class that gets street lighting. */
     static final int LAMP_MAX_CLASS = 4;
+
+    /**
+     * Aux tag for a traffic signal head.
+     *
+     * <p>Above the lamp, shadow and beacon tags and tested before all
+     * of them. The head's albedo is not a colour: red carries which
+     * phase it serves and green carries the junction's offset into the
+     * cycle, and the fragment stage works out what it should be
+     * showing from the clock - exactly the way the police beacon
+     * encodes which half of the flash it is. A signal that changed
+     * colour by remeshing its chunk would be absurd.
+     */
+    public static final float SIGNAL_AUX = 90.0f;
+
+    /** Height of a signal head above the road, m. */
+    static final float SIGNAL_H_M = 5.4f;
 
     /** Height of a kerb above the carriageway, m. */
     static final float KERB_H_M = 0.14f;

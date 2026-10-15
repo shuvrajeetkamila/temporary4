@@ -3,6 +3,8 @@ package ai.shuvrajeetkamila.mumbai.sim;
 import ai.shuvrajeetkamila.mumbai.game.VehicleKind;
 import ai.shuvrajeetkamila.mumbai.game.Wanted;
 import ai.shuvrajeetkamila.mumbai.math.MathUtil;
+import ai.shuvrajeetkamila.mumbai.world.CityCollision;
+import ai.shuvrajeetkamila.mumbai.world.Junctions;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 import java.util.Random;
@@ -78,7 +80,31 @@ public final class Agents {
         public double downTimer;
         /** An officer on foot, closing on the player rather than wandering. */
         public boolean cop;
+        /**
+         * How far over they have gone, radians. 0 upright, PI/2 flat.
+         *
+         * <p>Not a ragdoll - there are no joints and no limb physics -
+         * but a body that topples about its feet, slides, lies there
+         * and gets up again, which is most of what a ragdoll is for.
+         * Before this a knocked-down pedestrian was simply sunk 1.25 m
+         * into the pavement.
+         */
+        public double topple;
+        /** Velocity while sliding from the impact that put them down. */
+        public double slideX, slideZ;
     }
+
+    /** Flat out. */
+    public static final double TOPPLE_MAX = Math.PI / 2;
+
+    /** How long a body takes to go over, seconds. */
+    public static final double TOPPLE_S = 0.42;
+
+    /** How long they take to get back up, seconds. */
+    public static final double RISE_S = 0.85;
+
+    /** Total time on the ground after being hit, seconds. */
+    public static final double DOWN_S = 4.0;
 
     /** Pedestrians run over since the counters were last read. */
     public int pedsHit;
@@ -136,6 +162,48 @@ public final class Agents {
 
     private int carCap;
     private int pedCap;
+
+    /** Shoulder width used to keep a body out of a wall, m. */
+    public static final double PED_RADIUS_M = 0.34;
+
+    /** Junctions and their lights, when the engine has given us them. */
+    private Junctions junctions;
+
+    /**
+     * Simulated seconds, for the signal phase.
+     *
+     * <p>Set from the engine's clock rather than accumulated here, and
+     * the renderer uploads the same number to the shader. A light the
+     * traffic obeys and a light the driver sees are then the same
+     * light; two clocks that drift apart would be the worst bug a
+     * junction could have, because it would look like the cars were
+     * running reds.
+     */
+    public double signalClock;
+
+    /** Building collision, when the engine has given us one. */
+    private CityCollision city;
+    private final double[] push2 = new double[2];
+
+    /**
+     * Hand the agents the city's walls.
+     *
+     * <p>Optional: the tests that run without a compiled world leave it
+     * null and everybody walks through everything, which is what those
+     * tests are about.
+     */
+    public void setCity(CityCollision c) { this.city = c; }
+
+    /**
+     * Hand the agents the junction network.
+     *
+     * <p>Optional in the same way the walls are: the world-free tests
+     * leave it null and nobody obeys a light, which is the behaviour
+     * those tests were written against.
+     */
+    public void setJunctions(Junctions j) { this.junctions = j; }
+
+    public Junctions junctions() { return junctions; }
 
     // Spatial hash over graph edges so spawning is not a linear scan.
     private static final double CELL = 256.0;
@@ -384,10 +452,12 @@ public final class Agents {
                 continue;
             }
             if (p.downTimer > 0) {
-                // Knocked down: stays put, then gets up and is removed. An
-                // officer gets back up and carries on, because an arrest
-                // you can end by driving at the constable is not an arrest.
+                // Knocked down: goes over, slides, lies there, gets up.
+                // An officer gets back up and carries on, because an
+                // arrest you can end by driving at the constable is not
+                // an arrest.
                 p.downTimer -= dt;
+                stepDown(p, dt);
                 if (p.downTimer <= 0 && !p.cop) { p.active = false; }
             } else if (p.cop) {
                 stepCop(p, dt);
@@ -400,8 +470,7 @@ public final class Agents {
             if (p.downTimer <= 0 && dx * dx + dz * dz < HIT_PED_M * HIT_PED_M
                     && playerSpeed >= Wanted.CRIME_SPEED) {
                 pedsHit++;
-                p.downTimer = 4.0;
-                p.speed = 0;
+                knockDown(p, playerVx, playerVz);
             }
             if (p.cop) { continue; }
             if (dx * dx + dz * dz > (despawnRadius * 0.4) * (despawnRadius * 0.4)) {
@@ -707,6 +776,46 @@ public final class Agents {
     }
 
     /**
+     * The speed a red light at the end of this edge allows.
+     *
+     * <p>The stop line is a short way back from the node itself, so a
+     * car waiting at a light sits where a car waits rather than in the
+     * middle of the box. Amber is treated as red unless the car is
+     * already too close to stop, which is what amber means.
+     */
+    private double signalFor(Car c, double ax, double az,
+                             double bx, double bz) {
+        Junctions j = junctions;
+        if (j == null) { return c.targetSpeed; }
+        // The node this car is heading towards.
+        double nx = c.forward ? bx : ax;
+        double nz = c.forward ? bz : az;
+        int id = j.nearestSignalled(nx, nz, 4.0);
+        if (id < 0) { return c.targetSpeed; }
+
+        double dx = nx - c.x, dz = nz - c.z;
+        double d = Math.hypot(dx, dz);
+        if (d > NOTICE_M) { return c.targetSpeed; }
+
+        int asp = j.aspectFor(id, signalClock, c.heading);
+        if (asp == 0) { return c.targetSpeed; }
+        if (asp == 1) {
+            // Amber. Stop if there is room to; otherwise carry on,
+            // which is the whole point of amber and also stops a car
+            // slamming to a halt across the stop line.
+            double stopping = c.speed * c.speed / (2 * 4.5) + 3.0;
+            if (d < stopping) { return c.targetSpeed; }
+        }
+
+        // Aim at the stop line rather than the middle of the junction.
+        double ux = d > 1e-6 ? dx / d : 0;
+        double uz = d > 1e-6 ? dz / d : 0;
+        double sx = nx - ux * Junctions.STOP_LINE_M;
+        double sz = nz - uz * Junctions.STOP_LINE_M;
+        return desiredSpeed(c.x, c.z, c.heading, sx, sz, c.targetSpeed);
+    }
+
+    /**
      * The speed this car can hold given the car in front of it.
      *
      * <p>Reuses the same function that brakes for the player, because a
@@ -926,6 +1035,11 @@ public final class Agents {
         // Police do not give way to the player, but they do not drive
         // through the traffic jam they caused either.
         want = Math.min(want, headway(c, c.targetSpeed));
+        // Nor through a red light, unless they are running one on
+        // purpose - a patrol car with its lights on does.
+        if (!c.police) {
+            want = Math.min(want, signalFor(c, ax, az, bx, bz));
+        }
         double rate = want < c.speed ? 7.0 : 2.1;
         c.speed += Math.max(-rate * dt, Math.min(rate * dt, want - c.speed));
         if (c.speed < 0) { c.speed = 0; }
@@ -988,6 +1102,77 @@ public final class Agents {
      * reason to bolt, and a crowd that scatters from a stationary person is
      * a well-known way to make a city feel hostile rather than alive.
      */
+    /**
+     * Put a pedestrian on the ground, moving the way they were hit.
+     *
+     * <p>The slide is a fraction of what hit them rather than the whole
+     * of it: a body is not a billiard ball, and most of the energy goes
+     * into the ground.
+     */
+    public void knockDown(Ped p, double vx, double vz) {
+        p.downTimer = DOWN_S;
+        p.speed = 0;
+        p.slideX = vx * 0.35;
+        p.slideZ = vz * 0.35;
+        // Over in the direction of travel, so a body hit from behind
+        // goes forwards rather than folding towards the car.
+        double v = Math.hypot(vx, vz);
+        if (v > 0.5) { p.heading = Math.atan2(vx, -vz); }
+    }
+
+    /**
+     * A body on the ground: going over, sliding to a stop, then rising.
+     *
+     * <p>The topple is driven off {@code downTimer} rather than its own
+     * clock so that the two can never disagree - a body that is upright
+     * again while still counted as down is a pedestrian standing in the
+     * road being ignored by the traffic.
+     */
+    private void stepDown(Ped p, double dt) {
+        double left = p.downTimer;
+        if (left > DOWN_S - TOPPLE_S) {
+            // Still going over.
+            double t = (DOWN_S - left) / TOPPLE_S;
+            p.topple = TOPPLE_MAX * t * t * (3 - 2 * t);
+        } else if (left < RISE_S) {
+            double t = left / RISE_S;
+            p.topple = TOPPLE_MAX * t * t * (3 - 2 * t);
+        } else {
+            p.topple = TOPPLE_MAX;
+        }
+
+        p.x += p.slideX * dt;
+        p.z += p.slideZ * dt;
+        double decay = Math.exp(-3.4 * dt);
+        p.slideX *= decay;
+        p.slideZ *= decay;
+        pushOutOfWalls(p);
+        p.y = groundAt(p.x, p.z);
+    }
+
+    /**
+     * Keep a pedestrian out of the buildings.
+     *
+     * <p>They were walked along the pavement by a wander that knows
+     * nothing about geometry, so they strolled through walls - and a
+     * body knocked sliding by a car would end up inside whatever was
+     * behind it. The player has been pushed out of walls since the
+     * city became solid; this is the same query, for everybody else.
+     */
+    private void pushOutOfWalls(Ped p) {
+        CityCollision c = city;
+        if (c == null) { return; }
+        double depth = c.wallPush(p.x, p.z, p.y + 0.9, PED_RADIUS_M, push2);
+        if (depth > 0) {
+            p.x += push2[0];
+            p.z += push2[1];
+            // Whatever they were sliding into, they are not sliding
+            // into it any more.
+            p.slideX *= 0.2;
+            p.slideZ *= 0.2;
+        }
+    }
+
     private void stepPed(Ped p, double dt) {
         double dx = p.x - playerX, dz = p.z - playerZ;
         double d2 = dx * dx + dz * dz;

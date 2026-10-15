@@ -100,6 +100,30 @@ public final class WorldData {
 
     public int edgeCount() { return graphEdge.length / 2; }
 
+    private volatile Junctions junctionCache;
+
+    /**
+     * The junction network, derived from the road graph on first use.
+     *
+     * <p>Cached here rather than owned by the engine because the mesher
+     * needs it too - it plants the signal masts - and the two must be
+     * looking at the same junctions or the lights will not be where the
+     * traffic thinks they are. Costs about 140 ms to build once.
+     */
+    public Junctions junctions() {
+        Junctions j = junctionCache;
+        if (j == null) {
+            synchronized (this) {
+                j = junctionCache;
+                if (j == null) {
+                    j = new Junctions(this);
+                    junctionCache = j;
+                }
+            }
+        }
+        return j;
+    }
+
     // --- transit ----------------------------------------------------------
 
     /** Road class ids for the transit network, matching tools/extract_osm.py. */

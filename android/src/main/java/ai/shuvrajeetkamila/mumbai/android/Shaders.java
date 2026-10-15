@@ -174,6 +174,7 @@ final class Shaders {
             + "uniform mediump float uNight;\n"
             // Beacon phase, 0..1, or negative for "nobody is responding".
             + "uniform mediump float uSiren;\n"
+            + "uniform highp float uSignal;\n"
             + "out mediump vec4 fragColour;\n"
             + "void main() {\n"
             + "  mediump vec3 n = normalize(vNormal);\n"
@@ -182,6 +183,40 @@ final class Shaders {
             + "  mediump float hemi = 0.5 + 0.5 * n.y;\n"
             + "  mediump vec3 ambient = mix(vec3(0.22, 0.20, 0.18), uSkyColour, hemi) * 0.55;\n"
             + "  mediump vec3 albedo = vAlbedo;\n"
+            + "  if (vAux > " + (ai.shuvrajeetkamila.mumbai.world.ChunkMesher
+                    .SIGNAL_AUX - 0.5f) + ") {\n"
+            // A traffic signal head. Tested first because its tag is the
+            // highest of the four and all of them are greater-than
+            // tests, so whichever is written first wins.
+            //
+            // The albedo is not a colour here: red is which phase this
+            // head serves and green is its junction's offset into the
+            // cycle. The aspect is worked out from the clock, by the
+            // same arithmetic Junctions.aspect uses - a test compares
+            // the two, because a light the traffic obeys and a light
+            // the driver sees disagreeing would be the worst possible
+            // bug in a junction.
+            + "    highp float cyc = fract(uSignal / "
+                    + (float) ai.shuvrajeetkamila.mumbai.world.Junctions.CYCLE_S
+                    + " + vAlbedo.g);\n"
+            + "    highp float sgn = cyc * "
+                    + (float) ai.shuvrajeetkamila.mumbai.world.Junctions.CYCLE_S
+                    + ";\n"
+            + "    highp float half2 = "
+                    + (float) (ai.shuvrajeetkamila.mumbai.world.Junctions.GREEN_S
+                            + ai.shuvrajeetkamila.mumbai.world.Junctions.AMBER_S)
+                    + ";\n"
+            + "    highp float local = vAlbedo.r < 0.5 ? sgn : sgn - half2;\n"
+            + "    mediump vec3 lamp = vec3(0.55, 0.06, 0.05);\n"
+            + "    if (local >= 0.0 && local < half2) {\n"
+            + "      lamp = local < "
+                    + (float) ai.shuvrajeetkamila.mumbai.world.Junctions.GREEN_S
+                    + " ? vec3(0.10, 0.85, 0.22) : vec3(0.95, 0.62, 0.05);\n"
+            + "    }\n"
+            + "    highp float sf = clamp(1.0 - exp(-vDepth * uFogDensity), 0.0, 1.0);\n"
+            + "    fragColour = vec4(mix(lamp, uFogColour, sf), 1.0);\n"
+            + "    return;\n"
+            + "  }\n"
             + "  if (vAux > " + (ai.shuvrajeetkamila.mumbai.world.ChunkMesher
                     .LAMP_AUX - 0.5f) + ") {\n"
             // A street lamp head. Tested before the shadow and beacon
@@ -341,6 +376,19 @@ final class Shaders {
             + "      local.z = dy * sa + local.z * ca;\n"
             + "    }\n"
             + "    local.y += 0.022 * cos(aGait.x * 2.0) * aGait.y;\n"
+            + "  }\n"
+            // A negative gait amplitude is not a stride, it is a body
+            // that has gone over by that many radians. Rotated about
+            // the feet rather than the middle, so the soles stay on the
+            // pavement and the head swings down, which is how a person
+            // falls. Before this the whole figure was simply pushed
+            // 1.25 m into the ground.
+            + "  if (aGait.y < -0.001) {\n"
+            + "    mediump float t = -aGait.y;\n"
+            + "    mediump float ct = cos(t), st = sin(t);\n"
+            + "    mediump float yy = local.y;\n"
+            + "    local.y = yy * ct - local.z * st;\n"
+            + "    local.z = yy * st + local.z * ct;\n"
             + "  }\n"
             + "  highp vec3 p = vec3(local.x * c + local.z * s, local.y,\n"
             + "                      -local.x * s + local.z * c);\n"

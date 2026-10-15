@@ -25,6 +25,7 @@ import ai.shuvrajeetkamila.mumbai.physics.RigidBody;
 import ai.shuvrajeetkamila.mumbai.render.Sky;
 import ai.shuvrajeetkamila.mumbai.render.Weather;
 import ai.shuvrajeetkamila.mumbai.world.CityCollision;
+import ai.shuvrajeetkamila.mumbai.world.Junctions;
 import ai.shuvrajeetkamila.mumbai.world.CraftSpawns;
 import ai.shuvrajeetkamila.mumbai.world.Places;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
@@ -193,6 +194,9 @@ public final class Engine {
     /** Walls and bridge decks. Built lazily around whatever is moving. */
     public final CityCollision city;
 
+    /** Junctions and their lights, derived from the road graph. */
+    public final Junctions junctions;
+
     /** Height the player's body is at, for telling a deck from an underpass. */
     private double probeY = 2.0;
 
@@ -269,6 +273,16 @@ public final class Engine {
         this.mapView.setWorldBounds(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
         this.city = new CityCollision(world);
+        // So pedestrians stop walking through the buildings, and a body
+        // slid by a car does not end up inside one.
+        this.agents.setCity(this.city);
+        // And the junction network, so traffic stops at red rather than
+        // arriving at a crossroads and negotiating by collision.
+        this.junctions = world.junctions();
+        this.agents.setJunctions(this.junctions);
+        // And the junction network, so traffic stops at red rather than
+        // arriving at a crossroads and negotiating by collision.
+        this.agents.setJunctions(this.junctions);
         // Traffic and pedestrians stand on bridges too. Without this a car
         // crossing the Sea Link is placed on the seabed and drives along
         // underneath its own deck. The reference height is the deck if
@@ -726,6 +740,7 @@ public final class Engine {
         // less than one, and the busiest road in Mumbai was empty. The
         // number of cars is a budget for what is *around* you; spend it
         // there and let the far field be empty, because you cannot see it.
+        agents.signalClock = clock.simulatedSeconds();
         agents.update(dt, b.position.x, b.position.z, b.velocity.x, b.velocity.z,
                 AGENT_SPAWN_M, AGENT_DESPAWN_M);
         missions.update(dt, b.position.x, b.position.z,

@@ -514,7 +514,12 @@ final class DrawnSurfaceTest {
             ChunkMesher.Mesh m = mesher.build(f, ChunkMesher.LOD_HIGH);
             for (int v = 0; v < m.vertexCount; v++) {
                 int o = v * STRIDE;
-                if (m.vertices[o + 9] < ChunkMesher.LAMP_AUX - 0.5f) {
+                // A band, not a threshold: the signal heads are tagged
+                // above the lamps and would otherwise be counted as
+                // very short street lights.
+                float aux = m.vertices[o + 9];
+                if (aux < ChunkMesher.LAMP_AUX - 0.5f
+                        || aux > ChunkMesher.LAMP_AUX + 0.5f) {
                     continue;
                 }
                 heads++;
@@ -645,7 +650,12 @@ final class DrawnSurfaceTest {
             ChunkMesher.Mesh m = mesher.build(f, ChunkMesher.LOD_HIGH);
             for (int v = 0; v < m.vertexCount; v++) {
                 int o = v * STRIDE;
-                if (m.vertices[o + 9] < ChunkMesher.LAMP_AUX - 0.5f) {
+                // A band, not a threshold: the signal heads are tagged
+                // above the lamps and would otherwise be counted as
+                // very short street lights.
+                float aux = m.vertices[o + 9];
+                if (aux < ChunkMesher.LAMP_AUX - 0.5f
+                        || aux > ChunkMesher.LAMP_AUX + 0.5f) {
                     continue;
                 }
                 double g = mesher.lodGround(ox, oz, ChunkMesher.LOD_HIGH,
