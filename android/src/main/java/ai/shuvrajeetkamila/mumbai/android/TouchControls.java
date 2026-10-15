@@ -28,6 +28,10 @@ final class TouchControls extends View {
     private final Runnable onProfile;
     private final Runnable onCamera;
     private final Runnable onQuality;
+    private final Runnable onWeather;
+
+    /** Drawn filled when the monsoon is switched on. */
+    volatile boolean weatherOn = true;
 
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint knob = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -57,12 +61,14 @@ final class TouchControls extends View {
     private final int[] slotPointer = new int[ControlMapping.MAX_SLOTS];
 
     TouchControls(Context c, InputState out, Runnable onProfile,
-                  Runnable onCamera, Runnable onQuality) {
+                  Runnable onCamera, Runnable onQuality,
+                  Runnable onWeather) {
         super(c);
         this.out = out;
         this.onProfile = onProfile;
         this.onCamera = onCamera;
         this.onQuality = onQuality;
+        this.onWeather = onWeather;
         setWillNotDraw(false);
 
         float d = c.getResources().getDisplayMetrics().density;
@@ -234,11 +240,15 @@ final class TouchControls extends View {
             if (a == ControlMapping.ACT_CAM) { onCamera.run(); }
             return true;
         }
-        // Quality toggle, bottom centre.
+        // Quality and weather, bottom centre.
         float d = getResources().getDisplayMetrics().density;
-        if (Math.hypot(x - getWidth() * 0.5f, y - (getHeight() - 32 * d))
-                < 24 * d) {
+        float by = getHeight() - 32 * d;
+        if (Math.hypot(x - (getWidth() * 0.5f - 30 * d), y - by) < 24 * d) {
             onQuality.run();
+            return true;
+        }
+        if (Math.hypot(x - (getWidth() * 0.5f + 30 * d), y - by) < 24 * d) {
+            onWeather.run();
             return true;
         }
         return false;
@@ -298,11 +308,18 @@ final class TouchControls extends View {
             canvas.drawText(ControlMapping.labelFor(acts[i]), slotX[i], slotY[i] + 5 * d, label);
         }
 
-        float qx = getWidth() * 0.5f;
+        float qx = getWidth() * 0.5f - 30 * d;
         float qy = getHeight() - 32 * d;
         canvas.drawCircle(qx, qy, 24 * d, fill);
         canvas.drawCircle(qx, qy, 24 * d, ring);
         canvas.drawText("GFX", qx, qy + 5 * d, label);
+
+        // The monsoon switch. Filled when it is on, so the state is
+        // readable without having to wait for a squall to find out.
+        float wx = getWidth() * 0.5f + 30 * d;
+        canvas.drawCircle(wx, qy, 24 * d, weatherOn ? knob : fill);
+        canvas.drawCircle(wx, qy, 24 * d, ring);
+        canvas.drawText("RAIN", wx, qy + 5 * d, label);
 
         // Left stick legend, so the collective is not a mystery.
         canvas.drawText(ControlMapping.stickLegend(profile), leftCx, leftCy - stickRadius - 10 * d, label);

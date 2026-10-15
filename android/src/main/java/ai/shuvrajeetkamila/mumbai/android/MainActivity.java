@@ -77,7 +77,8 @@ public final class MainActivity extends Activity
         root.addView(surface);
 
         controls = new TouchControls(this, input, this::onProfileCycle,
-                this::onCameraToggle, this::onQualityCycle);
+                this::onCameraToggle, this::onQualityCycle,
+                this::onWeatherToggle);
         root.addView(controls);
 
         hud = new Hud(this);
@@ -123,6 +124,10 @@ public final class MainActivity extends Activity
             // good enough and never was: nothing was saved at all.
             Progress p = e.loadProgress(new PrefsStore(
                     getSharedPreferences("mumbai", MODE_PRIVATE)));
+            // The monsoon switch is part of the save, so the button has
+            // to come up showing what was actually restored.
+            controls.weatherOn = p.weather;
+            controls.postInvalidate();
             if (!Double.isNaN(p.x) && !Double.isNaN(p.z)
                     && world.inBounds(p.x, p.z)) {
                 e.spawnAtWorld(p.x, p.z, ControlProfile.ON_FOOT);
@@ -231,6 +236,27 @@ public final class MainActivity extends Activity
             }
             e.setBaseQuality(order[(i + 1) % order.length]);
             applyFrameCap(e.quality);
+        });
+    }
+
+    /**
+     * Turns the monsoon on and off.
+     *
+     * <p>Queued onto the GL thread like the quality cycle, because the
+     * weather is read by the renderer every frame and the switch is
+     * thrown from the UI thread. Saved immediately rather than at the
+     * next pause: a phone can kill the process without ever calling
+     * onPause, and a setting that forgets itself is worse than no
+     * setting.
+     */
+    private void onWeatherToggle() {
+        Engine e = engine;
+        if (e == null) { return; }
+        surface.queueEvent(() -> {
+            e.weather.enabled = !e.weather.enabled;
+            controls.weatherOn = e.weather.enabled;
+            controls.postInvalidate();
+            e.saveProgress();
         });
     }
 

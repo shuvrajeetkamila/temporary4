@@ -312,6 +312,8 @@ public final class Engine {
         progress.x = saved.x;
         progress.z = saved.z;
         progress.hour = saved.hour;
+        progress.weather = saved.weather;
+        weather.enabled = saved.weather;
         missions.money = progress.money;
         wanted.timesBusted = progress.timesBusted;
         timeOfDay = progress.hour;
@@ -334,6 +336,7 @@ public final class Engine {
         progress.x = b.position.x;
         progress.z = b.position.z;
         progress.hour = timeOfDay;
+        progress.weather = weather.enabled;
         store.write(progress.toString());
     }
 

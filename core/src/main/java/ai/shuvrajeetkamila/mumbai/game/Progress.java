@@ -34,6 +34,9 @@ public final class Progress {
     /** In-game hour, 0..24. */
     public double hour = 8.0;
 
+    /** Whether the player wants weather. Persisted like everything else. */
+    public boolean weather = true;
+
     public int jobsDone() { return faresDone + deliveriesDone + racesWon; }
 
     /** Records a finished job of this kind. */
@@ -65,6 +68,7 @@ public final class Progress {
         b.append("x=").append(x).append('\n');
         b.append("z=").append(z).append('\n');
         b.append("hour=").append(hour).append('\n');
+        b.append("weather=").append(weather ? 1 : 0).append('\n');
         return b.toString();
     }
 
@@ -89,6 +93,7 @@ public final class Progress {
                     case "x": p.x = Double.parseDouble(v); break;
                     case "z": p.z = Double.parseDouble(v); break;
                     case "hour": p.hour = Double.parseDouble(v); break;
+                    case "weather": p.weather = !"0".equals(v); break;
                     default: break;
                 }
             } catch (NumberFormatException ignored) {

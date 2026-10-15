@@ -40,6 +40,17 @@ public final class Weather {
      */
     public double monsoon = 0.30;
 
+    /**
+     * Whether weather runs at all.
+     *
+     * <p>A switch, because the monsoon is a full-screen overlay and not
+     * everybody wants one. The clock keeps running while it is off, so
+     * turning it back on resumes the real schedule rather than starting
+     * a fresh squall, and the ground is left to dry out on its own
+     * timer instead of going from soaked to bone dry in a frame.
+     */
+    public boolean enabled = true;
+
     /** Rain falling now, 0 to 1. */
     public double rain;
 
@@ -97,7 +108,7 @@ public final class Weather {
     public void update(double dt) {
         if (dt <= 0) { return; }
         clock += dt;
-        rain = scheduledRain(clock);
+        rain = enabled ? scheduledRain(clock) : 0;
 
         // Ground wetness chases the rain, fast up and slow down.
         double tau = rain > wetness ? WET_S : DRY_S;
@@ -116,7 +127,7 @@ public final class Weather {
     /** Puts the clock somewhere specific, for a test or a fixed scenario. */
     public void seek(double seconds) {
         clock = seconds;
-        rain = scheduledRain(clock);
+        rain = enabled ? scheduledRain(clock) : 0;
     }
 
     /** True when it is raining hard enough to be worth drawing. */
