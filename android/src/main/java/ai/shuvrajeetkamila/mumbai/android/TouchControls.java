@@ -81,11 +81,18 @@ final class TouchControls extends View {
         label.setTextAlign(Paint.Align.CENTER);
     }
 
+    /** Clock for the collective lever's travel rate. */
+    private long lastPumpMs;
+
     void setProfile(ControlProfile p) {
         if (p != profile) {
             // Carrying a throttle or a collective across a profile change
             // leaves a control applied that the new vehicle never set.
             out.reset();
+            // And the collective lever goes back to the hover, so a
+            // fresh helicopter is not inheriting where the last one's
+            // lever happened to be left.
+            out.resetLevers();
             for (int i = 0; i < held.length; i++) { held[i] = false; edge[i] = false; }
             for (int i = 0; i < ControlMapping.MAX_SLOTS; i++) { slotPointer[i] = -1; }
         }
@@ -253,7 +260,16 @@ final class TouchControls extends View {
         float ly = clampStick(leftY - leftCy);
         float rx = clampStick(rightX - rightCx);
         float ry = clampStick(rightY - rightCy);
-        ControlMapping.apply(profile, out, lx, ly, rx, ry, held, edge);
+        // The collective is a lever that integrates the stick, so this
+        // needs to know how long it has been since the last pump. Taken
+        // from the clock rather than assumed, and clamped, because the
+        // UI thread is not the simulation thread and a stall here must
+        // not slam the lever to a stop.
+        long now = android.os.SystemClock.uptimeMillis();
+        double dt = lastPumpMs == 0 ? 1.0 / 60.0
+                : Math.min(0.1, (now - lastPumpMs) / 1000.0);
+        lastPumpMs = now;
+        ControlMapping.apply(profile, out, lx, ly, rx, ry, held, edge, dt);
         for (int i = 0; i < edge.length; i++) { edge[i] = false; }
     }
 

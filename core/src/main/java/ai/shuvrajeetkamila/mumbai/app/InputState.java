@@ -22,6 +22,24 @@ public final class InputState {
 
     /** Helicopter collective, 0..1. */
     public double collective;
+
+    /**
+     * Where the collective lever is sitting, 0..1.
+     *
+     * <p>A collective is a lever, not a spring-centred stick: it stays
+     * where the pilot leaves it. Modelling it as a stick meant the
+     * control sprang back to half travel the moment the thumb came off,
+     * and half travel is below a hover - the machine sank at four
+     * metres a second whenever nobody was actively holding it up, which
+     * is most of the time you are also trying to work the cyclic.
+     *
+     * <p>Deliberately not cleared by {@link #reset()}: it is the
+     * position of a physical control, not a per-frame input. It is set
+     * back to the hover by {@link #resetLevers()} when the player
+     * changes seat.
+     */
+    public double collectiveLever = ai.shuvrajeetkamila.mumbai.physics
+            .HelicopterPhysics.HOVER_COLLECTIVE;
     /** Pedals: yaw or rudder, -1..1. */
     public double pedal;
 
@@ -67,6 +85,12 @@ public final class InputState {
         attack = false;
         map = false;
         mapConfirm = false;
+    }
+
+    /** Puts the held controls back where a fresh aircraft has them. */
+    public void resetLevers() {
+        collectiveLever = ai.shuvrajeetkamila.mumbai.physics
+                .HelicopterPhysics.HOVER_COLLECTIVE;
     }
 
     public void reset() {

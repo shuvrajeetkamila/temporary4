@@ -125,6 +125,41 @@ public final class CarPhysics extends RigidBody {
     public double dragArea = 0.72;                 // Cd * A, m^2
     public double rollingResistance = 0.014;
     public double maxSteerAngle = Math.toRadians(33);
+
+    /**
+     * Scale on the steering lock, as a function of road speed.
+     *
+     * <p>A front tyre makes its most lateral force at a few degrees of
+     * slip and less beyond that, so there is a steering angle at every
+     * speed past which turning the wheel further makes the car turn
+     * less. The rack used to shed lock linearly - full at walking pace,
+     * 36 per cent by 150 km/h - which left that angle well inside the
+     * stick's travel. Measured on the sedan, holding the speed steady:
+     *
+     * <pre>
+     *    50 km/h  peak yaw at 0.4 stick, full stick 20% worse
+     *    70 km/h  peak yaw at 0.4 stick, full stick 20% worse
+     *   100 km/h  peak yaw at 0.2 stick, full stick 18% worse
+     * </pre>
+     *
+     * <p>So above about 50 km/h more than half the stick was not merely
+     * wasted, it actively washed the car wide - you turn in, the nose
+     * pushes, and the natural reaction is to add more lock, which makes
+     * it worse. That is the whole of why the steering felt wrong.
+     *
+     * <p>The curve below is fitted to where the yaw actually peaks, and
+     * falls off as speed to the three halves - between the 1/v of a
+     * constant slip angle and the 1/v² of a constant lateral
+     * acceleration, which is where a tyre that is allowed to run a
+     * little slip ends up. Full stick now asks for about as much as the
+     * front axle can give, at every speed, and
+     * {@code CarHandlingTest} fails if the response stops being
+     * monotonic.
+     */
+    public static double steeringLock(double speedMs) {
+        double v = Math.max(6.0, speedMs);
+        return MathUtil.clamp(21.0 / (v * Math.sqrt(v)), 0.12, 1.0);
+    }
     public double brakeTorqueMax = 2600;           // N m per axle pair
     public double handbrakeTorque = 1800;
     public double wheelbase = 2.62;
@@ -550,8 +585,7 @@ public final class CarPhysics extends RigidBody {
 
         // --- steering, rate limited so a tap does not snap the wheel over ---
         double target = MathUtil.clamp(steerInput, -1, 1);
-        // Less lock at speed, or the car is undriveable above 60 km/h.
-        double speedFactor = MathUtil.remap(groundSpeed(), 6, 42, 1.0, 0.36);
+        double speedFactor = steeringLock(groundSpeed());
         steerState = MathUtil.approach(steerState, target * speedFactor, 9.0, dt);
         for (Wheel w : wheels) {
             // Negated because body +X is the car's left in this frame, so

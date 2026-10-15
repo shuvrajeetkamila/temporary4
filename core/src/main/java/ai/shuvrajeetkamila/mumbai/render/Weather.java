@@ -38,7 +38,7 @@ public final class Weather {
      * How monsoon the season is: 0 is a dry December, 1 is July. Drives
      * how much of the time it is raining at all.
      */
-    public double monsoon = 0.55;
+    public double monsoon = 0.30;
 
     /** Rain falling now, 0 to 1. */
     public double rain;

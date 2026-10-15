@@ -93,6 +93,74 @@ public final class HelicopterPhysics extends RigidBody {
     public double torqueRequired;
 
     /** Blade pitch limits. The low stop sits slightly positive, not at zero. */
+    /**
+     * Collective that holds a hover at sea level, out of ground effect.
+     *
+     * <p>The control rests here when the lever is untouched, so letting
+     * go of the stick holds the altitude instead of starting a descent.
+     * {@code HelicopterTrimTest} flies the machine and fails if this
+     * number stops being the hover.
+     */
+    public static final double HOVER_COLLECTIVE = 0.56;
+
+    /**
+     * Disc flapback per metre per second of airspeed, as a fraction of
+     * the full cyclic moment.
+     *
+     * <p>In forward flight the advancing blade meets more airspeed than
+     * the retreating one. The difference flaps the disc backwards, which
+     * pitches the nose up and is the whole of a helicopter's speed
+     * stability. Without it a cyclic input is an acceleration that never
+     * stops: a third of forward stick held for one second left this
+     * machine doing 114 m/s five seconds after the stick was released,
+     * because nothing ever brought the disc back. With it, a stick
+     * position corresponds to a trim speed - full forward cyclic trims
+     * at about {@code 0.55 / FLAPBACK} m/s - and centring the stick
+     * pitches the nose up and slows down, which is how the aircraft is
+     * actually flown.
+     */
+    public static final double FLAPBACK = 0.0076;
+
+    /** The same effect sideways, where there is much less of it. */
+    public static final double FLAPBACK_LATERAL = 0.014;
+
+    /**
+     * Rotor damping in pitch and roll, as a moment per radian per
+     * second per newton of thrust.
+     *
+     * <p>A rotor disc lags the shaft it is driven by: rotate the
+     * fuselage and the disc takes a moment to follow, and while it is
+     * behind, the thrust vector opposes the rotation. It is the
+     * dominant source of pitch and roll damping on a helicopter and it
+     * scales with how hard the rotor is pulling, which plain angular
+     * drag does not. Without it, adding flapback turned the runaway
+     * into a phugoid that would not settle - half a radian a second of
+     * pitch rate still swinging five seconds after the stick was
+     * centred.
+     */
+    public static final double FLAP_DAMPING = 0.46;
+
+    /**
+     * How far the rotor hub sits above the centre of mass, metres.
+     *
+     * <p>This is the pendulum, and leaving it out was why the aircraft
+     * could not be flown. Flapback alone gives the pitch loop feedback
+     * from the integral of attitude - tilt makes speed, speed makes a
+     * restoring moment - with no term proportional to attitude itself.
+     * A third-order loop missing its first-order term is unstable for
+     * any gain, which is exactly what the machine did: it tumbled
+     * between seventy degrees nose down and seventy nose up at any
+     * steady stick position, and no amount of damping helped because
+     * damping is not the term that was missing.
+     *
+     * <p>A fuselage hung below the hub supplies it. The thrust acts at
+     * the hub and the weight at the centre of mass, so a tilt away from
+     * level is a restoring moment of {@code T * h * sin(tilt)}. With
+     * the hub 1.4 m up, full cyclic trims at about 23 degrees of
+     * attitude, which is roughly what a light helicopter will give you.
+     */
+    public static final double HUB_ABOVE_COM = 1.4;
+
     public double minCollectivePitchDeg = 0.4;
     public double maxCollectivePitchDeg = 14.5;
 
@@ -230,7 +298,10 @@ public final class HelicopterPhysics extends RigidBody {
         // Thrust acts along the rotor shaft, which is the body's up axis
         // tilted by the cyclic. Tilting the disc is what moves a helicopter:
         // there is no separate forward force.
-        double tiltF = MathUtil.clamp(cyclicPitch, -1, 1) * Math.toRadians(9.0);
+        // Negated: cyclicPitch is the screen axis, where negative is the
+        // stick pushed forward. Forward stick tilts the disc forward, so
+        // the thrust vector has to gain a component along the nose.
+        double tiltF = -MathUtil.clamp(cyclicPitch, -1, 1) * Math.toRadians(9.0);
         double tiltR = MathUtil.clamp(cyclicRoll, -1, 1) * Math.toRadians(9.0);
         tmp1.scaleSelf(Math.cos(tiltF) * Math.cos(tiltR));
         tmp1.addScaledSelf(tmp2, Math.sin(tiltF));
@@ -240,18 +311,65 @@ public final class HelicopterPhysics extends RigidBody {
 
         // The disc is above the centre of mass, so a tilted disc also produces
         // the pitching and rolling moment that follows the stick.
-        orientation.rotate(new Vec3(0, 1.4, 0), tmp1);
-        tmp1.addSelf(position);
         orientation.forward(tmp2);
         orientation.right(tmp3);
-        addTorque(tmp3.x * -cyclicPitch * thrust * 0.55,
-                tmp3.y * -cyclicPitch * thrust * 0.55,
-                tmp3.z * -cyclicPitch * thrust * 0.55);
+        // Measured, not assumed: a NEGATIVE moment about the right axis
+        // raises the nose in this frame, and a negative one about the
+        // forward axis drops the right wing. cyclicPitch is the screen
+        // axis, so it is negative when the stick is forward, and forward
+        // stick must drop the nose.
+        double pitchMoment = -cyclicPitch * thrust * 0.55;
+        // Roll was inverted: stick right banked the machine left. The
+        // translation still went right, because the disc tilt below
+        // dominates in the first half second, so it felt like a sloppy
+        // control rather than a wrong one - and then the bank fought the
+        // turn the whole way round.
+        double rollMoment = -cyclicRoll * thrust * 0.42;
+
+        // Flapback, which is the speed stability. The advancing blade
+        // meets more airspeed than the retreating one and the disc
+        // flaps back from the difference, pitching the nose up in
+        // proportion to how fast the machine is going. Leaving it out
+        // made every cyclic input an acceleration with no end: a third
+        // of forward stick for one second left this aircraft doing
+        // 114 m/s five seconds after the stick was centred, because
+        // nothing ever brought the disc back to where it started. With
+        // it, a stick position is a trim speed, and centring the stick
+        // raises the nose and slows down.
+        // The airspeed in the plane of the disc, which means the
+        // vertical component counts too. Taking only the horizontal part
+        // made the restoring moment fade out exactly when it was needed:
+        // once the nose was down past about 45 degrees the forward axis
+        // is mostly vertical, the dot product collapsed towards zero and
+        // nothing was left to stop the pitch - so the machine tumbled
+        // between 70 degrees nose down and 70 nose up and never
+        // recovered.
+        double fwdAir = relX * tmp2.x + velocity.y * tmp2.y + relZ * tmp2.z;
+        double latAir = relX * tmp3.x + velocity.y * tmp3.y + relZ * tmp3.z;
+        pitchMoment -= FLAPBACK * thrust * fwdAir;
+        rollMoment += FLAPBACK_LATERAL * thrust * latAir;
+
+        // The pendulum. tmp2.y is how far the nose is above level and
+        // tmp3.y how far the right door is; a negative pitch moment
+        // raises the nose and a negative roll moment drops the right
+        // wing, so these are the signs that bring both back to level.
+        pitchMoment += thrust * HUB_ABOVE_COM * tmp2.y;
+        rollMoment -= thrust * HUB_ABOVE_COM * tmp3.y;
+
+        // And the disc's lag behind the shaft, which damps the rate.
+        double pitchRate = angularVelocity.x * tmp3.x
+                + angularVelocity.y * tmp3.y + angularVelocity.z * tmp3.z;
+        double rollRate = angularVelocity.x * tmp2.x
+                + angularVelocity.y * tmp2.y + angularVelocity.z * tmp2.z;
+        pitchMoment -= FLAP_DAMPING * thrust * pitchRate;
+        rollMoment -= FLAP_DAMPING * thrust * rollRate;
+
+        addTorque(tmp3.x * pitchMoment, tmp3.y * pitchMoment,
+                tmp3.z * pitchMoment);
         // Positive roll is right wing down, which is a positive moment
         // about the forward axis in this frame.
-        addTorque(tmp2.x * cyclicRoll * thrust * 0.42,
-                tmp2.y * cyclicRoll * thrust * 0.42,
-                tmp2.z * cyclicRoll * thrust * 0.42);
+        addTorque(tmp2.x * rollMoment, tmp2.y * rollMoment,
+                tmp2.z * rollMoment);
 
         // --- rotor torque and the tail rotor ------------------------------------
         double ct = thrust / Math.max(1e-6, rho * discArea()
@@ -303,9 +421,26 @@ public final class HelicopterPhysics extends RigidBody {
         double autoTorque = 0;
         inAutorotation = !engineOn;
         if (inAutorotation) {
-            // Below about 35 m/s of descent the rotor cannot sustain itself.
-            double drive = MathUtil.remap(-climb, 8.0, 35.0, 0.0, 1.25);
-            autoTorque = drive * torqueRequired
+            // How hard the upflow drives the rotor. This used to reach
+            // full drive only at 35 m/s of descent, which meant the
+            // machine had to be falling at 120 km/h before the blades
+            // were being turned properly - so an engine failure was a
+            // crash with extra steps rather than an autorotation. A
+            // light helicopter autorotates at about 12 m/s, so that is
+            // where the drive is full.
+            double drive = MathUtil.remap(-climb, 3.0, 13.0, 0.0, 1.25);
+            // Driven against what the rotor actually costs to turn, which
+            // at low pitch is the blades' own profile drag and almost
+            // nothing else. Scaling the drive by torqueRequired alone
+            // made it collapse exactly when the collective was lowered,
+            // so dropping the lever - the first thing anybody does when
+            // the engine quits - stopped the rotor dead and the machine
+            // fell at 90 m/s. Lowering the collective should speed the
+            // rotor up, and now does.
+            double profileTorque = solidity() * bladeDragCoefficient / 8.0
+                    * rho * discArea() * Math.pow(omega * rotorRadius, 2)
+                    * rotorRadius;
+            autoTorque = drive * (torqueRequired + profileTorque)
                     * MathUtil.clamp(1.4 - collective, 0.2, 1.4);
         }
         double netTorque = engineTorque + autoTorque - torqueRequired;

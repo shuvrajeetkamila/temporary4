@@ -303,10 +303,37 @@ final class LocomotionTest {
                 "pushing the cyclic forward did not pitch the nose down");
         assertTrue(heliAttitude(1, 0)[0] > 0.02,
                 "pulling the cyclic back did not pitch the nose up");
-        assertTrue(heliAttitude(0, 1)[1] > 0.02,
-                "cyclic right did not roll right");
-        assertTrue(heliAttitude(0, -1)[1] < -0.02,
-                "cyclic left did not roll left");
+        // Asked of the body axis rather than of Quat.roll(), because
+        // roll() is atan2(right.y, ..) and is therefore POSITIVE when
+        // the right-hand side is above level - which is a bank to the
+        // LEFT. These two assertions used to be written in terms of it
+        // and so were asserting, in good faith, that right stick banks
+        // the machine left. It did, and it also translated right at the
+        // same time, so the bank fought the turn the whole way round.
+        assertTrue(heliRightY(1) < -0.02,
+                "cyclic right did not drop the right-hand side");
+        assertTrue(heliRightY(-1) > 0.02,
+                "cyclic left did not drop the left-hand side");
+    }
+
+    /**
+     * Height of the body's right-hand axis after holding a roll input.
+     * Negative means the right-hand side has gone down, which is a bank
+     * to the right.
+     */
+    private double heliRightY(double roll) {
+        HelicopterPhysics h = new HelicopterPhysics();
+        HelicopterPhysics.GroundProbe ground = (x, z) -> 0.0;
+        h.position.set(0, 300, 0);
+        h.engineOn = true;
+        h.collective = 0.62;
+        for (int i = 0; i < 60 * 2; i++) { h.step(DT, ground, 0, 0); }
+        h.cyclicRoll = roll;
+        for (int i = 0; i < 24; i++) { h.step(DT, ground, 0, 0); }
+        ai.shuvrajeetkamila.mumbai.math.Vec3 r =
+                new ai.shuvrajeetkamila.mumbai.math.Vec3();
+        h.orientation.right(r);
+        return r.y;
     }
 
     /** Returns {pitch, roll} after holding a cyclic input. */

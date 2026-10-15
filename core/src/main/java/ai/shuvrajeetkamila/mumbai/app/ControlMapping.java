@@ -115,9 +115,18 @@ public final class ControlMapping {
         return v < -1 ? -1 : (v > 1 ? 1 : v);
     }
 
+    /** How fast the collective lever travels, full range per second. */
+    public static final double COLLECTIVE_RATE = 0.80;
+
     public static void apply(ControlProfile profile, InputState out,
                              double lx, double ly, double rx, double ry,
                              boolean[] held, boolean[] edge) {
+        apply(profile, out, lx, ly, rx, ry, held, edge, 1.0 / 60.0);
+    }
+
+    public static void apply(ControlProfile profile, InputState out,
+                             double lx, double ly, double rx, double ry,
+                             boolean[] held, boolean[] edge, double dt) {
         // Clamp at the boundary rather than trusting the caller. The two
         // half-range controls are (1 - ly) * 0.5, which lands a few parts
         // in 10^16 below zero for a stick reading exactly 1, and a
@@ -159,9 +168,20 @@ public final class ControlMapping {
                 out.steer = rx;
                 break;
             case HELICOPTER:
-                // Left stick vertical is collective, horizontal is the
-                // pedals. That is the real layout and worth the learning.
-                out.collective = clamp01((1 - ly) * 0.5);
+                // Left stick vertical drives the collective, horizontal
+                // is the pedals. That is the real layout and worth the
+                // learning.
+                //
+                // The stick moves the lever rather than being the lever.
+                // A collective stays where the pilot puts it; a spring
+                // centred one snapped back to half travel the instant
+                // the thumb came off, and half travel is below a hover,
+                // so the machine sank at four metres a second whenever
+                // nobody was holding it - which is exactly when you are
+                // busy with the cyclic in the other hand.
+                out.collectiveLever = clamp01(out.collectiveLever
+                        + (-ly) * COLLECTIVE_RATE * Math.max(0, dt));
+                out.collective = out.collectiveLever;
                 out.pedal = lx;
                 out.engineToggle = edge[ACT_ENGINE];
                 break;

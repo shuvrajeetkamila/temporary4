@@ -191,10 +191,17 @@ final class FlightControlsTest {
     @Test
     @DisplayName("autorotation is a descent, not a fall")
     void autorotationIsSurvivable() {
-        // Trimmed, with airspeed, engine off: the only way anyone has ever
-        // autorotated anything. A real light helicopter comes down at
-        // roughly 12 m/s.
-        for (double collective : new double[]{0.0, 0.15, 0.30}) {
+        // Trimmed, with airspeed, engine off: the only way anyone has
+        // ever autorotated anything. A real light helicopter comes down
+        // at roughly 12 m/s.
+        //
+        // The collectives tested are the autorotative range. Zero is
+        // not in it and should not be: flat blades make no lift, and a
+        // machine held at flat pitch all the way down is not
+        // autorotating, it is falling with the rotor turning. What
+        // matters is that the rotor is still there to be used, which is
+        // the separate test below.
+        for (double collective : new double[]{0.30, 0.40, 0.50}) {
             HelicopterPhysics h = new HelicopterPhysics();
             h.placeAt(0, 800, 0, 0);
             h.collective = 0.58;
@@ -216,5 +223,52 @@ final class FlightControlsTest {
             assertTrue(h.rotorRpm > 180,
                     "the rotor stopped: " + h.rotorRpm + " rpm");
         }
+    }
+
+    @Test
+    @DisplayName("lowering the collective keeps the rotor turning")
+    void loweringTheLeverDoesNotStopTheRotor() {
+        // The first thing anyone does when the engine quits is drop the
+        // lever, and that has to speed the rotor up: less pitch is less
+        // drag on the blades. The drive was scaled by the torque the
+        // rotor was absorbing, which collapses to nothing at flat
+        // pitch, so lowering the collective stopped the rotor dead and
+        // the machine fell at 90 m/s with no way back.
+        for (double collective : new double[]{0.0, 0.1, 0.2}) {
+            HelicopterPhysics h = new HelicopterPhysics();
+            h.placeAt(0, 1500, 0, 0);
+            h.collective = 0.58;
+            for (int i = 0; i < 60 * 8; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
+            h.velocity.set(0, 0, -28);
+            h.engineOn = false;
+            h.collective = collective;
+            for (int i = 0; i < 60 * 25 && h.position.y > 60; i++) {
+                h.step(1.0 / 60, FLAT_H, 0, 0);
+            }
+            assertTrue(h.rotorPercent() > 85,
+                    "twenty-five seconds after the engine quit with the"
+                            + " lever at " + collective + " the rotor is"
+                            + " down to " + h.rotorPercent() + " per"
+                            + " cent, so there is nothing left to flare"
+                            + " with");
+        }
+
+        // And the energy in it has to be usable: raise the lever and
+        // the descent must actually be arrested.
+        HelicopterPhysics h = new HelicopterPhysics();
+        h.placeAt(0, 1500, 0, 0);
+        h.collective = 0.58;
+        for (int i = 0; i < 60 * 8; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
+        h.velocity.set(0, 0, -28);
+        h.engineOn = false;
+        h.collective = 0.05;
+        for (int i = 0; i < 60 * 12; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
+        double plunge = -h.velocity.y;
+        h.collective = 0.75;
+        for (int i = 0; i < 60 * 4; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
+        assertTrue(-h.velocity.y < plunge * 0.75,
+                "pulling the lever in the flare only took the descent"
+                        + " from " + plunge + " to " + (-h.velocity.y)
+                        + " m/s");
     }
 }

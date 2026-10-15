@@ -1295,9 +1295,14 @@ public final class Engine {
         heli.collective = MathUtil.clamp(in.collective, 0, 1);
         // lookY is a screen axis: negative is the stick pushed forward.
         // Cyclic forward puts the nose DOWN and the machine flies forward,
-        // which is the whole of how a helicopter goes anywhere. It used to
-        // be negated, so pushing the stick forward pitched the nose up and
-        // flew you backwards.
+        // which is the whole of how a helicopter goes anywhere.
+        //
+        // That is now true. It was not: this negation was corrected once
+        // here, but the two signs inside the physics that actually
+        // decide it - the disc tilt and the pitching moment - disagreed
+        // with each other, so forward stick stood the aircraft on its
+        // tail. HelicopterTrimTest measures the attitude and the
+        // direction of travel rather than trusting any comment.
         heli.cyclicPitch = in.lookY;
         heli.cyclicRoll = in.lookX;
         heli.pedal = in.pedal;

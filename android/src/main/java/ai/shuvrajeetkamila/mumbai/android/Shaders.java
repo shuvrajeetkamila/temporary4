@@ -481,28 +481,49 @@ final class Shaders {
             + "uniform mediump float uAspect;\n"
             + "uniform mediump vec3 uTint;\n"
             + "out mediump vec4 fragColour;\n"
-            + "mediump float h11(mediump float x) {\n"
+            + "highp float h11(highp float x) {\n"
             + "  return fract(sin(x * 127.1) * 43758.5453);\n"
             + "}\n"
             + "void main() {\n"
-            + "  mediump vec2 uv = vec2(vNdc.x * uAspect, vNdc.y);\n"
-            + "  mediump float acc = 0.0;\n"
+            // Everything here is highp on purpose. The previous version
+            // held the screen position at mediump, where a value of 80
+            // steps by 1/16 - and the feature it was driving, the head
+            // of a streak, was 1/20 wide. The drops could not resolve
+            // and quantised into blocks.
+            + "  highp vec2 uv = vec2(vNdc.x * uAspect, vNdc.y);\n"
+            + "  highp float acc = 0.0;\n"
             + "  for (int i = 0; i < 3; i++) {\n"
-            + "    mediump float fi = float(i);\n"
-            + "    mediump float scale = 34.0 + fi * 24.0;\n"
-            + "    mediump float speed = 1.5 + fi * 0.9;\n"
-            + "    mediump vec2 p = uv;\n"
-            + "    p.x += p.y * 0.13;\n"
-            + "    p *= scale;\n"
-            + "    mediump float col = floor(p.x);\n"
-            + "    mediump float off = h11(col + fi * 31.7);\n"
-            + "    highp float y = fract(p.y * 0.25 - uTime * speed - off);\n"
-            + "    mediump float streak = smoothstep(0.0, 0.05, y)\n"
-            + "        * (1.0 - smoothstep(0.05, 0.28, y));\n"
-            + "    mediump float present = step(0.38, h11(col * 1.7 + fi * 5.3));\n"
-            + "    acc += streak * present * (0.45 + 0.28 * fi);\n"
+            + "    highp float fi = float(i);\n"
+            // Three sheets at different distances. The near one has the
+            // fewest, longest, fastest drops.
+            + "    highp float cols = 6.0 + fi * 4.0;\n"
+            + "    highp float rows = 1.15 + fi * 0.525;\n"
+            + "    highp float speed = 1.3 + fi * 0.8;\n"
+            + "    highp float gain = 0.62 - fi * 0.15;\n"
+            // A slight lean, so it is falling rather than hanging.
+            + "    highp float px = (uv.x + uv.y * 0.10) * cols;\n"
+            + "    highp float py = uv.y * rows;\n"
+            + "    highp float col = floor(px);\n"
+            + "    highp float xf = fract(px) - 0.5;\n"
+            + "    highp float off = h11(col + fi * 31.7);\n"
+            // The wrap on uTime is ten seconds and every speed times ten
+            // is a whole number, so the wrap lands on each layer's own
+            // period and cannot be seen.
+            + "    highp float y = fract(py - uTime * speed - off);\n"
+            // Long and thin: a bright head with a tail fading behind it.
+            // The old shape was as wide as it was tall, which is why a
+            // screen of them read as woven matting rather than rain.
+            + "    highp float streak = smoothstep(0.0, 0.02, y)\n"
+            + "        * (1.0 - smoothstep(0.02, 0.46, y));\n"
+            + "    highp float bar = 1.0 - smoothstep(0.035, 0.115, abs(xf));\n"
+            // Heavier rain fills in more of the columns rather than
+            // making the same drops brighter, so a shower is sparse and
+            // a squall is dense.
+            + "    highp float present = step(0.74 - 0.46 * uRain,\n"
+            + "        h11(col * 1.7 + fi * 5.3));\n"
+            + "    acc += streak * bar * present * gain;\n"
             + "  }\n"
-            + "  mediump float a = clamp(acc * uRain * 0.62, 0.0, 1.0);\n"
+            + "  mediump float a = clamp(acc * uRain * 1.35, 0.0, 1.0);\n"
             + "  fragColour = vec4(uTint, a);\n"
             + "}\n";
 

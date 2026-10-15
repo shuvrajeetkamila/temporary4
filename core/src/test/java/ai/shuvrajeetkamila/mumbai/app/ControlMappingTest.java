@@ -1,5 +1,7 @@
 package ai.shuvrajeetkamila.mumbai.app;
 
+import ai.shuvrajeetkamila.mumbai.physics.HelicopterPhysics;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -221,19 +223,60 @@ final class ControlMappingTest {
     // --------------------------------------------------------- helicopter
 
     @Test
-    @DisplayName("collective is centred at half and spans nothing to full")
+    @DisplayName("the collective is a lever, and it spans its whole range")
     void collectiveSpansItsRange() {
+        // It used to be the stick itself: centred meant half collective
+        // and letting go meant half collective. Half is below a hover,
+        // so taking a thumb off the stick - which you must do, because
+        // the other thumb is busy with the cyclic - started a descent
+        // at four metres a second. A real collective is a lever that
+        // stays where it is put, and so is this one.
         boolean[] h = held(), e = held();
-        assertEquals(1.0, run(ControlProfile.HELICOPTER, 0, -1, 0, 0, h, e)
-                .collective, 1e-9, "stick fully up is not full collective");
-        assertEquals(0.0, run(ControlProfile.HELICOPTER, 0, 1, 0, 0, h, e)
-                .collective, 1e-9, "stick fully down is not flat pitch");
-        assertEquals(0.5, run(ControlProfile.HELICOPTER, 0, 0, 0, 0, h, e)
-                .collective, 1e-9, "a centred stick should be mid collective");
-        for (double ly = -1; ly <= 1.0001; ly += 0.05) {
-            double c = run(ControlProfile.HELICOPTER, 0, ly, 0, 0, h, e).collective;
-            assertTrue(c >= 0 && c <= 1, "collective left its range: " + c);
+        InputState in = new InputState();
+
+        assertEquals(HelicopterPhysics.HOVER_COLLECTIVE, in.collectiveLever,
+                1e-9, "a fresh machine does not start at the hover");
+
+        // Hold the stick up for a second and it must reach the stop.
+        for (int i = 0; i < 120; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, -1, 0, 0,
+                    h, e, 1.0 / 60.0);
         }
+        assertEquals(1.0, in.collective, 1e-9,
+                "two seconds of full up stick did not reach full"
+                        + " collective");
+
+        // And it stays there when the stick is released.
+        for (int i = 0; i < 60; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 0, 0, 0,
+                    h, e, 1.0 / 60.0);
+        }
+        assertEquals(1.0, in.collective, 1e-9,
+                "the lever sprang back when the thumb came off, which is"
+                        + " the whole bug this replaced");
+
+        for (int i = 0; i < 120; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 1, 0, 0,
+                    h, e, 1.0 / 60.0);
+        }
+        assertEquals(0.0, in.collective, 1e-9,
+                "two seconds of full down stick did not reach flat pitch");
+
+        // Never outside its range, whatever is done to it.
+        for (double ly = -1; ly <= 1.0001; ly += 0.05) {
+            for (int i = 0; i < 40; i++) {
+                ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, ly,
+                        0, 0, h, e, 1.0 / 60.0);
+                assertTrue(in.collective >= 0 && in.collective <= 1,
+                        "collective left its range: " + in.collective);
+            }
+        }
+
+        // Changing seat puts it back at the hover, or the next
+        // helicopter inherits wherever the last one's lever was left.
+        in.resetLevers();
+        assertEquals(HelicopterPhysics.HOVER_COLLECTIVE, in.collectiveLever,
+                1e-9, "the lever survived a change of vehicle");
     }
 
     @Test
