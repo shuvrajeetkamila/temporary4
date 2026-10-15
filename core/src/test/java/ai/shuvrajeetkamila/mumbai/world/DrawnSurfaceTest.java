@@ -1,5 +1,6 @@
 package ai.shuvrajeetkamila.mumbai.world;
 
+import ai.shuvrajeetkamila.mumbai.render.SeaMask;
 import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
 
 import org.junit.jupiter.api.DisplayName;
@@ -48,23 +49,47 @@ final class DrawnSurfaceTest {
     @Test
     @DisplayName("open water is meshed once, not twice")
     void openWaterIsLeftToTheSea() throws Exception {
+        // Anything the terrain emits over water is a second water
+        // surface. It no longer sits at chart datum - the vertex stage
+        // lifts it onto the same wave the sea rides, five centimetres
+        // proud, so the two cannot fight - but it is still geometry,
+        // and over the open harbour there is no reason to pay for it.
+        //
+        // So the rule is where, not whether. The terrain owns the
+        // coastal fringe, because the sea is discarded there, and the
+        // sea owns everything past it. What is checked is that no water
+        // triangle is emitted further from land than the fringe can
+        // reach: one cell, plus the caution the mask is built with.
         WorldData w = WorldFixture.world();
         ChunkMesher mesher = new ChunkMesher(w);
         int checked = 0;
         int offenders = 0;
+        double worst = 0;
         for (int c = 0; c < w.chunkCount(); c += 37) {
             ChunkFeatures f = features(w, c);
             if (f == null) { continue; }
             for (int lod : new int[]{ChunkMesher.LOD_HIGH, ChunkMesher.LOD_MED,
                                      ChunkMesher.LOD_LOW}) {
                 ChunkMesher.Mesh m = mesher.build(f, lod);
+                double cell = w.chunkM
+                        / (lod == ChunkMesher.LOD_HIGH ? 32
+                           : lod == ChunkMesher.LOD_MED ? 16 : 8);
+                double reach = cell + SeaMask.TEXEL_M * 2;
                 for (int t = 0; t < m.indexCount; t += 3) {
-                    if (!isFlatWater(m, m.indices[t])
-                            || !isFlatWater(m, m.indices[t + 1])
-                            || !isFlatWater(m, m.indices[t + 2])) {
+                    if (!isWaterSurface(m, m.indices[t])
+                            || !isWaterSurface(m, m.indices[t + 1])
+                            || !isWaterSurface(m, m.indices[t + 2])) {
+                        continue;
+                    }
+                    double cx = f.originX + m.vertices[m.indices[t] * STRIDE];
+                    double cz = f.originZ
+                            + m.vertices[m.indices[t] * STRIDE + 2];
+                    if (w.anyLand(cx - reach, cz - reach,
+                                  cx + reach, cz + reach)) {
                         continue;
                     }
                     offenders++;
+                    worst = Math.max(worst, reach);
                 }
             }
             checked++;
@@ -72,19 +97,96 @@ final class DrawnSurfaceTest {
         }
         assertTrue(checked > 4, "no chunks were examined");
         assertTrue(offenders == 0,
-                offenders + " triangles of flat water at chart datum are"
-                        + " still being meshed. The animated sea is drawn"
-                        + " over the same water and the two fight for the"
-                        + " depth buffer along a join that moves with the"
-                        + " waves.");
+                offenders + " water triangles are being meshed in open"
+                        + " water more than " + worst + " m from the"
+                        + " nearest land, where the sea already draws"
+                        + " the same water.");
     }
 
-    /** An upward-facing water vertex sitting at chart datum. */
-    private static boolean isFlatWater(ChunkMesher.Mesh m, int v) {
+    @Test
+    @DisplayName("nowhere the sea is discarded is left undrawn")
+    void theCoastHasNoHoles() throws Exception {
+        // The hole that produced the white edge round the island. The
+        // sea is discarded wherever the land mask says land, and the
+        // mask calls a 40 m texel land if any 20 m cell inside it is.
+        // The mesh used to drop a cell whose own corners were all sea,
+        // sampled every 32 m at full detail and every 128 m at the
+        // lowest - so every islet, sandbar, jetty and ragged headland
+        // narrower than a cell had the sea discarded over it and no
+        // terrain put in its place. Nothing was drawn there at all, and
+        // nothing is the colour the frame was cleared to.
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        int checked = 0;
+        for (int c = 0; c < w.chunkCount() && checked < 12; c += 37) {
+            ChunkFeatures f = features(w, c);
+            if (f == null) { continue; }
+            // Only chunks that actually have a coast in them.
+            if (!w.anyLand(f.originX, f.originZ,
+                           f.originX + w.chunkM, f.originZ + w.chunkM)) {
+                continue;
+            }
+            checked++;
+            for (int lod : new int[]{ChunkMesher.LOD_HIGH, ChunkMesher.LOD_MED,
+                                     ChunkMesher.LOD_LOW}) {
+                int n = lod == ChunkMesher.LOD_HIGH ? 32
+                        : lod == ChunkMesher.LOD_MED ? 16 : 8;
+                double step = w.chunkM / n;
+                ChunkMesher.Mesh m = mesher.build(f, lod);
+                boolean[] drawn = new boolean[n * n];
+                for (int t = 0; t < m.indexCount; t += 3) {
+                    for (int k = 0; k < 3; k++) {
+                        int o = m.indices[t + k] * STRIDE;
+                        if (m.vertices[o + 4] < 0.5f) { continue; }  // skirt
+                        int ci = (int) Math.round(m.vertices[o] / step);
+                        int cj = (int) Math.round(m.vertices[o + 2] / step);
+                        // A corner vertex belongs to the four cells that
+                        // meet at it.
+                        for (int dj = -1; dj <= 0; dj++) {
+                            for (int di = -1; di <= 0; di++) {
+                                int ii = ci + di, jj = cj + dj;
+                                if (ii >= 0 && jj >= 0 && ii < n && jj < n) {
+                                    drawn[jj * n + ii] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                for (int j = 0; j < n; j++) {
+                    for (int i = 0; i < n; i++) {
+                        double x0 = f.originX + i * step;
+                        double z0 = f.originZ + j * step;
+                        // Where the mask discards the sea, something has
+                        // to be drawn. The mask's answer is taken over
+                        // the cell grown by a texel, because a texel
+                        // that straddles the boundary takes its answer
+                        // from land outside the cell.
+                        boolean maskSaysLand = w.anyLand(
+                                x0 - SeaMask.TEXEL_M, z0 - SeaMask.TEXEL_M,
+                                x0 + step + SeaMask.TEXEL_M,
+                                z0 + step + SeaMask.TEXEL_M);
+                        if (!maskSaysLand) { continue; }
+                        assertTrue(drawn[j * n + i],
+                                "chunk " + c + " at detail " + lod
+                                        + ": the sea is discarded over the"
+                                        + " cell at " + (int) x0 + ","
+                                        + (int) z0 + " and the terrain"
+                                        + " draws nothing there either,"
+                                        + " so the frame's clear colour"
+                                        + " shows through");
+                    }
+                }
+            }
+        }
+        assertTrue(checked > 3,
+                "no chunk with a coast in it was examined");
+    }
+
+    /** An upward-facing water vertex. */
+    private static boolean isWaterSurface(ChunkMesher.Mesh m, int v) {
         int o = v * STRIDE;
         return m.vertices[o + 9] < -0.5f          // aux -1 marks water
-                && m.vertices[o + 4] > 0.5f       // upward facing, not a skirt
-                && Math.abs(m.vertices[o + 1]) < 1e-3f;
+                && m.vertices[o + 4] > 0.5f;      // upward facing, not a skirt
     }
 
     @Test

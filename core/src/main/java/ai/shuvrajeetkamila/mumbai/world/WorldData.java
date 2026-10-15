@@ -431,6 +431,46 @@ public final class WorldData {
         return limit;
     }
 
+    /**
+     * Whether any part of a box contains land, at the land mask's own
+     * resolution.
+     *
+     * <p>Exists because the terrain mesh and the sea mask were asking
+     * two different questions and getting two different answers. The
+     * mesh dropped a cell whose corners were all sea - sampled every
+     * 32 m at full detail and every 128 m at the lowest - while the
+     * mask marked a texel as land if any 20 m cell inside it was land,
+     * and the sea is discarded wherever the mask says land. Along a
+     * ragged coast that leaves strips up to a cell wide where the sea
+     * has been discarded and the terrain was never emitted: a hole, in
+     * the colour the frame was cleared to.
+     *
+     * <p>Inclusive of the bounds and clamped to the grid, so a query
+     * that runs off the edge of the world answers for the part of it
+     * that exists.
+     */
+    public boolean anyLand(double x0, double z0, double x1, double z1) {
+        int i0 = (int) Math.floor((Math.min(x0, x1) - minX) / gridM);
+        int i1 = (int) Math.floor((Math.max(x0, x1) - minX) / gridM);
+        int j0 = (int) Math.floor((Math.min(z0, z1) - minZ) / gridM);
+        int j1 = (int) Math.floor((Math.max(z0, z1) - minZ) / gridM);
+        if (i1 < 0 || j1 < 0 || i0 >= nx || j0 >= nz) { return false; }
+        i0 = Math.max(0, i0);
+        j0 = Math.max(0, j0);
+        i1 = Math.min(nx - 1, i1);
+        j1 = Math.min(nz - 1, j1);
+        for (int j = j0; j <= j1; j++) {
+            int row = j * nx;
+            for (int i = i0; i <= i1; i++) {
+                int bit = row + i;
+                if ((landMask[bit >>> 6] & (1L << (bit & 63))) != 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public boolean landAt(int i, int j) {
         int bit = j * nx + i;
         return (landMask[bit >>> 6] & (1L << (bit & 63))) != 0;

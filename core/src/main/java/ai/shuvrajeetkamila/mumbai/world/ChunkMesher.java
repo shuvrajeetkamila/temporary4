@@ -1,5 +1,6 @@
 package ai.shuvrajeetkamila.mumbai.world;
 
+import ai.shuvrajeetkamila.mumbai.render.SeaMask;
 import ai.shuvrajeetkamila.mumbai.render.TextureLibrary;
 
 /**
@@ -164,7 +165,7 @@ public final class ChunkMesher {
         int row = n + 1;
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < n; i++) {
-                // A cell with sea at all four corners is not drawn. The
+                // A cell with no land anywhere in it is not drawn. The
                 // animated sea surface covers it, and until now both were
                 // drawn: this flat plane at chart datum, and the sea grid
                 // at the tide plus a metre and a half of swell. The two
@@ -173,21 +174,12 @@ public final class ChunkMesher {
                 // time - so over open water they interleaved in the depth
                 // buffer and the join crawled with the waves. That is the
                 // moving sheet that comes over the view after a while.
-                //
-                // Cells with any land in them are kept, so the shoreline
-                // is still drawn by the terrain at whatever detail the
-                // chunk is built at, and the sea tucks under it.
-                boolean w00 = wet[j * row + i];
-                boolean w10 = wet[j * row + i + 1];
-                boolean w01 = wet[(j + 1) * row + i];
-                boolean w11 = wet[(j + 1) * row + i + 1];
                 int a = base + j * row + i;
-                // Per triangle, not per cell: a cell with a single
-                // corner of land still has one triangle that is all
-                // sea, and that triangle is as much of a second water
-                // surface as a whole cell of them.
-                if (!(w00 && w01 && w10)) { triN(a, a + row, a + 1); }
-                if (!(w10 && w01 && w11)) { triN(a + 1, a + row, a + row + 1); }
+                if (!seaOnly(ox + i * step, oz + j * step,
+                             ox + (i + 1) * step, oz + (j + 1) * step)) {
+                    triN(a, a + row, a + 1);
+                    triN(a + 1, a + row, a + row + 1);
+                }
             }
         }
         // The skirt must reach past the lowest ground any neighbour might
@@ -478,6 +470,30 @@ public final class ChunkMesher {
     /** Whether a road of this width and surface is painted. */
     static boolean isMarked(float half, boolean unpaved, int lod) {
         return lod == LOD_HIGH && !unpaved && half >= MARKING_MIN_HALF_M;
+    }
+
+    /**
+     * Whether a terrain cell may be left to the sea.
+     *
+     * <p>This has to be at least as cautious as the land mask, or there
+     * is a hole between them. The mask is built at 40 m and a texel
+     * counts as land if any 20 m cell inside it is land; the sea is
+     * discarded wherever the mask says land. The mesh used to drop a
+     * cell whose own corners were all sea, sampled every 32 m at full
+     * detail and every 128 m at the lowest - so along a ragged coast,
+     * and over every islet and sandbar and jetty narrower than a cell,
+     * the sea was discarded and the terrain was never emitted. Nothing
+     * was drawn there at all, and a hole is whatever colour the frame
+     * was cleared to, which is the fog.
+     *
+     * <p>So the question asked here is the mask's question, over the
+     * cell grown by a mask texel on every side - because a texel that
+     * straddles the cell boundary takes its answer from land that may
+     * lie outside the cell entirely.
+     */
+    private boolean seaOnly(double x0, double z0, double x1, double z1) {
+        double m = SeaMask.TEXEL_M;
+        return !world.anyLand(x0 - m, z0 - m, x1 + m, z1 + m);
     }
 
     /** How far each end of a ribbon runs past its last centreline point, m. */
