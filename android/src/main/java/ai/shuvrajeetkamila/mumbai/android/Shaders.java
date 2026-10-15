@@ -244,6 +244,19 @@ final class Shaders {
             + "  }\n"
             + "  mediump vec4 tex = texture(uAtlas, vec3(uv, matF));\n"
             + "  albedo *= tex.rgb;\n"
+            // Lane markings. The mesher writes a road vertex's distance
+            // from its own centreline into vTexV - the channel the
+            // horizontal case above does not use - and pushes anything
+            // that should stay unpainted far past this test, so the
+            // paint needs no flag of its own in a vertex that has no
+            // room for one. fwidth keeps the line one pixel wide when
+            // it is nearly edge on, instead of flickering in and out
+            // between fragments the way a hard threshold does.
+            + "  if (mat == " + ai.shuvrajeetkamila.mumbai.render.TextureLibrary.MAT_TARMAC + ") {\n"
+            + "    highp float wline = fwidth(vTexV) * 0.9 + 0.055;\n"
+            + "    mediump float paint = 1.0 - smoothstep(0.0, wline, vTexV);\n"
+            + "    albedo = mix(albedo, vec3(0.80, 0.78, 0.70), paint * 0.88);\n"
+            + "  }\n"
             // Rain darkens and glosses surfaces.
             + "  albedo *= mix(1.0, 0.72, uWetness);\n"
             + "  mediump vec3 lit = albedo * (ambient + uSunColour * ndl);\n"

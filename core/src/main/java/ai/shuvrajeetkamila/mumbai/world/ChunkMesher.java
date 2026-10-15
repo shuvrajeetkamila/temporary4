@@ -461,6 +461,25 @@ public final class ChunkMesher {
         return (float) (half / Math.max(0.38, cosHalf));
     }
 
+    /**
+     * Lateral coordinate written to unmarked road vertices.
+     *
+     * <p>The fragment stage paints a centre line wherever a tarmac
+     * surface reports a lateral coordinate near zero. A road that
+     * should not be marked - a lane, a track, a car park - is pushed
+     * out past that test by this offset instead of needing a flag of
+     * its own, which there is no room for in the vertex.
+     */
+    static final float UNMARKED_V = 64.0f;
+
+    /** Half-width below which a road gets no centre line, m. */
+    static final float MARKING_MIN_HALF_M = 3.0f;
+
+    /** Whether a road of this width and surface is painted. */
+    static boolean isMarked(float half, boolean unpaved, int lod) {
+        return lod == LOD_HIGH && !unpaved && half >= MARKING_MIN_HALF_M;
+    }
+
     /** How far each end of a ribbon runs past its last centreline point, m. */
     static float endExtension(float half) {
         return Math.min(half, 2.4f);
@@ -503,7 +522,8 @@ public final class ChunkMesher {
             double y1 = groundAt(ox, oz, f.roadXZ, e - 1);
             double total = f.roadLength(r);
 
-            int prevL = -1, prevR = -1;
+            int prevL = -1, prevR = -1, prevC = -1;
+            boolean marked = isMarked(half, unpavedRoad, lod);
             double travelled = 0;
             for (int k = s; k < e; k++) {
                 float lx = f.roadXZ[k * 2];
@@ -602,16 +622,43 @@ public final class ChunkMesher {
                     yr = lodGround(ox, oz, lod, px - nx * hw, pz - nz * hw)
                             + lift;
                 }
+                // The lateral coordinate, in metres from the centreline.
+                // The fragment stage paints the centre line from it; an
+                // unpainted road is pushed past the test rather than
+                // carrying a flag the vertex has no room for.
+                float vBase = marked ? 0f : UNMARKED_V;
                 int li = push(px + nx * hw, (float) yl, pz + nz * hw,
-                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
+                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat, vBase + hw);
                 int ri = push(px - nx * hw, (float) yr, pz - nz * hw,
-                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
+                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat, vBase + hw);
+                if (!marked) {
+                    if (prevL >= 0) {
+                        triN(prevL, li, prevR);
+                        triN(prevR, li, ri);
+                    }
+                    prevL = li;
+                    prevR = ri;
+                    continue;
+                }
+                // A marked road carries a third vertex down the middle,
+                // because the paint has to be interpolated towards
+                // something. Two vertices both a half-width from the
+                // centre interpolate to a half-width everywhere in
+                // between, and the line never appears. The extra station
+                // also samples the ground once more across the
+                // carriageway, so a road on a cross slope sits on it a
+                // little better than two samples could manage.
+                int ci = push(px, (float) y, pz,
+                        0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat, 0f);
                 if (prevL >= 0) {
-                    triN(prevL, li, prevR);
-                    triN(prevR, li, ri);
+                    triN(prevL, li, prevC);
+                    triN(prevC, li, ci);
+                    triN(prevC, ci, prevR);
+                    triN(prevR, ci, ri);
                 }
                 prevL = li;
                 prevR = ri;
+                prevC = ci;
             }
         }
     }

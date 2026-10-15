@@ -251,4 +251,25 @@ final class ShaderSanityTest {
                 "the sea's vertex and fragment stages carry different"
                         + " copies of the wave function");
     }
+
+    @Test
+    @DisplayName("lane markings are confined to tarmac")
+    void markingsCannotLeakOntoOtherSurfaces() {
+        String fs = Shaders.SCENE_FS;
+        int at = fs.indexOf("vec3(0.80, 0.78, 0.70)");
+        assertTrue(at > 0, "the lane marking has gone");
+        // The paint has to be inside a test on the material. Everything
+        // horizontal ignores vTexV, so without the guard the default
+        // coordinate - the world height - would paint a white stripe
+        // along every contour at sea level.
+        String before = fs.substring(Math.max(0, at - 420), at);
+        assertTrue(before.contains("if (mat == "
+                        + ai.shuvrajeetkamila.mumbai.render
+                                .TextureLibrary.MAT_TARMAC + ")"),
+                "the lane marking is not guarded by the tarmac material");
+        assertTrue(before.contains("fwidth(vTexV)"),
+                "the line has no screen-space width, so at a glancing"
+                        + " angle it will flicker between fragments"
+                        + " instead of staying one pixel wide");
+    }
 }

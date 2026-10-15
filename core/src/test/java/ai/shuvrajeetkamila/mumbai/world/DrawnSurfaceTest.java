@@ -309,4 +309,67 @@ final class DrawnSurfaceTest {
         }
         assertTrue(checked > 0, "no chunk with roads was meshed");
     }
+
+    @Test
+    @DisplayName("only wide paved roads are painted, and only up close")
+    void markingsGoWhereMarkingsGo() {
+        assertTrue(ChunkMesher.isMarked(7.0f, false, ChunkMesher.LOD_HIGH),
+                "a fourteen metre arterial has no centre line");
+        assertTrue(!ChunkMesher.isMarked(1.6f, false, ChunkMesher.LOD_HIGH),
+                "a three metre lane was given a centre line, which no"
+                        + " three metre lane has");
+        assertTrue(!ChunkMesher.isMarked(7.0f, true, ChunkMesher.LOD_HIGH),
+                "an unmade track was given painted markings");
+        assertTrue(!ChunkMesher.isMarked(7.0f, false, ChunkMesher.LOD_MED),
+                "a distant chunk is carrying a third of its road"
+                        + " vertices for a line nobody can resolve");
+        assertTrue(!ChunkMesher.isMarked(7.0f, false, ChunkMesher.LOD_LOW),
+                "the lowest level of detail is still paying for paint");
+    }
+
+    @Test
+    @DisplayName("nothing but the centre of a road reads as paint")
+    void onlyTheCentrelineIsNearZero() throws Exception {
+        // The fragment stage paints any tarmac fragment whose lateral
+        // coordinate is near zero. That is safe only while no tarmac
+        // vertex sits near zero except the deliberate centre station:
+        // if some other surface were ever given the tarmac material and
+        // the default coordinate - which is the world height - then
+        // anything at sea level would come out painted white.
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        int chunks = 0;
+        long tarmac = 0;
+        long centre = 0;
+        // Stride coprime with the grid width, which is 53 chunks. A
+            // stride of 53 walks one column, and that column is sea.
+            for (int c = 0; c < w.chunkCount() && chunks < 20; c += 37) {
+            ChunkFeatures f = features(w, c);
+            if (f == null || f.roadCount() == 0) { continue; }
+            chunks++;
+            for (int lod : new int[]{ChunkMesher.LOD_HIGH, ChunkMesher.LOD_MED,
+                                     ChunkMesher.LOD_LOW}) {
+                ChunkMesher.Mesh m = mesher.build(f, lod);
+                for (int v = 0; v < m.vertexCount; v++) {
+                    int o = v * ChunkMesher.STRIDE;
+                    int mat = (int) Math.floor(m.vertices[o + 9] + 5e-4);
+                    if (mat != TextureLibrary.MAT_TARMAC) { continue; }
+                    float tv = m.vertices[o + 10];
+                    tarmac++;
+                    if (tv == 0f) { centre++; continue; }
+                    assertTrue(tv >= ChunkMesher.MARKING_MIN_HALF_M - 1e-4,
+                            "a tarmac vertex sits at a lateral coordinate"
+                                    + " of " + tv + " m, inside the band"
+                                    + " the shader paints, so a stripe"
+                                    + " will appear away from any"
+                                    + " centreline");
+                }
+            }
+        }
+        assertTrue(chunks > 0, "no chunk with roads was meshed");
+        assertTrue(tarmac > 0, "no tarmac was emitted at all");
+        assertTrue(centre > 0,
+                "not one road carried a centre station, so no road in"
+                        + " the city has a line down the middle");
+    }
 }
