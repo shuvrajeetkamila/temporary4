@@ -50,6 +50,13 @@ public final class Telemetry {
     public volatile String auxLabel1 = "";
     public volatile String auxLabel2 = "";
 
+    /**
+     * Crash damage on the vehicle being driven, 0 pristine to 1 wrecked,
+     * or 0 on foot. The HUD only draws it once there is some, so an
+     * undamaged car shows no gauge at all.
+     */
+    public volatile double damage;
+
     public volatile String warning = "";
     public volatile boolean onWater;
     public volatile double tideM;

@@ -433,6 +433,39 @@ public final class ChunkMesher {
      * centimetres so it beats the terrain in the depth test, and lifted
      * properly where OSM marks a bridge.
      */
+    /**
+     * Half-width to use at a bend so the ribbon stays the width of the
+     * road.
+     *
+     * <p>The ribbon edge is offset perpendicular to the average of the
+     * two segments meeting at the vertex, which is the right direction
+     * and the wrong length. The road only keeps its width if that offset
+     * is divided by the cosine of half the turn. Without it the outside
+     * of every corner pinches in by that factor - a quarter of the width
+     * at a 60 degree bend - and leaves a row of bites out of the kerb
+     * all the way round a flyover.
+     *
+     * @param half    the road's true half-width, m
+     * @param ax, az  the segment arriving at the vertex
+     * @param bx, bz  the segment leaving it
+     */
+    static float mitre(float half, double ax, double az,
+                       double bx, double bz) {
+        double al = Math.sqrt(ax * ax + az * az);
+        double bl = Math.sqrt(bx * bx + bz * bz);
+        if (al < 1e-5 || bl < 1e-5) { return half; }
+        double dot = (ax * bx + az * bz) / (al * bl);
+        double cosHalf = Math.sqrt(Math.max(0.0, (1.0 + dot) * 0.5));
+        // Capped at about 2.6, or a hairpin throws a spike kilometres
+        // long out of a single vertex.
+        return (float) (half / Math.max(0.38, cosHalf));
+    }
+
+    /** How far each end of a ribbon runs past its last centreline point, m. */
+    static float endExtension(float half) {
+        return Math.min(half, 2.4f);
+    }
+
     private void roads(ChunkFeatures f, double ox, double oz, int lod) {
         for (int r = 0; r < f.roadCount(); r++) {
             int cls = f.roadClass[r];
@@ -490,17 +523,56 @@ public final class ChunkMesher {
                 if (dl < 1e-5) { continue; }
                 float nx = (float) (dz / dl);
                 float nz = (float) (-dx / dl);
+
+                // Mitre the corner. The offset above is perpendicular to
+                // the average of the two segments meeting here, which is
+                // the right direction and the wrong length: on a bend the
+                // ribbon has to be wider than the road to stay the width
+                // of the road, by one over the cosine of half the turn.
+                // Without it the outside of every corner pinches in and
+                // leaves a notch, which on a sweeping flyover or a
+                // roundabout approach is a row of bites out of the kerb.
+                float hw = half;
+                if (k > s && k < e - 1) {
+                    hw = mitre(half,
+                            lx - f.roadXZ[(k - 1) * 2],
+                            lz - f.roadXZ[(k - 1) * 2 + 1],
+                            f.roadXZ[(k + 1) * 2] - lx,
+                            f.roadXZ[(k + 1) * 2 + 1] - lz);
+                }
+
                 if (k > s) {
                     double sx = lx - f.roadXZ[(k - 1) * 2];
                     double sz = lz - f.roadXZ[(k - 1) * 2 + 1];
                     travelled += Math.sqrt(sx * sx + sz * sz);
                 }
+                // Run the ribbon a little past each end.
+                //
+                // OSM splits a street into a way per attribute change and
+                // the compiler splits again at every chunk border, so a
+                // single road is a chain of ribbons that stop dead at a
+                // shared node. Where four of them meet, the four square
+                // ends leave an unpaved notch in the middle of the
+                // crossroads, and at a chunk border there is a hairline
+                // of bare ground straight across the carriageway. Pushing
+                // each end out by about half a lane makes them overlap
+                // instead of abut; the class lift above keeps the overlap
+                // from fighting in the depth buffer. A cul-de-sac gets a
+                // two metre tongue of tarmac, which nobody will see.
+                float px = lx, pz = lz;
+                if (k == s || k == e - 1) {
+                    float ext = endExtension(half);
+                    float sgn = k == s ? -1f : 1f;
+                    px += (float) (dx / dl) * ext * sgn;
+                    pz += (float) (dz / dl) * ext * sgn;
+                }
+
                 double y;
                 if (bridge && total > 1) {
                     // The drawn ground again, not the true one: a deck
                     // that clears the real hillside by a metre can still
                     // be buried in the coarse mesh a distant chunk draws.
-                    double ground = lodGround(ox, oz, lod, lx, lz);
+                    double ground = lodGround(ox, oz, lod, px, pz);
                     y = RoadDeck.height(y0, y1, Math.min(1, travelled / total),
                             ground);
                 } else {
@@ -515,7 +587,7 @@ public final class ChunkMesher {
                     // ribbon where it crosses the ground tears into
                     // exactly the sort of line that gets reported as
                     // texture on the land.
-                    y = lodGround(ox, oz, lod, lx, lz) + lift;
+                    y = lodGround(ox, oz, lod, px, pz) + lift;
                 }
                 // Each edge of the ribbon takes the ground under itself.
                 // Using the centreline height for both, as this did,
@@ -525,14 +597,14 @@ public final class ChunkMesher {
                 double yl = y;
                 double yr = y;
                 if (!(bridge && total > 1)) {
-                    yl = lodGround(ox, oz, lod, lx + nx * half, lz + nz * half)
+                    yl = lodGround(ox, oz, lod, px + nx * hw, pz + nz * hw)
                             + lift;
-                    yr = lodGround(ox, oz, lod, lx - nx * half, lz - nz * half)
+                    yr = lodGround(ox, oz, lod, px - nx * hw, pz - nz * hw)
                             + lift;
                 }
-                int li = push(lx + nx * half, (float) yl, lz + nz * half,
+                int li = push(px + nx * hw, (float) yl, pz + nz * hw,
                         0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
-                int ri = push(lx - nx * half, (float) yr, lz - nz * half,
+                int ri = push(px - nx * hw, (float) yr, pz - nz * hw,
                         0, 1, 0, rgb[0], rgb[1], rgb[2], roadMat);
                 if (prevL >= 0) {
                     triN(prevL, li, prevR);

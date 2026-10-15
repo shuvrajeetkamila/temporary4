@@ -60,6 +60,8 @@ public final class Agents {
         public double shoveTimer;
         /** Yaw rate while shoved, rad/s. */
         public double spin;
+        /** Accumulated crash damage, 0 pristine to 1 wrecked. */
+        public double damage;
     }
 
     public static final class Ped {
@@ -369,6 +371,12 @@ public final class Agents {
                 c.active = false;
             }
         }
+
+        // Once every car has moved, settle the ones that moved into each
+        // other. Done after the whole loop rather than inside it so the
+        // result does not depend on the order the cars happen to sit in
+        // the array.
+        resolveCarCollisions(cars, Math.min(carCap, cars.length), dt);
         for (int i = 0; i < pedCap && i < peds.length; i++) {
             Ped p = peds[i];
             if (!p.active) {
@@ -641,8 +649,166 @@ public final class Agents {
         }
     }
 
+    // ---- traffic against traffic -----------------------------------
+    //
+    // Until now a car yielded to the player and to nothing else, so
+    // traffic drove straight through itself. At a junction a dozen cars
+    // would converge on the same two metres of tarmac and sit inside
+    // one another, which reads as a single flickering car, and a queue
+    // never formed anywhere because nothing was ever in anyone's way.
+
+    /** Half the length of a car for the overlap test, m. */
+    static double halfLength(Car c) {
+        return VehicleKind.values()[c.kindOrdinal].lengthM * 0.5;
+    }
+
+    /** Half the width of a car for the overlap test, m. */
+    static double halfWidth(Car c) {
+        return VehicleKind.values()[c.kindOrdinal].widthM * 0.5;
+    }
+
+    /**
+     * Whether two cars are touching.
+     *
+     * <p>A circle round each car cannot do this: a circle big enough to
+     * cover a five metre taxi end to end is two and a half metres wide,
+     * and traffic in the oncoming lane passes within two. Every car
+     * would have spent the whole drive shoving the cars going the other
+     * way off the road.
+     *
+     * <p>So each car's box is tested in its own frame and both have to
+     * agree. That is the separating-axis test over the four face axes,
+     * which for two boxes of roughly the same size is exact enough that
+     * nothing visible gets through it.
+     */
+    static boolean touching(Car a, Car b) {
+        return inBox(a, b.x, b.z, halfLength(b), halfWidth(b))
+                && inBox(b, a.x, a.z, halfLength(a), halfWidth(a));
+    }
+
+    /** Whether a point, grown by a margin, falls inside a car's box. */
+    private static boolean inBox(Car c, double px, double pz,
+                                 double growLen, double growWid) {
+        double fx = Math.sin(c.heading), fz = -Math.cos(c.heading);
+        double dx = px - c.x, dz = pz - c.z;
+        double along = dx * fx + dz * fz;
+        double side = dx * fz - dz * fx;
+        return Math.abs(along) <= halfLength(c) + growLen
+                && Math.abs(side) <= halfWidth(c) + growWid;
+    }
+
+    /** World velocity of a car, shoved or driving. */
+    private static double velX(Car c) {
+        return c.shoveTimer > 0 ? c.shoveX : Math.sin(c.heading) * c.speed;
+    }
+
+    private static double velZ(Car c) {
+        return c.shoveTimer > 0 ? c.shoveZ : -Math.cos(c.heading) * c.speed;
+    }
+
+    /**
+     * The speed this car can hold given the car in front of it.
+     *
+     * <p>Reuses the same function that brakes for the player, because a
+     * car ahead and a player ahead are the same problem, and having one
+     * definition means the diagonal-road bug that was fixed in one is
+     * fixed in both.
+     */
+    private double headway(Car c, double cruise) {
+        double want = cruise;
+        for (int i = 0; i < carCap && i < cars.length; i++) {
+            Car o = cars[i];
+            if (o == c || !o.active) { continue; }
+            double dx = o.x - c.x, dz = o.z - c.z;
+            if (Math.abs(dx) > NOTICE_M || Math.abs(dz) > NOTICE_M) { continue; }
+            want = Math.min(want,
+                    desiredSpeed(c.x, c.z, c.heading, o.x, o.z, cruise));
+            if (want <= 0) { return 0; }
+        }
+        return want;
+    }
+
+    /**
+     * Separate and bounce every pair of cars that ended the step inside
+     * one another.
+     *
+     * <p>This is every pair against every other, which is the thing one
+     * is told not to write. At the cap of {@value #MAX_CARS} that is
+     * about four thousand rejections of two subtractions each, once per
+     * frame, and a grid to avoid it would cost more to rebuild than it
+     * saves. If the cap ever rises past a few hundred this wants the
+     * same spatial index the road lookup uses.
+     */
+    static void resolveCarCollisions(Car[] cars, int n, double dt) {
+        for (int i = 0; i < n && i < cars.length; i++) {
+            Car a = cars[i];
+            if (!a.active || a.parked) { continue; }
+            for (int j = i + 1; j < n && j < cars.length; j++) {
+                Car b = cars[j];
+                if (!b.active) { continue; }
+                double dx = b.x - a.x, dz = b.z - a.z;
+                if (Math.abs(dx) > 12 || Math.abs(dz) > 12) { continue; }
+                if (!touching(a, b)) { continue; }
+
+                double d = Math.hypot(dx, dz);
+                if (d < 1e-6) { dx = 1; dz = 0; d = 1; }
+                double ux = dx / d, uz = dz / d;
+
+                double avx = velX(a), avz = velZ(a);
+                double bvx = velX(b), bvz = velZ(b);
+                // Closing speed along the line of centres. Positive means
+                // a is driving into b.
+                double rel = (avx - bvx) * ux + (avz - bvz) * uz;
+
+                double ma = Math.max(120.0,
+                        VehicleKind.values()[a.kindOrdinal].massKg);
+                double mb = Math.max(120.0,
+                        VehicleKind.values()[b.kindOrdinal].massKg);
+
+                if (rel > 0) {
+                    double e = 0.12;            // sheet metal does not bounce
+                    double jj = (1 + e) * rel / (1 / ma + 1 / mb);
+                    double ga = jj / ma, gb = jj / mb;
+                    // A glancing blow spins the lighter car more than a
+                    // square one does, which is what the sideways part of
+                    // the impulse means.
+                    double spin = (dx * avz - dz * avx) / Math.max(4.0, d * d);
+                    shove(a, avx - ux * ga, avz - uz * ga, -spin * 0.5);
+                    shove(b, bvx + ux * gb, bvz + uz * gb, spin * 0.5);
+                    damage(a, rel * mb / (ma + mb));
+                    damage(b, rel * ma / (ma + mb));
+                }
+
+                // Push them apart whether or not they were closing, or a
+                // pair that arrived overlapping stays overlapping: the
+                // impulse is zero when they are already separating and
+                // nothing else would ever move them.
+                double overlap = Math.max(0.0, halfLength(a) + halfLength(b) - d);
+                if (overlap > 0) {
+                    double push = Math.min(overlap, 6.0 * dt) * 0.5;
+                    a.x -= ux * push; a.z -= uz * push;
+                    b.x += ux * push; b.z += uz * push;
+                    if (a.shoveTimer <= 0) { a.shoveTimer = 0.25; }
+                    if (b.shoveTimer <= 0) { b.shoveTimer = 0.25; }
+                }
+            }
+        }
+    }
+
+    /**
+     * Add crash damage from an impact at the given closing speed.
+     *
+     * <p>Below walking pace nothing happens, so nudging through a queue
+     * does not slowly destroy the car. Above that it is linear in the
+     * speed: a 50 km/h shunt is most of a wreck.
+     */
+    public static void damage(Car c, double closingMs) {
+        if (closingMs <= 1.5) { return; }
+        c.damage = Math.min(1.0, c.damage + (closingMs - 1.5) / 26.0);
+    }
+
     /** Knock a car off its route. Velocity in m/s, spin in rad/s. */
-    public void shove(Car c, double vx, double vz, double spin) {
+    public static void shove(Car c, double vx, double vz, double spin) {
         if (c.parked) { c.parked = false; }
         c.shoveX = vx;
         c.shoveZ = vz;
@@ -757,6 +923,9 @@ public final class Agents {
         // breathe in and out like a concertina.
         // Police do not give way. Everything else does.
         double want = c.police ? c.targetSpeed : yieldFor(c, c.targetSpeed);
+        // Police do not give way to the player, but they do not drive
+        // through the traffic jam they caused either.
+        want = Math.min(want, headway(c, c.targetSpeed));
         double rate = want < c.speed ? 7.0 : 2.1;
         c.speed += Math.max(-rate * dt, Math.min(rate * dt, want - c.speed));
         if (c.speed < 0) { c.speed = 0; }

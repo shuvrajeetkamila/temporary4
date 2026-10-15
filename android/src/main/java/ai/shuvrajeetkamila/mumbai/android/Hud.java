@@ -42,6 +42,8 @@ final class Hud extends View {
     private final Paint banner = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint starOn = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint starOff = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint damageBar = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint damageLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path starPath = new android.graphics.Path();
     private final android.graphics.Path arrowPath = new android.graphics.Path();
 
@@ -112,6 +114,9 @@ final class Hud extends View {
 
         starOn.setColor(0xFFFFC421);
         starOn.setStyle(Paint.Style.FILL);
+        damageBar.setStyle(Paint.Style.FILL);
+        damageLabel.setColor(0xFFB9C2C8);
+        damageLabel.setTextSize(9 * d);
         starOff.setColor(0x33FFFFFF);
         starOff.setStyle(Paint.Style.STROKE);
         starOff.setStrokeWidth(1.2f * d);
@@ -292,6 +297,26 @@ final class Hud extends View {
         String cash = "Rs " + s.money;
         float cw = money.measureText(cash);
         canvas.drawText(cash, getWidth() - cw - 12 * d, 30 * d, money);
+
+        // --- crash damage ----------------------------------------------------
+        // Only once there is some. A full gauge sitting at zero all game
+        // is clutter, and the first time it appears is information.
+        if (s.damage > 0.02) {
+            float bw = 96 * d, bh = 7 * d;
+            float bx = 12 * d, by = getHeight() - 20 * d;
+            rect.set(bx, by, bx + bw, by + bh);
+            canvas.drawRoundRect(rect, 2 * d, 2 * d, panel);
+            // Green through amber to red, so a glance is enough.
+            float f = (float) Math.min(1.0, s.damage);
+            int r = (int) (90 + 165 * Math.min(1f, f * 1.6f));
+            int g = (int) (200 - 170 * f);
+            damageBar.setColor(0xFF000000 | (r << 16) | (g << 8) | 40);
+            rect.set(bx + 1 * d, by + 1 * d,
+                    bx + 1 * d + (bw - 2 * d) * f, by + bh - 1 * d);
+            canvas.drawRoundRect(rect, 2 * d, 2 * d, damageBar);
+            canvas.drawText(f >= 0.999f ? "WRECKED" : "DAMAGE",
+                    bx, by - 3 * d, damageLabel);
+        }
 
         // --- wanted level, under the money -----------------------------------
         if (s.wantedStars > 0) {

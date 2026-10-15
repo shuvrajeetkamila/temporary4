@@ -654,6 +654,11 @@ public final class Engine {
             // The impulse as a force over this step, so nothing is assigned.
             car.carryForce(ux * j / dt, 0, uz * j / dt);
 
+            // Both of them wear the hit. -rel is the closing speed, since
+            // rel is negative whenever they are approaching.
+            car.takeImpact(-rel * m2 / (m1 + m2));
+            Agents.damage(c, -rel * m1 / (m1 + m2));
+
             // And the other way for the car that was hit.
             double give = j / m2;
             agents.shove(c, ovx - ux * give, ovz - uz * give,
@@ -951,6 +956,11 @@ public final class Engine {
         VehicleKind k = kindOf(c);
         car.configure(k);
         car.reset();
+        // Damage belongs to the vehicle, not to the driver. Carrying it
+        // across means you cannot repair a wreck by stepping out of it
+        // and back in, and the dented taxi you abandoned is still dented
+        // when you come back for it.
+        car.damage = c.damage;
         car.position.set(c.x, c.y + k.comHeightM + 0.22, c.z);
         car.orientation.set(Quat.yaw(c.heading));
         // Inherit the traffic speed rather than snapping to a standstill.
@@ -1058,6 +1068,7 @@ public final class Engine {
             c.speed = 0;
             c.parked = true;
             c.kindOrdinal = k.ordinal();
+            c.damage = car.damage;
             c.active = true;
         }
         occupiedAgent = -1;
@@ -1385,6 +1396,8 @@ public final class Engine {
 
         Places.Place p = world.places().nearest(b.position.x, b.position.z, 2500);
         t.nearestPlace = p == null ? "" : p.name;
+
+        t.damage = profile == ControlProfile.CAR ? car.damage : 0;
 
         switch (profile) {
             case CAR:

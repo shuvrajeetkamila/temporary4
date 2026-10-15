@@ -82,6 +82,36 @@ public final class CarPhysics extends RigidBody {
     public double redlineRpm = 6200;
     /** Peak crank torque, N m. Set by {@link #configure}. */
     public double peakTorqueNm = 196.0;
+
+    /**
+     * Accumulated crash damage, 0 pristine to 1 wrecked.
+     *
+     * <p>Costs engine torque and nothing else. A car that steers worse
+     * the more you hit things is a car you cannot drive to a garage,
+     * and there is no garage; losing power is a penalty you can still
+     * finish a mission with.
+     */
+    public double damage;
+
+    /** Damage at which the engine stops making useful power. */
+    public static final double DAMAGE_POWER_LOSS = 0.55;
+
+    /**
+     * Take an impact at the given closing speed, m/s.
+     *
+     * <p>Below walking pace nothing happens, so kerbing the car or
+     * nudging through a queue does not wear it out. The scale is set so
+     * that a 50 km/h shunt into a stationary car is most of a wreck.
+     */
+    public void takeImpact(double closingMs) {
+        if (closingMs <= 1.5) { return; }
+        damage = MathUtil.clamp(damage + (closingMs - 1.5) / 26.0, 0, 1);
+    }
+
+    /** Fraction of engine torque still available, 1 pristine. */
+    public double powerFraction() {
+        return 1.0 - DAMAGE_POWER_LOSS * MathUtil.clamp(damage, 0, 1);
+    }
     /** Which vehicle this currently is. Drives the mesh the renderer picks. */
     public VehicleKind kind = VehicleKind.SEDAN;
     /** Engine plus flywheel plus gearbox, kg m^2 at the crank. */
@@ -341,7 +371,10 @@ public final class CarPhysics extends RigidBody {
         // now, so each engine gets the same shape over its own range.
         double idleRef = Math.min(500, redlineRpm * 0.12);
         double r = MathUtil.clamp(rpm, idleRef, maxRpm);
-        double peak = peakTorqueNm;
+        // A damaged engine makes less of it. Braking torque above the
+        // limiter is deliberately not scaled: a wrecked car should not
+        // also rev higher than a healthy one.
+        double peak = peakTorqueNm * powerFraction();
         double rise = 0.42 * redlineRpm;      // peak torque arrives
         double mid = 0.58 * redlineRpm;
         double fall = 0.77 * redlineRpm;      // and starts to go away
