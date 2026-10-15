@@ -483,6 +483,20 @@ public final class ChunkMesher {
     /** Highest road class that gets street lighting. */
     static final int LAMP_MAX_CLASS = 4;
 
+    /** Height of a kerb above the carriageway, m. */
+    static final float KERB_H_M = 0.14f;
+
+    /** Width of the footpath behind the kerb, m. */
+    static final float FOOTPATH_W_M = 2.2f;
+
+    /** Whether a road of this class gets a footpath. */
+    static boolean hasFootpath(int cls, boolean bridge, boolean unpaved,
+                               float half, int lod) {
+        return lod == LOD_HIGH && !bridge && !unpaved
+                && cls >= 0 && cls <= LAMP_MAX_CLASS
+                && half >= 2.5f;
+    }
+
     /** Whether a road of this class is lit. */
     static boolean isLit(int cls, boolean bridge, int lod) {
         return lod == LOD_HIGH && !bridge
@@ -701,8 +715,16 @@ public final class ChunkMesher {
                 prevR = ri;
                 prevC = ci;
             }
+            if (hasFootpath(cls, bridge, unpavedRoad, half, lod)) {
+                footpath(f, r, ox, oz, lod, half, 1);
+                footpath(f, r, ox, oz, lod, half, -1);
+            }
             if (isLit(cls, bridge, lod)) {
-                streetLights(f, r, ox, oz, lod, half);
+                // Standing on the pavement when there is one, rather
+                // than sunk a kerb's height into it.
+                float base = hasFootpath(cls, bridge, unpavedRoad, half, lod)
+                        ? ROAD_LIFT_M + KERB_H_M : 0f;
+                streetLights(f, r, ox, oz, lod, half, base);
             }
         }
     }
@@ -721,7 +743,7 @@ public final class ChunkMesher {
      * pixel and would do nothing but alias.
      */
     private void streetLights(ChunkFeatures f, int r, double ox, double oz,
-                              int lod, float half) {
+                              int lod, float half, float base) {
         int s = f.roadOffset[r];
         int e = f.roadOffset[r + 1];
         double since = LAMP_SPACING_M * 0.5;
@@ -738,13 +760,93 @@ public final class ChunkMesher {
                 // Alternating sides, so a single file of lights down one
                 // kerb does not read as a fence.
                 double sgn = (n++ & 1) == 0 ? 1.0 : -1.0;
-                double off = half + 0.8;
+                // Out on the pavement rather than on the kerb edge.
+                double off = half + FOOTPATH_W_M * 0.55;
                 double px = x0 + dx * t / len + nx * off * sgn;
                 double pz = z0 + dz * t / len + nz * off * sgn;
-                lamp(px, pz, lodGround(ox, oz, lod, px, pz));
+                lamp(px, pz, lodGround(ox, oz, lod, px, pz) + base);
                 t += LAMP_SPACING_M;
             }
             since = (since + len) % LAMP_SPACING_M;
+        }
+    }
+
+    /**
+     * A raised footpath down one side of a road.
+     *
+     * <p>An arterial was a grey ribbon laid straight onto the ground,
+     * with the street lights standing in the dirt beside it. A kerb and
+     * a pavement are what make a road read as a street rather than as a
+     * strip of tarmac somebody painted on a field, and they give the
+     * lights and the pedestrians something to stand on.
+     *
+     * <p>Only at the nearest level of detail, and only where the ground
+     * under it is land - a causeway's kerb would otherwise sit at chart
+     * datum with the sea over it.
+     *
+     * @param side +1 for the left-hand edge of the ribbon, -1 the right
+     */
+    private void footpath(ChunkFeatures f, int r, double ox, double oz,
+                          int lod, float half, int side) {
+        int s = f.roadOffset[r];
+        int e = f.roadOffset[r + 1];
+        float lift = ROAD_LIFT_M + KERB_H_M;
+        int prevIn = -1, prevOut = -1, prevKerb = -1;
+        for (int k = s; k < e; k++) {
+            float lx = f.roadXZ[k * 2];
+            float lz = f.roadXZ[k * 2 + 1];
+            float dx, dz;
+            if (k == s) {
+                dx = f.roadXZ[(k + 1) * 2] - lx;
+                dz = f.roadXZ[(k + 1) * 2 + 1] - lz;
+            } else if (k == e - 1) {
+                dx = lx - f.roadXZ[(k - 1) * 2];
+                dz = lz - f.roadXZ[(k - 1) * 2 + 1];
+            } else {
+                dx = f.roadXZ[(k + 1) * 2] - f.roadXZ[(k - 1) * 2];
+                dz = f.roadXZ[(k + 1) * 2 + 1] - f.roadXZ[(k - 1) * 2 + 1];
+            }
+            double dl = Math.sqrt(dx * dx + dz * dz);
+            if (dl < 1e-5) { continue; }
+            float nx = (float) (dz / dl) * side;
+            float nz = (float) (-dx / dl) * side;
+            float hw = half;
+            if (k > s && k < e - 1) {
+                hw = mitre(half,
+                        lx - f.roadXZ[(k - 1) * 2],
+                        lz - f.roadXZ[(k - 1) * 2 + 1],
+                        f.roadXZ[(k + 1) * 2] - lx,
+                        f.roadXZ[(k + 1) * 2 + 1] - lz);
+            }
+            float ix = lx + nx * hw;
+            float iz = lz + nz * hw;
+            float oxp = lx + nx * (hw + FOOTPATH_W_M);
+            float ozp = lz + nz * (hw + FOOTPATH_W_M);
+            if (!world.isLand(ox + oxp, oz + ozp)) {
+                prevIn = prevOut = prevKerb = -1;
+                continue;
+            }
+            float gi = (float) lodGround(ox, oz, lod, ix, iz);
+            float go = (float) lodGround(ox, oz, lod, oxp, ozp);
+            // The kerb face, from the carriageway up to the path.
+            int kerb = push(ix, gi + ROAD_LIFT_M, iz, nx, 0, nz,
+                    0.52f, 0.51f, 0.49f,
+                    (float) TextureLibrary.MAT_CONCRETE);
+            int in = push(ix, gi + lift, iz, 0, 1, 0,
+                    0.56f, 0.55f, 0.53f,
+                    (float) TextureLibrary.MAT_CONCRETE);
+            int out = push(oxp, go + lift, ozp, 0, 1, 0,
+                    0.54f, 0.53f, 0.51f,
+                    (float) TextureLibrary.MAT_CONCRETE);
+            if (prevIn >= 0) {
+                triN(prevKerb, kerb, prevIn);
+                triN(prevIn, kerb, in);
+                triN(prevIn, in, prevOut);
+                triN(prevOut, in, out);
+            }
+            prevIn = in;
+            prevOut = out;
+            prevKerb = kerb;
         }
     }
 

@@ -487,6 +487,61 @@ Two things were added in the same pass rather than fixed: traffic is
 now solid to traffic, and vehicles accumulate crash damage that costs
 engine torque. Both are described in `DELIVERY.md`.
 
+### Round four — the mat, the helicopter and the steering
+
+29. **The moving mat was the rain.** The overlay draws three sheets of
+    streaks, and the streaks were 34, 58 and 82 columns across the
+    screen by 17, 29 and 41 down — so each drop was about as wide as
+    it was tall. A screen full of square drops is not rain, it is
+    woven matting. Rendering the shader offline and looking at the
+    image settled it in a way that reading the code did not. It was
+    also computed at mediump, where a value of eighty steps by a
+    sixteenth while the feature being driven — the head of a streak —
+    was a twentieth wide, so the drops quantised into blocks that
+    jumped rather than fell. **Fixed:** six to fourteen columns, long
+    thin streaks with a head and a tail, a quarter of the previous
+    screen coverage, all the position maths at highp, and the monsoon
+    frequency down from 0.55 to 0.30. Plus a RAIN switch next to GFX,
+    saved with the rest of the progress.
+
+30. **The helicopter could not be flown, for three reasons that hid
+    each other.** The disc tilt was inverted against the pitching
+    moment, so the thrust pushed one way while the nose went the
+    other and the two fought to a feeble 20 km/h. The roll moment was
+    inverted, so the stick banked it away from the way it was
+    translating. And there was no term proportional to attitude at
+    all: flapback closes the pitch loop through speed, which is an
+    integral, and a third-order loop with no first-order term is
+    unstable at any gain — at a steady stick it tumbled between 70°
+    nose down and 70° nose up and never settled. **Fixed:** signs
+    measured rather than assumed, and the 1.4 m the fuselage hangs
+    below the hub restored as the pendulum term. Full forward cyclic
+    now trims at 225 km/h, a nudge is gone in three seconds, and the
+    collective is a lever that stays where it is put instead of
+    springing back to half travel, which is below a hover.
+
+31. **Autorotation was wrong in both directions.** The rotor needed
+    35 m/s of descent before it was driven properly, so an engine
+    failure was a crash with extra steps; and the drive was scaled by
+    the torque the rotor was absorbing, which collapses at flat pitch,
+    so dropping the lever — the first thing anybody does when the
+    engine quits — stopped the rotor dead and the machine fell at
+    90 m/s. **Fixed:** it comes down at 8–13 m/s in the autorotative
+    range, the rotor is sustained at any lever position, and pulling
+    in the flare arrests the descent.
+
+32. **More steering made the car turn less.** A front tyre makes its
+    most lateral force at a few degrees of slip and less past that,
+    and the rack shed lock linearly with speed, which left that angle
+    well inside the stick's travel. Measured at a held speed: peak yaw
+    at 0.4 stick at 50 and 70 km/h and at 0.2 at 100, with full stick
+    about a fifth worse than the peak. So above 50 km/h more than half
+    the stick washed the car wide — and the natural reaction, more
+    lock, made it worse. **Fixed:** the lock falls off as speed to the
+    three halves, fitted to where the yaw actually peaks. Monotonic at
+    every speed, full-lock yaw 19 % better at 50–100 km/h, full lock
+    still there below 22 km/h for parking.
+
 ## Suggested order
 
 1 → 7 → 2 → 3 (the collision family; 7 is nearly free once 1 exists, and

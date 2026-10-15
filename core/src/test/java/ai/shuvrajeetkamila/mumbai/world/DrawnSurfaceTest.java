@@ -552,4 +552,121 @@ final class DrawnSurfaceTest {
         assertTrue(ChunkMesher.LAMP_AUX > 61.0f,
                 "the lamp tag overlaps the beacon tag");
     }
+
+    // ---- kerbs and footpaths -------------------------------------------
+
+    @Test
+    @DisplayName("footpaths go beside wide paved arterials and nowhere else")
+    void footpathsGoWhereFootpathsGo() {
+        int hi = ChunkMesher.LOD_HIGH;
+        assertTrue(ChunkMesher.hasFootpath(2, false, false, 7f, hi),
+                "a fourteen metre arterial has no pavement");
+        assertTrue(!ChunkMesher.hasFootpath(2, true, false, 7f, hi),
+                "a pavement was laid along a bridge deck");
+        assertTrue(!ChunkMesher.hasFootpath(2, false, true, 7f, hi),
+                "an unmade track was given a concrete kerb");
+        assertTrue(!ChunkMesher.hasFootpath(2, false, false, 2.0f, hi),
+                "a four metre lane was given a kerb and a pavement on"
+                        + " both sides, which is wider than the lane");
+        assertTrue(!ChunkMesher.hasFootpath(9, false, false, 7f, hi),
+                "a service road is carrying pavement geometry");
+        for (int lod : new int[]{ChunkMesher.LOD_MED, ChunkMesher.LOD_LOW}) {
+            assertTrue(!ChunkMesher.hasFootpath(2, false, false, 7f, lod),
+                    "a 14 cm kerb is being meshed at detail " + lod);
+        }
+    }
+
+    @Test
+    @DisplayName("the kerb is a kerb, not a step")
+    void footpathsSitOneKerbAboveTheRoad() throws Exception {
+        // A pavement that stands half a metre proud is a wall the car
+        // cannot climb and the pedestrians sink into; one flush with the
+        // road is not a pavement at all.
+        assertTrue(ChunkMesher.KERB_H_M > 0.08 && ChunkMesher.KERB_H_M < 0.25,
+                "a kerb of " + ChunkMesher.KERB_H_M + " m");
+
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        long tops = 0;
+        int chunks = 0;
+        for (int c = 0; c < w.chunkCount() && chunks < 16; c += 29) {
+            double ox = w.chunkOriginX(c);
+            double oz = w.chunkOriginZ(c);
+            if (!w.inBounds(ox, oz)) { continue; }
+            ChunkFeatures f = features(w, c);
+            if (f == null || f.roadCount() == 0) { continue; }
+            chunks++;
+            ChunkMesher.Mesh m = mesher.build(f, ChunkMesher.LOD_HIGH);
+            for (int v = 0; v < m.vertexCount; v++) {
+                int o = v * STRIDE;
+                if ((int) Math.floor(m.vertices[o + 9] + 5e-4)
+                        != TextureLibrary.MAT_CONCRETE) { continue; }
+                if (m.vertices[o + 4] < 0.5f) { continue; }
+                double g = mesher.lodGround(ox, oz, ChunkMesher.LOD_HIGH,
+                        m.vertices[o], m.vertices[o + 2]);
+                double above = m.vertices[o + 1] - g;
+                if (Math.abs(above - (ChunkMesher.ROAD_LIFT_M
+                        + ChunkMesher.KERB_H_M)) < 0.01) {
+                    tops++;
+                    // Never over water: a causeway's kerb would sit at
+                    // chart datum with the sea washing over it.
+                    double wx = f.originX + m.vertices[o];
+                    double wz = f.originZ + m.vertices[o + 2];
+                    assertTrue(w.isLand(wx, wz),
+                            "a pavement was laid over open water at "
+                                    + (int) wx + "," + (int) wz);
+                }
+            }
+        }
+        assertTrue(chunks > 0, "no chunk with roads was meshed");
+        assertTrue(tops > 200,
+                "only " + tops + " pavement vertices in " + chunks
+                        + " chunks of arterial city");
+    }
+
+    @Test
+    @DisplayName("street lights stand on the pavement, not in it")
+    void lampsAreNotSunkIntoTheKerb() throws Exception {
+        // The column is planted on the drawn ground plus whatever the
+        // pavement adds, so on a road that has one the base has to be a
+        // kerb higher than the carriageway. Getting this wrong buries
+        // 14 cm of every column in the city.
+        WorldData w = WorldFixture.world();
+        ChunkMesher mesher = new ChunkMesher(w);
+        int checked = 0;
+        int onPath = 0;
+        for (int c = 0; c < w.chunkCount() && checked < 14; c += 29) {
+            double ox = w.chunkOriginX(c);
+            double oz = w.chunkOriginZ(c);
+            if (!w.inBounds(ox, oz)) { continue; }
+            ChunkFeatures f = features(w, c);
+            if (f == null || f.roadCount() == 0) { continue; }
+            checked++;
+            ChunkMesher.Mesh m = mesher.build(f, ChunkMesher.LOD_HIGH);
+            for (int v = 0; v < m.vertexCount; v++) {
+                int o = v * STRIDE;
+                if (m.vertices[o + 9] < ChunkMesher.LAMP_AUX - 0.5f) {
+                    continue;
+                }
+                double g = mesher.lodGround(ox, oz, ChunkMesher.LOD_HIGH,
+                        m.vertices[o], m.vertices[o + 2]);
+                double h = m.vertices[o + 1] - g;
+                // The head is at the top of the column, give or take the
+                // head's own thickness; on a kerbed road it is a kerb
+                // higher again.
+                assertTrue(h > ChunkMesher.LAMP_HEIGHT_M - 0.01,
+                        "a lamp head is only " + h + " m above the"
+                                + " ground it stands on");
+                if (h > ChunkMesher.LAMP_HEIGHT_M
+                        + ChunkMesher.KERB_H_M * 0.5) {
+                    onPath++;
+                }
+            }
+        }
+        assertTrue(checked > 0, "no chunk with roads was meshed");
+        assertTrue(onPath > 0,
+                "not one street light in the sampled city is standing on"
+                        + " a pavement, so either the kerb lift is not"
+                        + " being applied or the two never coincide");
+    }
 }

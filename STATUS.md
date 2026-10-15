@@ -156,9 +156,10 @@ no backend.
 
 ### Rendering gaps
 
-16. **Street lights are scenery.** Columns stand along every arterial
-    and their heads burn after dark, but nothing collides with them -
-    you drive straight through - and the renderer has no dynamic
+16. **Street furniture is scenery.** Columns and kerbed pavements run
+    along the arterials and the lamp heads burn after dark, but
+    nothing collides with any of it - you drive through a lamp post
+    and over a kerb without noticing - and the renderer has no dynamic
     lights, so a lamp throws nothing onto the road beneath it.
 17. **Buildings cast no shadows.** There are blob shadows under moving
     bodies and nothing else — no shadow map, no dynamic lights at

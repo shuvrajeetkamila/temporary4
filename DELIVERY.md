@@ -11,8 +11,8 @@ What this build is, what it is not, and what has actually been measured.
 | Geographic checkpoints (Python, independent projection) | 51 | `tools/verify_world.py`, before the APK is built |
 | Total world gates (files, provenance, extent, projection, chunks, coverage, network, places, heights) | 145 | same |
 | Geographic checkpoints (Java, through the game's own loader) | 51 | `core/src/test/.../CoverageTest` |
-| Core tests overall | 474 | `gradle :core:test` |
-| Android-module tests (shader source, HUD, meshes) | 26 | `gradle :android:test` |
+| Core tests overall | 496 | `gradle :core:test` |
+| Android-module tests (shader source, HUD, meshes) | 27 | `gradle :android:test` |
 
 The Python verifier re-derives the ENU projection from the WGS84 constants
 rather than importing `aoi.py`, so a bug in the projection cannot validate
@@ -88,6 +88,12 @@ This matters more than anything above.
   so they are not navigable water in this build.
 - Navi Mumbai, east of Thane Creek, is distant low-detail context, as the
   brief allows.
+- **The monsoon can be switched off.** RAIN sits next to GFX at the
+  bottom of the screen and is saved with the rest of the progress. The
+  weather clock keeps running while it is off, so turning it back on
+  rejoins the season rather than starting a fresh squall, and the
+  roads are left to dry on their own 300-second timer rather than
+  snapping dry.
 - **Audio is entirely synthesised** - every sound is computed sample by
   sample at runtime and there is not one recording in the package. That
   keeps it original, but it also means it sounds synthesised: engines,
@@ -132,6 +138,12 @@ This matters more than anything above.
 - **Pedestrians are drawn** in four outfits with a walk cycle. One who
   has been knocked down sinks into the pavement rather than falling
   over - there is no ragdoll.
+- **The arterials have kerbs and pavements**, 2.2 m wide and a 14 cm
+  kerb above the carriageway, on paved roads of class 4 and better
+  that are at least 5 m wide - about an eighth of the ways in the
+  city, which is the arterial network. Never on a bridge deck and
+  never where the ground under them is water. Nothing collides with
+  them: you drive over a kerb without noticing.
 - **The arterials are lit.** A column every 38 m, alternating sides,
   on roads of class 4 and better and only on the nearest level of
   detail - at 16 cm across a column is thinner than a pixel by the
