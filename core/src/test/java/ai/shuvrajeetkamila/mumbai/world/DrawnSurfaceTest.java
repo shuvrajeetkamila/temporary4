@@ -129,8 +129,16 @@ final class DrawnSurfaceTest {
                             lod, lx, lz);
                     double over = m.vertices[o + 1] - ground;
                     sampled++;
-                    worst = Math.max(worst,
-                            Math.abs(over - ChunkMesher.ROAD_LIFT_M));
+                    // The base lift, plus however much this road's class
+                    // is raised to keep it off the one it crosses. The
+                    // class is not recoverable from a vertex, so the
+                    // whole band is allowed and the floor is what
+                    // matters: a road must never be below the ground.
+                    double low = ChunkMesher.ROAD_LIFT_M;
+                    double high = low + ChunkMesher.junctionLift(0);
+                    double off = over < low ? low - over
+                            : (over > high ? over - high : 0);
+                    worst = Math.max(worst, off);
                 }
             }
         }

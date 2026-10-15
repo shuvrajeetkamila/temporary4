@@ -214,6 +214,20 @@ public final class ChunkMesher {
     public static final float ROAD_LIFT_M = 0.14f;
 
     /**
+     * How much a road is raised above the base lift for its class.
+     *
+     * <p>Spread over ten centimetres, which reads as a kerb lip rather
+     * than a step, and quantised so two roads of different class are
+     * always at least a centimetre apart - enough to hold the depth
+     * test out to about 400 m, past which a junction is a few pixels.
+     * Lower class number is a more important road, and sits higher.
+     */
+    static float junctionLift(int cls) {
+        int band = cls < 0 ? 0 : (cls > 9 ? 9 : cls);
+        return (9 - band) * 0.011f;
+    }
+
+    /**
      * The renderer's near plane, metres. Here because the road lift is
      * derived from it and the two have to be chosen together.
      */
@@ -436,7 +450,14 @@ public final class ChunkMesher {
             boolean bridge = (f.roadFlags[r] & ChunkFeatures.FLAG_BRIDGE) != 0;
             boolean tunnel = (f.roadFlags[r] & ChunkFeatures.FLAG_TUNNEL) != 0;
             if (tunnel) { continue; }
-            float lift = bridge ? 0.0f : ROAD_LIFT_M;
+            // Roads cross. Two ribbons laid at the same height over the
+            // same ground are coplanar, and a crossroads is then a patch
+            // of two surfaces fighting for the depth buffer - which in a
+            // city of 105,000 ways is a flickering speckle at every
+            // junction in view. They are separated by class, which is
+            // also the right answer physically: where a trunk road and a
+            // lane meet, the trunk road is the one that carries through.
+            float lift = bridge ? 0.0f : ROAD_LIFT_M + junctionLift(cls);
             float[] rgb = new float[3];
             boolean unpavedRoad = (f.roadFlags[r] & ChunkFeatures.FLAG_UNPAVED) != 0;
             roadColour(cls, unpavedRoad, rgb);

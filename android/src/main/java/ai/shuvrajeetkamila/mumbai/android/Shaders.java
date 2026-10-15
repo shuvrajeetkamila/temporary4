@@ -55,6 +55,53 @@ final class Shaders {
             + "precision mediump sampler2D;\n"
             + "precision mediump sampler2DArray;\n";
 
+    /**
+     * The wave set and its evaluation, shared verbatim by the sea's
+     * vertex and fragment stages so the surface they draw and the slope
+     * they light it with cannot disagree. The numbers arrive from
+     * Ocean.java as uniforms; there are no wave constants in GLSL.
+     */
+    private static final String WAVE_COMMON =
+            "uniform highp vec4 uWaveAmp;\n"
+            + "uniform highp vec4 uWaveK;\n"
+            + "uniform highp vec4 uWaveDirX;\n"
+            + "uniform highp vec4 uWaveDirZ;\n"
+            + "uniform highp vec4 uWavePhase;\n"
+            // Render space is world space minus the floating origin. The
+            // waves have to be evaluated where the physics evaluates
+            // them, or after the first rebase the drawn surface slides
+            // out from under every hull in the harbour.
+            + "uniform highp vec2 uWorldOffset;\n"
+            + "uniform highp float uTide;\n"
+            // Height and slope together. The slope used to be four extra
+            // height samples differenced 1.5 m apart - a subtraction of
+            // two nearly equal numbers, the one operation a float is
+            // worst at. The derivative of a sine is a cosine; there is no
+            // reason to approximate it.
+            + "highp float waveAt(highp vec2 pr, out highp vec2 slope) {\n"
+            + "  highp vec2 p = pr + uWorldOffset;\n"
+            + "  highp float h = 0.0;\n"
+            + "  slope = vec2(0.0);\n"
+            + "  for (int i = 0; i < 4; i++) {\n"
+            + "    highp vec2 d = vec2(uWaveDirX[i], uWaveDirZ[i]);\n"
+            + "    highp float k = uWaveK[i];\n"
+            // Reduce the distance along the wave into one wavelength
+            // before turning it into an angle. Mumbai is 70 km across and
+            // the shortest wave is 7.5 m, so without this the angle
+            // reaches 60,000 radians at the far corner of the map and a
+            // 32-bit float can no longer tell one crest from the next.
+            + "    highp float lambda = 6.2831853 / k;\n"
+            + "    highp float a = mod(dot(p, d), lambda) * k + uWavePhase[i];\n"
+            + "    h += uWaveAmp[i] * sin(a);\n"
+            + "    slope += uWaveAmp[i] * k * cos(a) * d;\n"
+            + "  }\n"
+            // Insurance. The real surface is a metre and a half of swell
+            // on a two metre tide; anything outside this is arithmetic
+            // having gone wrong, and an unclamped vertex does not just
+            // look wrong, it throws a triangle across the whole screen.
+            + "  return clamp(h, -4.0, 4.0) + uTide;\n"
+            + "}\n";
+
     /** Terrain and buildings. One shader, because the vertex format is one. */
     static final String SCENE_VS = VS_HEAD
             + "layout(location = 0) in vec3 aPos;\n"
@@ -72,11 +119,25 @@ final class Shaders {
             + "out highp float vAux;\n"
             + "out highp float vTexV;\n"
             + "out highp float vDepth;\n"
+            + WAVE_COMMON
             + "void main() {\n"
             // Chunk-local float plus a double-derived origin passed as a
             // uniform. The vertex itself is never more than a kilometre from
             // its own origin, so 32 bits is plenty for it.
             + "  highp vec3 world = aPos + uChunkOrigin;\n"
+  // The coastal fringe. Cells that are all sea are not meshed at
+  // all - the sea surface draws those - but a cell with any land
+  // in it is kept, so the shoreline is drawn by the terrain at
+  // whatever detail the chunk is built at. Its sea corners sat
+  // flat at chart datum while the sea beside them rode the tide
+  // and the swell, so at high water there was a two metre step
+  // all the way round the island with a dark static rim below
+  // it. They are put on the same surface here, a few centimetres
+  // proud so the join cannot fight the sea for the depth buffer.
+            + "  if (aAux < -0.5) {\n"
+            + "    highp vec2 slope;\n"
+            + "    world.y = waveAt(world.xz, slope) + 0.05;\n"
+            + "  }\n"
             + "  vWorld = world;\n"
             + "  vNormal = aNormal;\n"
             + "  vAlbedo = aAlbedo;\n"
@@ -104,6 +165,8 @@ final class Shaders {
             // highp: at 4.5e-5 this underflows mediump to zero and the fog
             // vanishes. It cost a day to find the first time.
             + "uniform highp float uFogDensity;\n"
+            // Shared with the vertex stage, which already receives it.
+            + "uniform highp vec3 uCamera;\n"
             + "uniform mediump float uWetness;\n"
             + "uniform mediump sampler2DArray uAtlas;\n"
             + "uniform mediump float uMatScale[" + MAT_COUNT + "];\n"
@@ -147,10 +210,16 @@ final class Shaders {
             // aux = -1 marks water. Fresnel plus a sky tint, cheap but reads
             // correctly against the land. Untextured by design: the sea gets
             // its detail from the wave geometry, not from a tile.
-            + "    mediump float fres = pow(1.0 - max(n.y, 0.0), 3.0);\n"
-            + "    mediump vec3 lit = mix(vec3(0.045, 0.105, 0.135), uSkyColour,\n"
-            + "                           0.22 + 0.55 * fres);\n"
-            + "    lit += uSunColour * pow(ndl, 48.0) * 0.8;\n"
+            // The same water as the sea surface, to the number: this is
+            // the shoreline strip and the sea begins at the far edge of
+            // it, so any difference in the two shadings draws a line
+            // round the island.
+            + "    mediump vec3 view = normalize(uCamera - vWorld);\n"
+            + "    mediump float fres = pow(1.0 - max(dot(n, view), 0.0), 4.0);\n"
+            + "    mediump vec3 lit = mix(vec3(0.030, 0.082, 0.106),\n"
+            + "                           uSkyColour * 0.85, 0.18 + 0.68 * fres);\n"
+            + "    mediump vec3 hv = normalize(uSunDir + view);\n"
+            + "    lit += uSunColour * pow(max(dot(n, hv), 0.0), 220.0) * 1.35;\n"
             + "    highp float fw = clamp(1.0 - exp(-vDepth * uFogDensity), 0.0, 1.0);\n"
             + "    fragColour = vec4(mix(lit, uFogColour, fw), 1.0);\n"
             + "    return;\n"
@@ -257,53 +326,6 @@ final class Shaders {
             + "  vTexV = world.y;\n"
             + "  vDepth = length(world - uCamera);\n"
             + "  gl_Position = uViewProj * vec4(world, 1.0);\n"
-            + "}\n";
-
-    /**
-     * The wave set and its evaluation, shared verbatim by the sea's
-     * vertex and fragment stages so the surface they draw and the slope
-     * they light it with cannot disagree. The numbers arrive from
-     * Ocean.java as uniforms; there are no wave constants in GLSL.
-     */
-    private static final String WAVE_COMMON =
-            "uniform highp vec4 uWaveAmp;\n"
-            + "uniform highp vec4 uWaveK;\n"
-            + "uniform highp vec4 uWaveDirX;\n"
-            + "uniform highp vec4 uWaveDirZ;\n"
-            + "uniform highp vec4 uWavePhase;\n"
-            // Render space is world space minus the floating origin. The
-            // waves have to be evaluated where the physics evaluates
-            // them, or after the first rebase the drawn surface slides
-            // out from under every hull in the harbour.
-            + "uniform highp vec2 uWorldOffset;\n"
-            + "uniform highp float uTide;\n"
-            // Height and slope together. The slope used to be four extra
-            // height samples differenced 1.5 m apart - a subtraction of
-            // two nearly equal numbers, the one operation a float is
-            // worst at. The derivative of a sine is a cosine; there is no
-            // reason to approximate it.
-            + "highp float waveAt(highp vec2 pr, out highp vec2 slope) {\n"
-            + "  highp vec2 p = pr + uWorldOffset;\n"
-            + "  highp float h = 0.0;\n"
-            + "  slope = vec2(0.0);\n"
-            + "  for (int i = 0; i < 4; i++) {\n"
-            + "    highp vec2 d = vec2(uWaveDirX[i], uWaveDirZ[i]);\n"
-            + "    highp float k = uWaveK[i];\n"
-            // Reduce the distance along the wave into one wavelength
-            // before turning it into an angle. Mumbai is 70 km across and
-            // the shortest wave is 7.5 m, so without this the angle
-            // reaches 60,000 radians at the far corner of the map and a
-            // 32-bit float can no longer tell one crest from the next.
-            + "    highp float lambda = 6.2831853 / k;\n"
-            + "    highp float a = mod(dot(p, d), lambda) * k + uWavePhase[i];\n"
-            + "    h += uWaveAmp[i] * sin(a);\n"
-            + "    slope += uWaveAmp[i] * k * cos(a) * d;\n"
-            + "  }\n"
-            // Insurance. The real surface is a metre and a half of swell
-            // on a two metre tide; anything outside this is arithmetic
-            // having gone wrong, and an unclamped vertex does not just
-            // look wrong, it throws a triangle across the whole screen.
-            + "  return clamp(h, -4.0, 4.0) + uTide;\n"
             + "}\n";
 
     /** The sea surface, displaced by the same wave sum the physics uses. */

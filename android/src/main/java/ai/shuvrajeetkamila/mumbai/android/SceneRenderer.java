@@ -54,6 +54,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private int uSceneViewProj, uSceneOrigin, uSceneCam, uSceneSunDir;
     private int uSceneSunCol, uSceneSky, uSceneFogCol, uSceneFogDen, uSceneWet;
     private int uSceneAtlas, uSceneMatScale, uSceneNight;
+    // The coastal strip is lifted onto the sea by the terrain's vertex
+    // stage, so the terrain program carries the same wave set the sea does.
+    private int uSceneWaveAmp, uSceneWaveK, uSceneWaveDirX, uSceneWaveDirZ;
+    private int uSceneWavePhase, uSceneWorldOffset, uSceneTide;
     private int uInstViewProj, uInstCam, uInstSunDir, uInstSunCol, uInstSky;
     private int uInstFogCol, uInstFogDen, uInstWet, uInstAtlas, uInstMatScale, uInstNight;
     private int uInstSiren;
@@ -218,6 +222,13 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         uSkySky = GLES30.glGetUniformLocation(skyProg, "uSkyColour");
         uSkyFog = GLES30.glGetUniformLocation(skyProg, "uFogColour");
         uSkyHorizon = GLES30.glGetUniformLocation(skyProg, "uHorizon");
+        uSceneWaveAmp = GLES30.glGetUniformLocation(sceneProg, "uWaveAmp");
+        uSceneWaveK = GLES30.glGetUniformLocation(sceneProg, "uWaveK");
+        uSceneWaveDirX = GLES30.glGetUniformLocation(sceneProg, "uWaveDirX");
+        uSceneWaveDirZ = GLES30.glGetUniformLocation(sceneProg, "uWaveDirZ");
+        uSceneWavePhase = GLES30.glGetUniformLocation(sceneProg, "uWavePhase");
+        uSceneWorldOffset = GLES30.glGetUniformLocation(sceneProg, "uWorldOffset");
+        uSceneTide = GLES30.glGetUniformLocation(sceneProg, "uTide");
         uRainTime = GLES30.glGetUniformLocation(rainProg, "uTime");
         uRainAmount = GLES30.glGetUniformLocation(rainProg, "uRain");
         uRainAspect = GLES30.glGetUniformLocation(rainProg, "uAspect");
@@ -356,7 +367,13 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         e.cameraPosition(camPos);
         target.set(e.renderPosition());
 
-        float far = (float) Math.max(3000, q.farRadius);
+        // Where the ground really stops, which is not the configured far
+        // radius: the streamer clamps its outer ring to the tile budget.
+        // The fog and the far plane are both set from this so the edge of
+        // the streamed world is always inside the haze rather than a line
+        // of bare sky across the city.
+        double reach = Math.min(q.farRadius, e.streamer.effectiveRadius());
+        float far = (float) Math.max(3000, reach);
         // Tied to ChunkMesher.ROAD_LIFT_M: a 24-bit depth buffer resolves
         // about d*d/(near * 2^24) metres at distance d, so the near plane
         // is what decides how far away road surfaces can be drawn before
@@ -390,7 +407,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         // part; this floor ties it to the far plane as well, so chunk pop-in
         // always happens inside the fog whatever the weather is doing.
         float fogDensity = Math.max(e.sky.fogDensity,
-                (float) (1.35 / Math.max(900, q.farRadius * 0.9)));
+                (float) (1.35 / Math.max(900, reach * 0.9)));
 
         // Clear to the fog colour so anything beyond the far plane
         // dissolves into the same air the near geometry fades into.
@@ -423,6 +440,17 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUniform1fv(uSceneMatScale, TextureLibrary.MAT_COUNT,
                 TextureLibrary.SCALE_M, 0);
         GLES30.glUniform1f(uSceneNight, nightFactor);
+        // The coastal strip is lifted onto the sea surface by the vertex
+        // stage, so the terrain needs the same wave set the sea has.
+        e.ocean.waveParameters(waveParams);
+        GLES30.glUniform4fv(uSceneWaveAmp, 1, waveParams, 0);
+        GLES30.glUniform4fv(uSceneWaveK, 1, waveParams, Ocean.WAVES);
+        GLES30.glUniform4fv(uSceneWaveDirX, 1, waveParams, Ocean.WAVES * 2);
+        GLES30.glUniform4fv(uSceneWaveDirZ, 1, waveParams, Ocean.WAVES * 3);
+        GLES30.glUniform4fv(uSceneWavePhase, 1, waveParams, Ocean.WAVES * 4);
+        GLES30.glUniform2f(uSceneWorldOffset, (float) e.origin.offsetX(),
+                (float) e.origin.offsetZ());
+        GLES30.glUniform1f(uSceneTide, (float) e.ocean.tide());
 
         int drawn = 0;
         long tris = 0;
@@ -456,7 +484,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         // from a helicopter at five hundred metres is most of the view.
         // The grid is spaced quadratically, so widening it costs nothing
         // near the camera.
-        GLES30.glUniform1f(uSeaExtent, (float) q.farRadius);
+        GLES30.glUniform1f(uSeaExtent, (float) reach);
         GLES30.glUniform1f(uSeaTide, (float) e.ocean.tide());
         // The wave set, straight from the model the boats float on. There
         // is no copy of these numbers in the shader any more.

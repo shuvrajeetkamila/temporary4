@@ -208,6 +208,36 @@ final class ShaderSanityTest {
     }
 
     @Test
+    @DisplayName("the shoreline strip is on the same water as the sea")
+    void theCoastIsContinuousWithTheSea() {
+        // Cells that are all sea are not meshed; cells with any land in
+        // them are kept, so the shoreline is drawn by the terrain. Its
+        // sea corners sat flat at chart datum while the sea beside them
+        // rode the tide and the swell, which at high water left a two
+        // metre step and a dark static rim right round the island.
+        assertTrue(Shaders.SCENE_VS.contains("highp float waveAt("),
+                "the terrain no longer evaluates the wave, so its"
+                        + " shoreline strip is back at chart datum while"
+                        + " the sea beside it rides the tide");
+        assertTrue(Shaders.SCENE_VS.contains("aAux < -0.5"),
+                "the terrain no longer singles out its water vertices");
+        assertTrue(body(Shaders.SCENE_VS).equals(body(Shaders.SEA_VS)),
+                "the terrain and the sea evaluate different waves, so"
+                        + " the shoreline and the water beyond it are"
+                        + " two different surfaces");
+        // And shaded the same, to the number, or the difference draws a
+        // line round the island.
+        for (String constant : new String[]{"0.030, 0.082, 0.106",
+                                            "0.18 + 0.68 * fres",
+                                            "220.0"}) {
+            assertTrue(Shaders.SCENE_FS.contains(constant)
+                            && Shaders.SEA_FS.contains(constant),
+                    "the shoreline water and the sea disagree on "
+                            + constant);
+        }
+    }
+
+    @Test
     @DisplayName("the sea's two stages share one wave evaluation")
     void theSeaEvaluatesOneWave() {
         // The surface the vertex stage draws and the slope the fragment

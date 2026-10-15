@@ -128,6 +128,30 @@ public final class WorldStreamer {
 
     private int frame;
     private int maxResident = MAX_RESIDENT;
+
+    /** The outer radius actually being streamed this frame, metres. */
+    private double effectiveRadius = 1024;
+
+    /**
+     * How far out the tile budget can reach, metres.
+     *
+     * <p>A disc of radius r covers {@code pi * r^2 / chunk^2} tiles. Run
+     * backwards from the budget, with a tenth held back for the tiles a
+     * fast approach has already queued ahead of the player, and that is
+     * the furthest the ground can be guaranteed to exist.
+     */
+    private double budgetRadius() {
+        return Math.sqrt(maxResident * 0.90 / Math.PI) * world.chunkM;
+    }
+
+    /**
+     * The radius the ground is actually being kept out to, metres.
+     *
+     * <p>The renderer needs this, not the configured far radius: the fog
+     * and the far plane have to be set from the distance at which the
+     * world really stops, or the player sees the edge of it.
+     */
+    public double effectiveRadius() { return effectiveRadius; }
     private double highRadius = 800;
     private double medRadius = 3200;
     private double lowRadius = 22000;
@@ -191,9 +215,26 @@ public final class WorldStreamer {
             ax += velX / speed * lead;
             az += velZ / speed * lead;
         }
+        // Clamp the outer ring to what the resident budget can actually
+        // hold. This is the whole of the "white land" fault: the far
+        // radius at HIGH quality is 22 km, a disc of that radius is
+        // about 1,500 chunks, and only 420 may be resident at once. The
+        // nearest 420 loaded and the rest silently never did, so beyond
+        // about 11 km there was no ground - and since the sea is masked
+        // off over land, the hole showed the colour the frame is cleared
+        // to, which is the fog. Pale grey-white, in daylight.
+        //
+        // At LOW quality the disc is 9 km, which is 250 chunks and fits,
+        // so there were no holes at all. That is why cycling the
+        // graphics button sometimes fixed it and sometimes did not: it
+        // was not fixing anything, it was choosing a tier whose view
+        // distance the memory budget could meet.
         double rHigh = highRadius * altScale;
         double rMed = medRadius * altScale;
-        double rLow = lowRadius * altScale;
+        double rLow = Math.min(lowRadius * altScale, budgetRadius());
+        if (rMed > rLow) { rMed = rLow; }
+        if (rHigh > rMed) { rHigh = rMed; }
+        effectiveRadius = rLow;
 
         int cx = (int) Math.floor(x / world.chunkM) - world.chunkMinX;
         int cz = (int) Math.floor(z / world.chunkM) - world.chunkMinZ;
