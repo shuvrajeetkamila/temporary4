@@ -83,7 +83,11 @@ public final class Engine {
 
     public final HumanPhysics human = new HumanPhysics();
     public final CarPhysics car = new CarPhysics();
-    public final BoatPhysics boat = BoatPhysics.ferry();
+    /**
+     * Not final: the hull depends on which mooring you untie from.
+     * Every boat in the city used to be the same harbour ferry.
+     */
+    public BoatPhysics boat = BoatPhysics.ferry();
     public final HelicopterPhysics heli = new HelicopterPhysics();
     public final AeroplanePhysics plane = new AeroplanePhysics();
 
@@ -995,6 +999,9 @@ public final class Engine {
         car.velocity.set(Math.sin(c.heading) * c.speed, 0,
                 -Math.cos(c.heading) * c.speed);
         car.angularVelocity.set(0, 0, 0);
+        // And a gear to match, now that it has a speed. reset() leaves
+        // it in first, which at traffic speed is past the redline.
+        car.selectGearForSpeed();
         c.active = false;
         occupiedAgent = best;
         profile = ControlProfile.CAR;
@@ -1193,7 +1200,11 @@ public final class Engine {
         }
         RigidBody b;
         switch (p) {
-            case BOAT: boat.reset(); b = boat; break;
+            case BOAT:
+                boat = BoatPhysics.forMooring(sp.homeX, sp.homeZ);
+                boat.reset();
+                b = boat;
+                break;
             case HELICOPTER: heli.reset(); b = heli; break;
             default: plane.reset(); b = plane; break;
         }
@@ -1346,6 +1357,10 @@ public final class Engine {
         heli.pedal = in.pedal;
         if (in.engineToggle) { heli.engineOn = !heli.engineOn; }
         heli.step(dt, heliGround, windX, windZ);
+        // Hand the skid state back to the control mapping, which needs
+        // to know whether a released collective should rest at the pad
+        // setting or at the hover.
+        in.heliOnSkids = heli.onSkids;
     }
 
     private void stepPlane(double dt, InputState in) {
@@ -1467,7 +1482,7 @@ public final class Engine {
                 t.aux2 = wetness;
                 break;
             case BOAT:
-                t.gear = "-";
+                t.gear = boat.planing ? "PLANING" : "-";
                 t.rpm = 0;
                 t.auxLabel1 = "knots";
                 t.aux1 = boat.speedKnots();
@@ -1477,10 +1492,15 @@ public final class Engine {
             case HELICOPTER:
                 t.gear = heli.engineOn ? "ENG" : "AUTO";
                 t.rpm = heli.rotorRpm;
-                t.auxLabel1 = "rotor%";
-                t.aux1 = heli.rotorPercent();
-                t.auxLabel2 = "T/W";
-                t.aux2 = heli.thrustToWeight();
+                // Collective position and rate of climb, because those are
+                // the two numbers a helicopter pilot actually flies by and
+                // neither of them was on screen. Rotor per cent only ever
+                // moves during an overpitch, so it told you nothing while
+                // you were trying to find a hover.
+                t.auxLabel1 = "coll%";
+                t.aux1 = 100.0 * heli.collective;
+                t.auxLabel2 = "m/s up";
+                t.aux2 = heli.velocity.y;
                 t.warning = heli.rotorPercent() < 80 ? "ROTOR RPM LOW" : "";
                 break;
             case AEROPLANE:

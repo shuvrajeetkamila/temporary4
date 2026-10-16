@@ -218,4 +218,62 @@ class BoatAndHumanTest {
         for (int i = 0; i < 60 * 4; i++) { h.step(1.0 / 60, FLAT, sea); }
         assertTrue(h.velocity.planarLength() > 1.0, "it should walk again once up");
     }
+
+    @Test
+    @DisplayName("not every boat in the harbour is the same boat")
+    void mooringsCarryDifferentHulls() {
+        // The engine held one BoatPhysics built by ferry(), and boarding
+        // anything reset that, so every vessel in the city was a 34
+        // tonne harbour ferry. Fourteen knots is right for a ferry and
+        // wrong for everything else afloat: no boat could plane and the
+        // planing model never ran outside this file.
+        java.util.Map<String, Integer> mix = new java.util.HashMap<>();
+        for (int i = 0; i < 400; i++) {
+            double x = -4000 + i * 37.5, z = 9000 - i * 19.25;
+            mix.merge(BoatPhysics.forMooring(x, z).hullName, 1, Integer::sum);
+        }
+        assertTrue(mix.size() >= 3,
+                "the whole harbour is the same hull: " + mix);
+        for (java.util.Map.Entry<String, Integer> e : mix.entrySet()) {
+            assertTrue(e.getValue() > 400 / 12,
+                    "hull " + e.getKey() + " barely appears: " + mix);
+        }
+
+        // And the same mooring must give the same boat every time, or
+        // the launch you left tied up is a lighter when you come back.
+        for (int i = 0; i < 50; i++) {
+            double x = 1234.5 + i, z = -876.25 - i * 3;
+            assertEquals(BoatPhysics.forMooring(x, z).hullName,
+                    BoatPhysics.forMooring(x, z).hullName,
+                    "the hull at a mooring is not stable");
+        }
+    }
+
+    @Test
+    @DisplayName("the launch gets up on the plane and outruns the ferry")
+    void theLaunchPlanes() {
+        BoatPhysics fast = BoatPhysics.launch();
+        BoatPhysics slow = BoatPhysics.ferry();
+        ai.shuvrajeetkamila.mumbai.physics.Ocean sea =
+                new ai.shuvrajeetkamila.mumbai.physics.Ocean();
+        fast.throttle = 1.0;
+        slow.throttle = 1.0;
+        boolean planedWithin10s = false;
+        for (int i = 0; i < 60 * 90; i++) {
+            sea.advance(1.0 / 60);
+            fast.step(1.0 / 60, sea, DEEP);
+            slow.step(1.0 / 60, sea, DEEP);
+            if (i < 60 * 10 && fast.planing) { planedWithin10s = true; }
+        }
+        assertTrue(planedWithin10s,
+                "the launch took more than ten seconds to get on the plane");
+        assertTrue(fast.planing, "it fell off the plane at its own top speed");
+        double kn = fast.groundSpeed() * 1.94384;
+        assertTrue(kn > 22 && kn < 45,
+                "a harbour launch should do twenty-odd knots, got " + kn);
+        assertTrue(fast.groundSpeed() > slow.groundSpeed() * 1.5,
+                "the launch (" + kn + " kn) barely beat the ferry ("
+                        + slow.groundSpeed() * 1.94384 + " kn)");
+        assertFalse(slow.planing, "a 34 tonne harbour ferry is planing");
+    }
 }

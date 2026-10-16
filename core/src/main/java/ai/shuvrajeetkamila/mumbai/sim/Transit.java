@@ -203,6 +203,11 @@ public final class Transit {
         return pointAt(route, stopS[route][i]);
     }
 
+    /** How far along its route a station is, metres. */
+    public double stopDistance(int route, int i) {
+        return stopS[route][i];
+    }
+
     /**
      * The service a player standing here could board, or -1.
      *
@@ -240,14 +245,38 @@ public final class Transit {
                 double dx = q[0] - px, dz = q[1] - pz;
                 double d2 = dx * dx + dz * dz;
                 if (d2 >= bestD2) { continue; }
-                if (!Double.isNaN(py)
-                        && Math.abs(heightAt(sv, q[2]) - py) > BOARD_RISE_M) {
+                if (!Double.isNaN(py) && !canReach(q[0], q[1],
+                        heightAt(sv, q[2]), px, py, pz)) {
                     continue;
                 }
                 bestD2 = d2; best = i;
             }
         }
         return best;
+    }
+
+    /**
+     * Can somebody standing here get to that door?
+     *
+     * <p>Either they are already level with it - on the platform - or
+     * they are on the pavement at the foot of the station, in which
+     * case they walk in and up. Two hundred and sixty-seven stations
+     * had their platform up to twenty metres above the street and
+     * another fifty-eight were in a tunnel beneath it, so a flat
+     * "within four metres vertically" test made two in every five
+     * stations in the city impossible to use: the train called, the
+     * prompt never appeared, and you stood underneath it.
+     *
+     * <p>The stairs are drawn. Walking up them step by step is not
+     * simulated, and neither is any other interior in the game.
+     */
+    private boolean canReach(double doorX, double doorZ, double doorY,
+                             double px, double py, double pz) {
+        if (Math.abs(doorY - py) <= BOARD_RISE_M) { return true; }
+        // On the ground under - or over - the station counts, because
+        // that is where its entrance is.
+        double street = world.isLand(px, pz) ? world.height(px, pz) : 0.0;
+        return Math.abs(py - street) <= BOARD_RISE_M;
     }
 
     /** Cached line names, built on first use. */

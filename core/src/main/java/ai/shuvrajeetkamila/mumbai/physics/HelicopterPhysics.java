@@ -120,6 +120,15 @@ public final class HelicopterPhysics extends RigidBody {
     public boolean inAutorotation;
     public double torqueRequired;
 
+    /**
+     * True while the skids are taking weight.
+     *
+     * <p>Published because the control mapping needs it: the collective
+     * springs back to the ground setting on the pad and to the hover
+     * setting in the air, and those are different numbers.
+     */
+    public boolean onSkids = true;
+
     /** Blade pitch limits. The low stop sits slightly positive, not at zero. */
     /**
      * Collective that holds a hover at sea level, out of ground effect.
@@ -254,6 +263,7 @@ public final class HelicopterPhysics extends RigidBody {
         orientation.identity();
         clearAccumulators();
         rotorRpm = nominalRotorRpm;
+        onSkids = true;
     }
 
     public double discArea() { return Math.PI * rotorRadius * rotorRadius; }
@@ -589,6 +599,13 @@ public final class HelicopterPhysics extends RigidBody {
                 -angularVelocity.z * 2100);
 
         // --- skids ---------------------------------------------------------------
+        // A Schmitt trigger, not a threshold. A machine resting on its
+        // springs sits within millimetres of the contact height, so a
+        // bare comparison flickers, and the control mapping hangs the
+        // collective's rest position off this: one flickering frame was
+        // enough to spring the lever to the hover setting and float a
+        // parked aircraft off the pad untouched.
+        if (agl < 1.25) { onSkids = true; } else if (agl > 2.5) { onSkids = false; }
         if (agl < 1.25) {
             double pen = 1.25 - agl;
             double k = mass * 26.0;

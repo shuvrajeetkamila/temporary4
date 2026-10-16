@@ -223,14 +223,26 @@ final class ControlMappingTest {
     // --------------------------------------------------------- helicopter
 
     @Test
-    @DisplayName("the collective is a lever, and it spans its whole range")
+    @DisplayName("the collective spans its range and rests where the machine holds")
     void collectiveSpansItsRange() {
-        // It used to be the stick itself: centred meant half collective
-        // and letting go meant half collective. Half is below a hover,
-        // so taking a thumb off the stick - which you must do, because
-        // the other thumb is busy with the cyclic - started a descent
-        // at four metres a second. A real collective is a lever that
-        // stays where it is put, and so is this one.
+        // Two designs were tried and both were unflyable.
+        //
+        // The stick as the lever: centred meant half collective, which
+        // is below a hover, so taking a thumb off - which you must do,
+        // the other thumb being busy with the cyclic - started a four
+        // metre a second descent.
+        //
+        // A lever that stays exactly where it is put: worse. There is
+        // no detent and no scale on a touchscreen, so after a climb the
+        // pilot cannot find the hover again except by guessing how long
+        // to push back down. Flown through the engine, the machine went
+        // up at twelve metres a second indefinitely with the stick
+        // released.
+        //
+        // What is here now: the stick commands a rate, and the lever
+        // eases back to whatever holds the aircraft where it is as soon
+        // as the stick is let go - the pad setting on the skids, the
+        // hover setting in the air.
         boolean[] h = held(), e = held();
         InputState in = new InputState();
 
@@ -246,6 +258,7 @@ final class ControlMappingTest {
                 "the parked setting is not below the hover");
 
         // Hold the stick up for a second and it must reach the stop.
+        in.heliOnSkids = false;
         for (int i = 0; i < 120; i++) {
             ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, -1, 0, 0,
                     h, e, 1.0 / 60.0);
@@ -254,15 +267,44 @@ final class ControlMappingTest {
                 "two seconds of full up stick did not reach full"
                         + " collective");
 
-        // And it stays there when the stick is released.
+        // Released in the air it must come back to the hover, so that
+        // letting go stops the climb instead of continuing it.
         for (int i = 0; i < 60; i++) {
             ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 0, 0, 0,
                     h, e, 1.0 / 60.0);
         }
-        assertEquals(1.0, in.collective, 1e-9,
-                "the lever sprang back when the thumb came off, which is"
-                        + " the whole bug this replaced");
+        assertEquals(HelicopterPhysics.HOVER_COLLECTIVE, in.collective, 1e-9,
+                "a released collective must settle at the hover, or the"
+                        + " machine climbs for ever");
 
+        // On the skids it must come back to the pad setting instead, or
+        // a parked helicopter lifts off with nobody aboard the controls.
+        in.heliOnSkids = true;
+        for (int i = 0; i < 60; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, -1, 0, 0,
+                    h, e, 1.0 / 60.0);
+        }
+        for (int i = 0; i < 120; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 0, 0, 0,
+                    h, e, 1.0 / 60.0);
+        }
+        assertEquals(HelicopterPhysics.GROUND_COLLECTIVE, in.collective, 1e-9,
+                "a released collective on the pad must settle at the"
+                        + " ground setting");
+
+        // It must ease home rather than snap, or releasing mid-climb is
+        // a step input into the rotor.
+        in.heliOnSkids = false;
+        for (int i = 0; i < 120; i++) {
+            ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, -1, 0, 0,
+                    h, e, 1.0 / 60.0);
+        }
+        ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 0, 0, 0,
+                h, e, 1.0 / 60.0);
+        assertTrue(in.collective > HelicopterPhysics.HOVER_COLLECTIVE + 0.2,
+                "the lever snapped home in one frame, got " + in.collective);
+
+        in.heliOnSkids = false;
         for (int i = 0; i < 120; i++) {
             ControlMapping.apply(ControlProfile.HELICOPTER, in, 0, 1, 0, 0,
                     h, e, 1.0 / 60.0);

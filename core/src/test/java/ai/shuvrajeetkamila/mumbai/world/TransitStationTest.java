@@ -272,4 +272,59 @@ final class TransitStationTest {
         assertTrue(Math.abs(a - b) > 1.0,
                 "every line in the city departs at the same instant");
     }
+
+    @Test
+    @DisplayName("every station in the city can actually be used")
+    void everyStationIsReachable() throws Exception {
+        // Two in every five stations were impossible to board. The
+        // height test was flat - "within four metres of the door" - and
+        // 267 platforms sit up to twenty metres above the street on a
+        // viaduct while another 58 are in a tunnel under it, one of them
+        // 144 m down beneath a hill. The train called, the prompt never
+        // appeared, and you stood underneath looking up at it.
+        WorldData w = WorldFixture.world();
+        Transit t = new Transit(w);
+        t.setOcean(new ai.shuvrajeetkamila.mumbai.physics.Ocean());
+        TransitStops stops = w.transitStops();
+
+        int elevated = 0, underground = 0, surface = 0;
+        int reachable = 0, tested = 0;
+        for (int r = 0; r < w.transitCount(); r++) {
+            if (w.transitClass(r) == WorldData.CLS_FERRY) { continue; }
+            for (int i = 0; i < t.stopCount(r); i++) {
+                Transit.Service sv = t.services()[0];
+                sv.active = true;
+                sv.atStop = true;
+                sv.dwell = 10;
+                sv.route = r;
+                sv.cls = w.transitClass(r);
+                sv.carriages = 1;
+                sv.dir = 1;
+                sv.s = t.stopDistance(r, i);
+                double[] q = t.pointAt(r, sv.s);
+                boolean land = w.isLand(q[0], q[1]);
+                double street = land ? w.height(q[0], q[1]) : 0.0;
+                TransitStops.Grade g = TransitStops.gradeAt(
+                        w.transitClass(r), q[2], street, land);
+                tested++;
+                switch (g) {
+                    case ELEVATED: elevated++; break;
+                    case UNDERGROUND: underground++; break;
+                    default: surface++; break;
+                }
+                // A player on the pavement outside, which is the only
+                // place they can be: the platform is unreachable on foot
+                // either way, up a viaduct or down a tunnel.
+                if (t.boardableAt(q[0], street + 0.9, q[1]) >= 0) { reachable++; }
+            }
+        }
+        assertTrue(tested > 100, "only sampled " + tested + " stations");
+        assertTrue(elevated > 20 && underground > 5 && surface > 20,
+                "the sample missed a whole kind of station: elevated="
+                        + elevated + " underground=" + underground
+                        + " surface=" + surface);
+        assertEquals(tested, reachable,
+                (tested - reachable) + " of " + tested + " stations could"
+                        + " not be boarded from the street outside them");
+    }
 }

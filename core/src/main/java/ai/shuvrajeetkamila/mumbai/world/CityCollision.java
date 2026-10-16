@@ -307,6 +307,16 @@ public final class CityCollision {
                 int e = f.buildingOffset[b + 1];
                 if (e - s >= 3) { segs += e - s; }
             }
+            // Viaduct piers are walls too. Three hundred and eighty-two
+            // kilometres of Metro and monorail guideway were drawn and
+            // then driven straight through, columns and all. Counted
+            // first because the arrays are exact-sized.
+            int[] pierCount = {0};
+            for (int r = 0; r < w.transitCount(); r++) {
+                Viaduct.piers(w, r, ox, oz, ox + w.chunkM, oz + w.chunkM,
+                        (px, pz, top, base, fx, fz) -> pierCount[0]++);
+            }
+            segs += pierCount[0] * 4;
             c.wx0 = new float[segs];
             c.wz0 = new float[segs];
             c.wx1 = new float[segs];
@@ -378,6 +388,48 @@ public final class CityCollision {
                     at++;
                 }
             }
+            // ---- viaduct piers, as four walls round a square ------------
+            final int[] pat = {at};
+            for (int r = 0; r < w.transitCount(); r++) {
+                Viaduct.piers(w, r, ox, oz, ox + w.chunkM, oz + w.chunkM,
+                        (px, pz, top, base, fx, fz) -> {
+                            double nx = fz, nz = -fx;
+                            double h = Viaduct.PIER_HALF_M;
+                            // Corners in order, so the ring winds the same
+                            // way every time and the outward normals point
+                            // out of the column rather than into it.
+                            double[][] corner = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+                            double[] cx = new double[4], cz = new double[4];
+                            for (int k = 0; k < 4; k++) {
+                                cx[k] = px + fx * h * corner[k][0] + nx * h * corner[k][1];
+                                cz[k] = pz + fz * h * corner[k][0] + nz * h * corner[k][1];
+                            }
+                            double area2 = 0;
+                            for (int k = 0; k < 4; k++) {
+                                int k2 = (k + 1) & 3;
+                                area2 += cx[k] * cz[k2] - cx[k2] * cz[k];
+                            }
+                            double wind = area2 >= 0 ? 1.0 : -1.0;
+                            for (int k = 0; k < 4; k++) {
+                                int k2 = (k + 1) & 3;
+                                int i = pat[0]++;
+                                c.wx0[i] = (float) cx[k];
+                                c.wz0[i] = (float) cz[k];
+                                c.wx1[i] = (float) cx[k2];
+                                c.wz1[i] = (float) cz[k2];
+                                double ex = cx[k2] - cx[k], ez = cz[k2] - cz[k];
+                                double len = Math.hypot(ex, ez);
+                                c.wnx[i] = (float) (wind * ez / len);
+                                c.wnz[i] = (float) (-wind * ex / len);
+                                // From under the ground to the underside of
+                                // the deck. Below the base too, so a column
+                                // on a slope has no gap at its foot.
+                                c.wBase[i] = (float) (base - 30.0);
+                                c.wTop[i] = (float) top;
+                            }
+                        });
+            }
+            at = pat[0];
             c.wallGrid = index(c, c.wx0, c.wz0, c.wx1, c.wz1, at, 1.5);
 
             // ---- bridge decks -------------------------------------------

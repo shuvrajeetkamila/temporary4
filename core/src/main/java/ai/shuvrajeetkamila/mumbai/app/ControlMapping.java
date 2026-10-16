@@ -1,5 +1,7 @@
 package ai.shuvrajeetkamila.mumbai.app;
 
+import ai.shuvrajeetkamila.mumbai.physics.HelicopterPhysics;
+
 /**
  * Which on-screen control does what, for each thing you can be driving.
  *
@@ -172,15 +174,35 @@ public final class ControlMapping {
                 // is the pedals. That is the real layout and worth the
                 // learning.
                 //
-                // The stick moves the lever rather than being the lever.
-                // A collective stays where the pilot puts it; a spring
-                // centred one snapped back to half travel the instant
-                // the thumb came off, and half travel is below a hover,
-                // so the machine sank at four metres a second whenever
-                // nobody was holding it - which is exactly when you are
-                // busy with the cyclic in the other hand.
-                out.collectiveLever = clamp01(out.collectiveLever
-                        + (-ly) * COLLECTIVE_RATE * Math.max(0, dt));
+                // The stick moves the lever rather than being the lever,
+                // and the lever springs back to a REFERENCE rather than
+                // to the middle of its travel.
+                //
+                // Both of the obvious designs are unflyable on glass. A
+                // spring-centred stick returns to half travel, which is
+                // below a hover, so the machine sank at four metres a
+                // second whenever nobody was holding it. A lever that
+                // simply stays put is worse: there is no detent and no
+                // readout, so after a climb the pilot has no way to find
+                // the hover again except to guess how long to push back
+                // down - measured, the machine went up at twelve metres
+                // a second, indefinitely, with the stick released.
+                //
+                // So: hold the stick to command a climb or a descent,
+                // let go and the lever eases back to whatever holds the
+                // aircraft where it is. On the skids that is the ground
+                // setting, so a parked machine stays parked; airborne it
+                // is the hover, so letting go holds the height.
+                double ref = out.heliOnSkids
+                        ? HelicopterPhysics.GROUND_COLLECTIVE
+                        : HelicopterPhysics.HOVER_COLLECTIVE;
+                double travel = COLLECTIVE_RATE * Math.max(0, dt);
+                if (ly == 0) {
+                    double back = ref - out.collectiveLever;
+                    out.collectiveLever += clamp11(back / Math.max(1e-9, travel)) * travel;
+                } else {
+                    out.collectiveLever = clamp01(out.collectiveLever + (-ly) * travel);
+                }
                 out.collective = out.collectiveLever;
                 out.pedal = lx;
                 out.engineToggle = edge[ACT_ENGINE];

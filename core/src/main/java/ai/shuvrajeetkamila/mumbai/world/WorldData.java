@@ -169,6 +169,45 @@ public final class WorldData {
 
     public int transitCount() { return transitClassId.length; }
 
+    /** minX, minZ, maxX, maxZ per route, built on first use. */
+    private double[] transitBox;
+
+    /**
+     * Does this route come anywhere near that box?
+     *
+     * <p>An O(1) reject. Anything that walks the transit network per
+     * chunk - the mesher, the collision builder - otherwise scans all
+     * four hundred odd routes and every one of their twelve thousand
+     * vertices to build one 1 km tile, and that is a visible hitch when
+     * you drive into a new chunk.
+     */
+    public boolean transitNear(int route, double minX, double minZ,
+                               double maxX, double maxZ) {
+        if (transitBox == null) {
+            double[] b = new double[transitCount() * 4];
+            for (int r = 0; r < transitCount(); r++) {
+                double x0 = Double.MAX_VALUE, z0 = Double.MAX_VALUE;
+                double x1 = -Double.MAX_VALUE, z1 = -Double.MAX_VALUE;
+                int n = transitPointCount(r);
+                for (int i = 0; i < n; i++) {
+                    double x = transitX(r, i), z = transitZ(r, i);
+                    if (x < x0) { x0 = x; }
+                    if (x > x1) { x1 = x; }
+                    if (z < z0) { z0 = z; }
+                    if (z > z1) { z1 = z; }
+                }
+                b[r * 4] = x0;
+                b[r * 4 + 1] = z0;
+                b[r * 4 + 2] = x1;
+                b[r * 4 + 3] = z1;
+            }
+            transitBox = b;
+        }
+        int o = route * 4;
+        return transitBox[o] <= maxX && transitBox[o + 2] >= minX
+                && transitBox[o + 1] <= maxZ && transitBox[o + 3] >= minZ;
+    }
+
     public int transitClass(int route) { return transitClassId[route]; }
 
     /** Points in a route. */

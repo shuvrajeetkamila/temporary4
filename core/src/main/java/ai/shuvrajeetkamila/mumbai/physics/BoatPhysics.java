@@ -132,6 +132,33 @@ public final class BoatPhysics extends RigidBody {
     /** Per-sample heave damping, N s/m. Derived, not guessed. */
     public double heaveDamping = 820;
 
+    /** What this hull is, for the HUD. */
+    public String hullName = "ferry";
+
+    /**
+     * The hull moored at a given spot.
+     *
+     * <p>Every boat in the game was a 34 tonne harbour ferry, because
+     * the engine held one {@code BoatPhysics} built by {@link #ferry()}
+     * and boarding anything reset that. Fourteen knots flat out is
+     * right for a ferry and wrong for everything else afloat, so no
+     * boat in the city could plane and the planing model never ran
+     * outside its unit test.
+     *
+     * <p>Chosen from the mooring's own coordinates so it is the same
+     * boat every time you come back to it, with no extra field in the
+     * world file.
+     */
+    public static BoatPhysics forMooring(double x, double z) {
+        long h = Double.doubleToLongBits(Math.rint(x * 4)) * 0x9E3779B97F4A7C15L
+                ^ Double.doubleToLongBits(Math.rint(z * 4)) * 0xC2B2AE3D27D4EB4FL;
+        h ^= h >>> 31;
+        int pick = (int) Math.floorMod(h, 100L);
+        if (pick < 46) { return launch(); }
+        if (pick < 80) { return ferry(); }
+        return cargo();
+    }
+
     /** Preset: a Mumbai harbour ferry. Beamy, stiff, slow. */
     public static BoatPhysics ferry() {
         BoatPhysics b = new BoatPhysics(22.0, 6.4, 34000);
@@ -140,6 +167,28 @@ public final class BoatPhysics extends RigidBody {
         b.maxThrust = 62000;
         b.planingThreshold = 99;                 // never planes
         b.hullDragCoefficient = 0.012;
+        b.hullName = "ferry";
+        b.recomputeHeaveDamping();
+        return b;
+    }
+
+    /**
+     * Preset: a harbour launch. Small, light, and fast enough to plane.
+     *
+     * <p>The one hull in the city a player would actually choose, and
+     * the only one the planing model ever gets to run on.
+     */
+    public static BoatPhysics launch() {
+        BoatPhysics b = new BoatPhysics(8.4, 2.8, 2100);
+        b.draft = 0.62;
+        b.metacentricHeight = 1.05;
+        // Measured: 28 knots flat out, up on the plane in about eight
+        // seconds. A harbour launch that could not outrun the ferry it
+        // is moored next to was not worth putting in the water.
+        b.maxThrust = 26000;
+        b.planingThreshold = 6.4;
+        b.hullDragCoefficient = 0.010;
+        b.hullName = "launch";
         b.recomputeHeaveDamping();
         return b;
     }
@@ -152,6 +201,7 @@ public final class BoatPhysics extends RigidBody {
         b.maxThrust = 9800;
         b.planingThreshold = 6.2;
         b.hullDragCoefficient = 0.009;
+        b.hullName = "speedboat";
         b.recomputeHeaveDamping();
         return b;
     }
@@ -164,6 +214,7 @@ public final class BoatPhysics extends RigidBody {
         b.maxThrust = 310000;
         b.planingThreshold = 99;
         b.hullDragCoefficient = 0.015;
+        b.hullName = "lighter";
         b.recomputeHeaveDamping();
         return b;
     }

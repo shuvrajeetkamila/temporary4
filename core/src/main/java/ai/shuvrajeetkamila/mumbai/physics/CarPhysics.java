@@ -78,6 +78,14 @@ public final class CarPhysics extends RigidBody {
     public int gear = 1;
     public double engineRpm = 850;
     public double idleRpm = 850;
+
+    /**
+     * Idle torque as a fraction of peak, for creep.
+     *
+     * <p>Small on purpose: enough to hold the car on a mild slope and
+     * walk it forward at a few km/h, not enough to be a launch.
+     */
+    public static final double IDLE_TORQUE_FRACTION = 0.085;
     public double maxRpm = 6600;
     public double redlineRpm = 6200;
     /** Peak crank torque, N m. Set by {@link #configure}. */
@@ -429,7 +437,24 @@ public final class CarPhysics extends RigidBody {
         // a flat 16 + 0.0075 rpm is six times a 125 cc scooter's peak
         // torque at its redline, which braked it to a standstill.
         double drag = peak * (0.081 + 0.259 * r / maxRpm);
-        return t * throttlePos - drag * (1.0 - throttlePos);
+        // An idling engine is not just a brake. The throttle plate is
+        // shut but the idle bypass keeps the engine turning and makes
+        // real torque, and that torque is what creeps an automatic
+        // forward in Drive and holds it against a gentle hill.
+        //
+        // Without it, closed throttle was pure negative drag at every
+        // engine speed including idle, so a stationary car had nothing
+        // holding it: a saloon left alone on a three degree slope rolled
+        // backwards to 15 km/h and kept going.
+        //
+        // Modelled as a governor - full idle torque below the idle
+        // speed, fading out as the engine comes up off it - so it does
+        // nothing at all once the car is moving.
+        double idleDemand = MathUtil.clamp(
+                1.0 - r / Math.max(1, idleRpm * 1.35), 0, 1);
+        double idleT = peak * IDLE_TORQUE_FRACTION * idleDemand;
+        return t * throttlePos
+                + (idleT - drag) * (1.0 - throttlePos);
     }
 
     public double totalRatio() {
@@ -827,7 +852,17 @@ public final class CarPhysics extends RigidBody {
                 : engineTorque(engineRpm, MathUtil.clamp(throttle, 0, 1));
         double transmitted = 0;
         if (engaged) {
-            double inputRpm = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
+            // SIGNED. A wheel turning backwards is not the same as one
+            // turning forwards at the same rate, and taking the modulus
+            // here told the clutch they were. A car rolling backwards in
+            // a forward gear therefore looked like a car already up to
+            // speed: the clutch locked, the engine's closed-throttle
+            // torque went through the gearbox, and because the wheels
+            // were already turning the wrong way it drove them further
+            // that way. The autorickshaw and the tempo accelerated
+            // backwards off a standing start on dead flat ground, with
+            // the engine revving, and nothing stopped them.
+            double inputRpm = drivenSpin * ratio * 60.0 / (2 * Math.PI);
             // The driver lets the pedal up as the input speed comes up to idle.
             // The driver lets the pedal all the way up by about 15 km/h.
             clutchEngagement = MathUtil.clamp(Math.abs(forwardSpeed()) / 4.2, 0.26, 1.0);
@@ -855,7 +890,7 @@ public final class CarPhysics extends RigidBody {
             // to top in half a second while slowing down.
             clutchSlipping = true;
             clutchEngagement = 0;
-            double nextInput = Math.abs(drivenSpin * ratio) * 60.0 / (2 * Math.PI);
+            double nextInput = drivenSpin * ratio * 60.0 / (2 * Math.PI);
             engineRpm = MathUtil.lerp(engineRpm, Math.max(idleRpm, nextInput),
                     MathUtil.clamp(dt / Math.max(dt, shiftTimer), 0.08, 1.0));
         } else {
@@ -895,8 +930,16 @@ public final class CarPhysics extends RigidBody {
                 // backwards with the throttle shut and showed no sign of
                 // stopping. Overrun torque may only oppose rotation, and
                 // may not reverse it within a step.
-                boolean overrun = wheelTorque * w.spin < 0
-                        || (w.spin == 0 && wheelTorque < 0 && throttle < 0.02);
+                // Decided by the sign of the crank torque, not by the
+                // wheel's direction of travel. The old test asked
+                // whether the wheel torque and the spin disagreed, which
+                // is true at a standstill and false the instant the
+                // wheel picks up a hair of rotation the wrong way - so
+                // engine braking flipped from "retard" to "drive" and
+                // ran the car away backwards. A negative crank torque is
+                // the engine being turned BY the driveline; it can only
+                // ever take rotation out.
+                boolean overrun = transmitted < 0;
                 if (overrun) {
                     double toStop = Math.abs(w.spin) * inertiaEff / dt;
                     applied = -Math.signum(w.spin)
@@ -981,6 +1024,32 @@ public final class CarPhysics extends RigidBody {
             gear = MathUtil.clampi(Math.min(want, gear - 1), 2, gearRatios.length - 1);
             shiftTimer = shiftDuration;
         }
+    }
+
+    /**
+     * Choose the gear that suits the speed the car is already doing.
+     *
+     * <p>For getting into a vehicle that is already moving. Everything
+     * resets to first, which is right for a parked car and badly wrong
+     * for one doing 68 km/h: first gear at that speed is far past the
+     * redline, so taking the wheel of a moving taxi produced a violent
+     * deceleration and a scream from the engine before the gearbox
+     * caught up.
+     */
+    public void selectGearForSpeed() {
+        double v = Math.abs(forwardSpeed());
+        if (v < 1.0) { gear = 2; return; }
+        int want = 2;
+        for (int g = 3; g < gearRatios.length; g++) {
+            double rpm = v / wheels[0].radius
+                    * gearRatios[g] * finalDrive * 60.0 / (2 * Math.PI);
+            if (rpm > redlineRpm * 0.29) { want = g; } else { break; }
+        }
+        gear = MathUtil.clampi(want, 2, gearRatios.length - 1);
+        shiftTimer = 0;
+        engineRpm = MathUtil.clamp(
+                v / wheels[0].radius * totalRatio() * 60.0 / (2 * Math.PI),
+                idleRpm, redlineRpm);
     }
 
     /** Engage reverse. */

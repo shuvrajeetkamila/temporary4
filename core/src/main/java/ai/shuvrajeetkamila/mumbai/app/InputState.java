@@ -42,6 +42,16 @@ public final class InputState {
      */
     public double collectiveLever = ai.shuvrajeetkamila.mumbai.physics
             .HelicopterPhysics.GROUND_COLLECTIVE;
+    /**
+     * Published by the engine, read by the control mapping: true while
+     * the helicopter's skids are taking weight.
+     *
+     * <p>The collective has to spring back to a different place on the
+     * pad than it does in the air, and only the simulation knows which
+     * of the two the aircraft is in.
+     */
+    public boolean heliOnSkids = true;
+
     /** Pedals: yaw or rudder, -1..1. */
     public double pedal;
 

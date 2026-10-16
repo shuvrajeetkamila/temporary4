@@ -119,15 +119,27 @@ class CarPhysicsTest {
         CarPhysics c = onGround();
         c.throttle = 0.45;
         for (int i = 0; i < 60 * 8; i++) { c.step(1.0 / 60, flat(), 0); }
-        double h0 = c.orientation.heading();
         c.steerInput = 0.7;
         double maxRoll = 0;
+        // Accumulate the per-step delta. A hard-steering car passes through
+        // 2 pi in well under six seconds, and heading() wraps, so a single
+        // end-to-end subtraction measures the wrap rather than the corner.
+        double prev = c.orientation.heading();
+        double swept = 0;
         for (int i = 0; i < 60 * 6; i++) {
             c.step(1.0 / 60, flat(), 0);
+            double h = c.orientation.heading();
+            double d = h - prev;
+            while (d > Math.PI) { d -= 2 * Math.PI; }
+            while (d < -Math.PI) { d += 2 * Math.PI; }
+            swept += d;
+            prev = h;
             maxRoll = Math.max(maxRoll, Math.abs(c.orientation.roll()));
         }
-        double turned = Math.abs(c.orientation.heading() - h0);
+        double turned = Math.abs(swept);
         assertTrue(turned > 0.3, "the car should have changed heading, got " + turned + " rad");
+        assertTrue(turned < 4 * Math.PI,
+                "0.7 of lock at 30 km/h is a corner, not a spin, got " + turned + " rad");
         assertTrue(maxRoll > 0.004, "weight transfer should roll the body, got " + maxRoll);
         assertTrue(maxRoll < 0.5, "it should not roll over on tarmac, got " + maxRoll);
     }

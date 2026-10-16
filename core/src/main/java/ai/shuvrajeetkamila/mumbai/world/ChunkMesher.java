@@ -470,18 +470,6 @@ public final class ChunkMesher {
     /** Height of the platform above the running rail, m. */
     static final float PLATFORM_H_M = 1.0f;
 
-    /** Deck width of an elevated guideway, by line class, metres. */
-    private static final java.util.Map<Integer, Double> DECK_W_M =
-            java.util.Map.of(WorldData.CLS_RAIL, 9.0,
-                    WorldData.CLS_LIGHT_RAIL, 8.4,
-                    WorldData.CLS_SUBWAY, 8.4,
-                    WorldData.CLS_MONORAIL, 2.6);
-
-    /** Depth of the deck slab, metres. */
-    private static final double DECK_T_M = 1.6;
-
-    /** Distance between viaduct piers, metres. */
-    private static final double PIER_SPACING_M = 26.0;
 
     /**
      * A platform either side of the line at every station.
@@ -529,8 +517,124 @@ public final class ChunkMesher {
                     }
                 }
             }
+            access(st, ox, oz, fx, fz, nx, nz, rail);
         }
         viaducts(ox, oz, size, lod);
+    }
+
+    /** Width of a station stair flight, metres. */
+    private static final double STAIR_W_M = 4.0;
+
+    /** How steep a flight is: metres along for every metre up. */
+    private static final double STAIR_RUN_PER_RISE = 1.9;
+
+    /**
+     * The way in.
+     *
+     * <p>Two hundred and sixty-seven stations had their platform up to
+     * twenty metres above the street with nothing connecting the two,
+     * and another fifty-eight were in a tunnel under it. They were
+     * drawn, they were named, trains called at them, and there was no
+     * way to reach one: you stood underneath a Metro station looking up
+     * at it.
+     *
+     * <p>An elevated station gets a stair flight down to the pavement.
+     * An underground one gets a street entrance over the tunnel, which
+     * is all you ever see of a subway station from outside anyway.
+     */
+    private void access(TransitStops.Stop st, double ox, double oz,
+                        double fx, double fz, double nx, double nz,
+                        double rail) {
+        double lx = st.x - ox;
+        double lz = st.z - oz;
+        double street = st.ground;
+        double platform = rail + PLATFORM_H_M;
+
+        if (st.grade == TransitStops.Grade.ELEVATED) {
+            double rise = platform - street;
+            if (rise < 1.6) { return; }
+            double run = rise * STAIR_RUN_PER_RISE;
+            // Out to the side of the platform, running back along the
+            // line so the flight lands on the pavement rather than in
+            // the middle of the carriageway.
+            double offset = 3.1 + PLATFORM_W_M + STAIR_W_M * 0.5 + 0.6;
+            double bx = lx + nx * offset;
+            double bz = lz + nz * offset;
+            // Landing at the top, level with the platform, bridging the
+            // gap back to it.
+            slab(bx - nx * (STAIR_W_M * 0.5 + 1.0),
+                    bz - nz * (STAIR_W_M * 0.5 + 1.0),
+                    fx, fz, nx, nz, STAIR_W_M * 0.5, STAIR_W_M * 0.5 + 1.0,
+                    platform - 0.9, platform);
+            stairs(bx, bz, fx, fz, nx, nz, run, STAIR_W_M * 0.5, street, platform);
+        } else if (st.grade == TransitStops.Grade.UNDERGROUND) {
+            // A kiosk over the tunnel, with a flight disappearing into
+            // it. Nobody can see down there, so the stairs stop at the
+            // doorway and the rest is implied.
+            double offset = 7.0;
+            for (int side = -1; side <= 1; side += 2) {
+                double bx = lx + nx * offset * side;
+                double bz = lz + nz * offset * side;
+                slab(bx, bz, fx, fz, nx, nz, 5.0, 3.2, street - 0.4, street + 3.4);
+                slab(bx, bz, fx, fz, nx, nz, 5.6, 3.8,
+                        street + 3.4, street + 3.9);
+            }
+        }
+    }
+
+    /**
+     * An inclined flight: a sloped top face, two sides and an end wall.
+     *
+     * <p>{@link #slab} is flat-topped, so a staircase built out of them
+     * is a ziggurat. This is one wedge, which at this fidelity reads as
+     * a flight of steps and costs six quads instead of a hundred.
+     */
+    private void stairs(double cx, double cz, double fx, double fz,
+                        double nx, double nz, double run, double halfWid,
+                        double yLow, double yHigh) {
+        // Bottom of the flight is `run` back along the line from the top.
+        double ax = cx - fx * run, az = cz - fz * run;
+        double bx = cx, bz = cz;
+        float[] x = new float[4];
+        float[] z = new float[4];
+        // 0,1 at the foot; 3,2 at the head.
+        x[0] = (float) (ax - nx * halfWid); z[0] = (float) (az - nz * halfWid);
+        x[1] = (float) (ax + nx * halfWid); z[1] = (float) (az + nz * halfWid);
+        x[2] = (float) (bx + nx * halfWid); z[2] = (float) (bz + nz * halfWid);
+        x[3] = (float) (bx - nx * halfWid); z[3] = (float) (bz - nz * halfWid);
+        float[] yTop = {(float) yLow, (float) yLow, (float) yHigh, (float) yHigh};
+        float lo = (float) (yLow - 0.4);
+        float mat = (float) TextureLibrary.MAT_CONCRETE;
+        // Normal of the sloped top: u x v, with u = (ux, 0, uz) along the
+        // width of the flight and v = (vx, vy, vz) up the slope.
+        double ux = x[1] - x[0], uz = z[1] - z[0];
+        double vx = x[3] - x[0], vy = yTop[3] - yTop[0], vz = z[3] - z[0];
+        double tnx = 0.0 * vz - uz * vy;
+        double tny = uz * vx - ux * vz;
+        double tnz = ux * vy - 0.0 * vx;
+        double tl = Math.sqrt(tnx * tnx + tny * tny + tnz * tnz);
+        if (tl < 1e-6) { return; }
+        float fnx = (float) (tnx / tl), fny = (float) (tny / tl), fnz = (float) (tnz / tl);
+        int[] top = new int[4];
+        for (int i = 0; i < 4; i++) {
+            top[i] = push(x[i], yTop[i], z[i], fnx, fny, fnz,
+                    0.60f, 0.59f, 0.57f, mat);
+        }
+        triN(top[0], top[1], top[2]);
+        triN(top[0], top[2], top[3]);
+        for (int i = 0; i < 4; i++) {
+            int j = (i + 1) % 4;
+            double ex = x[j] - x[i], ez = z[j] - z[i];
+            double el = Math.hypot(ex, ez);
+            if (el < 1e-5) { continue; }
+            float wnx = (float) (ez / el), wnz = (float) (-ex / el);
+            int p0 = push(x[i], lo, z[i], wnx, 0, wnz, 0.46f, 0.45f, 0.44f, mat);
+            int p1 = push(x[j], lo, z[j], wnx, 0, wnz, 0.46f, 0.45f, 0.44f, mat);
+            int p2 = push(x[j], yTop[j], z[j], wnx, 0, wnz, 0.50f, 0.49f, 0.48f, mat);
+            int p3 = push(x[i], yTop[i], z[i], wnx, 0, wnz, 0.50f, 0.49f, 0.48f, mat);
+            triN(p0, p1, p2);
+            triN(p0, p2, p3);
+        }
     }
 
     /**
@@ -550,7 +654,9 @@ public final class ChunkMesher {
             if (cls == WorldData.CLS_FERRY) { continue; }
             int n = world.transitPointCount(r);
             if (n < 2) { continue; }
-            double pierRun = 0;
+            if (!world.transitNear(r, ox - pad, oz - pad,
+                    ox + size + pad, oz + size + pad)) { continue; }
+            double half = Viaduct.deckHalfWidth(cls);
             for (int i = 1; i < n; i++) {
                 double ax = world.transitX(r, i - 1), az = world.transitZ(r, i - 1);
                 double bx = world.transitX(r, i), bz = world.transitZ(r, i);
@@ -560,37 +666,23 @@ public final class ChunkMesher {
                         || Math.min(az, bz) > oz + size + pad) {
                     continue;
                 }
-                double ay = world.transitY(r, i - 1), by = world.transitY(r, i);
-                double mx = (ax + bx) * 0.5, mz = (az + bz) * 0.5;
-                double g = world.isLand(mx, mz) ? world.height(mx, mz) : 0.0;
-                double above = (ay + by) * 0.5 - g;
-                if (above < TransitStops.ELEVATED_M) {
-                    // At grade, on an embankment or bored: no structure.
-                    continue;
-                }
+                if (!Viaduct.elevatedSegment(world, r, i)) { continue; }
                 double seg = Math.hypot(bx - ax, bz - az);
                 if (seg < 1e-6) { continue; }
+                double ay = world.transitY(r, i - 1), by = world.transitY(r, i);
+                double mx = (ax + bx) * 0.5, mz = (az + bz) * 0.5;
                 double fx = (bx - ax) / seg, fz = (bz - az) / seg;
                 double nx = fz, nz = -fx;
-                double half = DECK_W_M.get(cls) * 0.5;
                 // The deck itself, one slab per alignment segment.
                 slab((mx - ox), (mz - oz), fx, fz, nx, nz, seg * 0.5, half,
-                        (ay + by) * 0.5 - DECK_T_M, (ay + by) * 0.5 - 0.1);
-                // Piers at a fixed spacing along the run.
-                for (double t = 0; t < seg; t += 1.0) {
-                    pierRun += 1.0;
-                    if (pierRun < PIER_SPACING_M) { continue; }
-                    pierRun = 0;
-                    double px = ax + fx * t, pz = az + fz * t;
-                    if (px < ox - 8 || px > ox + size + 8
-                            || pz < oz - 8 || pz > oz + size + 8) { continue; }
-                    double pg = world.isLand(px, pz) ? world.height(px, pz) : -1.0;
-                    double top = ay + (by - ay) * (t / seg) - DECK_T_M;
-                    if (top - pg < 1.5) { continue; }
-                    slab(px - ox, pz - oz, fx, fz, nx, nz, 1.1, 1.1,
-                            pg - 0.6, top);
-                }
+                        (ay + by) * 0.5 - Viaduct.DECK_T_M, (ay + by) * 0.5 - 0.1);
             }
+            // Piers, from the one authority that also makes them solid.
+            Viaduct.piers(world, r, ox - 8, oz - 8, ox + size + 8, oz + size + 8,
+                    (px, pz, top, base, fx, fz) -> slab(px - ox, pz - oz,
+                            fx, fz, fz, -fx,
+                            Viaduct.PIER_HALF_M, Viaduct.PIER_HALF_M,
+                            base - 0.6, top));
         }
     }
 

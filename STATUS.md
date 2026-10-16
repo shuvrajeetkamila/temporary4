@@ -1,8 +1,8 @@
 # Status — what is built, what is not
 
-Current release **v2.0.48** (CI run `38874026795`, both jobs green).
-34870 lines of Java across 48 core classes and 11 Android classes,
-53 test files holding **517 core tests + 28 Android tests**, and **145
+Current release **v2.0.49** (CI run `PENDING`).
+Java across 49 core classes and 11 Android classes,
+55 test files holding **535 core tests + 28 Android tests**, and **145
 world verification gates**. All green locally.
 
 This file is the honest inventory. Anything not listed under "Built" is
@@ -48,8 +48,8 @@ a tile off screen while its replacement is being built.
 |---|---|
 | **Human** | Capsule controller, walk/run/swim, ground probe, baton |
 | **Car** | Per-wheel spring-damper, torque curve, clutch, gearbox, slip curves, wet grip, left-hand traffic |
-| **Boat** | 6–12 buoyancy points, analytic waves shared with the renderer, tide, planing, beaching |
-| **Helicopter** | Collective/cyclic, tail rotor torque, translational lift, ground effect, autorotation |
+| **Boat** | 6–12 buoyancy points, analytic waves shared with the renderer, tide, planing, beaching. Four hulls — launch, ferry, lighter, speedboat — picked deterministically from the mooring |
+| **Helicopter** | Collective/cyclic, tail rotor torque, translational lift, ground effect, autorotation. The collective is rate-commanded and springs back to a hover, so letting go of the stick holds the height |
 | **Aeroplane** | q = ½ρv², Cl/Cd curves, stall, flaps, gear, real runway lengths, no hidden impulse |
 
 Fixed 60 Hz accumulator, max 4 substeps, dt clamped to 0.1 s, render
@@ -58,7 +58,9 @@ interpolation. SI units throughout.
 Measured: sedan 198 km/h, 0–60 in 6.0 s, 100–0 in 44 m at 0.90 g;
 kaali-peeli 135/6.8/13.2; autorickshaw 65; double-decker 74; scooter
 85 km/h at 0.62 g; autorotation 11.1 → 7.3 m/s; takeoff roll 894 m
-clean, 591 m at flap 25°.
+clean, 591 m at flap 25°; helicopter cruise 202 km/h, full pedal
+58 °/s, hands-off hover holds within 2.5 m/s; harbour launch 28 kn on
+the plane against the ferry's 13 kn.
 
 ### 4. Rendering
 
@@ -88,6 +90,10 @@ clean, 591 m at flap 25°.
   and money.
 - **Transit you can ride:** stations at real spacing (1.6 km rail,
   1.15 km Metro, 900 m monorail), 16-second dwells, board and alight.
+  All 821 stations are boardable from the street outside them;
+  elevated ones have a stair flight, bored ones a street entrance.
+- **382 km of elevated guideway is solid** — 14,178 viaduct piers in
+  the collision grid, from the same function that draws them.
 - **Save:** money, jobs done, races won, distance, position and
   time of day persist.
 - **HUD:** radar with street layout and blips, full-screen vector map,
@@ -131,18 +137,28 @@ no backend.
    departure. There is still no shelter, no signage, no footbridge and
    no concourse, and the 380 OSM platform ways are not used - the
    platforms are derived from the alignment.
-   **There are also no stairs.** An elevated platform is reachable on
-   foot only by walking up the embankment where one exists; the 66
-   bored stations have no entrance at all and cannot be used.
+   Every station now has a way in: elevated platforms get a stair
+   flight down to the pavement and bored stations get a street
+   entrance over the tunnel. Walking up the stairs is not simulated —
+   standing on the pavement outside a station is enough to board,
+   the same abstraction every interior in the game uses.
 7. **The timetable is a headway, not a calling pattern.** Each line
    departs on a fixed interval from a fixed phase, so a board is
    always right, but there are no real timings, no fast/slow services
    and no destinations beyond the two terminals the line is named
    after.
-8. **No music and no voices.** Everything audible is synthesised.
-9. **Upper Thane and Vasai Creek are land,** because OSM maps them as
+8. **5.1 % of at-grade track is buried in the terrain.** 78 km of the
+   1,519 km that runs at grade sits more than 0.3 m inside the drawn
+   ground, worst case 1.97 m; the median clearance is +0.86 m. The
+   compiled formation is a morphological opening of the DEM, so a
+   narrow rise the opening removed is still drawn, and the track goes
+   through it. Fixing it properly means either carving cuttings into
+   the terrain heightfield or putting the line on stilts wherever the
+   surface model has a spike. Measured, not fixed.
+9. **No music and no voices.** Everything audible is synthesised.
+10. **Upper Thane and Vasai Creek are land,** because OSM maps them as
    intertidal mudflat. Not navigable in this build.
-10. **Rooftop helipads are rejected** by the spawn validator, so none
+11. **Rooftop helipads are rejected** by the spawn validator, so none
     exist despite Mumbai having many.
 
 ### Simulation gaps
@@ -159,19 +175,19 @@ no backend.
    drag polar is the likely cause. Not yet measured against a real
    aircraft.
 
-11. **Collision is footprint-ring extruded.** Balconies, archways and
+12. **Collision is footprint-ring extruded.** Balconies, archways and
     overhangs are solid; you cannot walk under a building that you
     should be able to walk under.
-12. **Traffic collides with traffic, pedestrians do not.** Cars queue
+13. **Traffic collides with traffic, pedestrians do not.** Cars queue
     behind each other and bounce off each other with an oriented-box
     test and a mass-weighted impulse. Pedestrians still walk through
     one another and are not pushed out of walls.
-13. **A knockdown is not a ragdoll.** A body topples about its feet,
+14. **A knockdown is not a ragdoll.** A body topples about its feet,
     slides and gets up, but there are no joints and no limb physics:
     everyone falls the same way, and they fall through each other.
-14. **Some OSM footprints are self-intersecting bow-ties** and mesh
+15. **Some OSM footprints are self-intersecting bow-ties** and mesh
     accordingly.
-15. **Vehicle damage is a single number.** It costs engine torque and
+16. **Vehicle damage is a single number.** It costs engine torque and
     survives getting out and back in, but there is no deformation, no
     smoke, no part loss and no effect on steering or brakes.
 
