@@ -5,12 +5,12 @@
  "attribution": "\u00a9 OpenStreetMap contributors",
  "copyright_url": "https://www.openstreetmap.org/copyright",
  "source_url": "https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf",
- "source_bytes": 221177381,
- "source_sha256": "5ffd6012c56426190e896ad261a6f5a7eaec2550a19bb73f2e40872691168a97",
- "source_md5_published": "3a56f9543b1d697bd55ecf4eb577e9e1",
+ "source_bytes": 221280431,
+ "source_sha256": "48202e8a6a4bdbe80859efded1fb26c62a576fdfeba2a5d3336dbb7df946a860",
+ "source_md5_published": "23c7ac69f834424e4bda5ef771e0840d",
  "osm_replication_timestamp": "unknown",
- "retrieved_utc": "2026-10-13T15:41:05+00:00",
- "http_last_modified": "Mon, 12 Oct 2026 23:13:01 GMT",
+ "retrieved_utc": "2026-10-16T08:30:35+00:00",
+ "http_last_modified": "Fri, 16 Oct 2026 00:01:52 GMT",
  "clip": {
   "tool": "osmium-tool",
   "tool_version": "osmium version 1.16.0",
@@ -19,13 +19,13 @@
   "aoi_version": "2.1.0",
   "aoi_vertices": 29,
   "output": "data/osm/mumbai-aoi.osm.pbf",
-  "output_bytes": 19134820,
-  "output_sha256": "49995cfaa5edb7cc66436b194f135a541c70665d9e78bad938171c491d503af1",
+  "output_bytes": 19168234,
+  "output_sha256": "a69fe0da47c5ef898eeba92cfe1136eba82ab7fd0f5b14dd553b31f839d2e2b8",
   "counts": {
    "changesets": 0,
-   "nodes": 2144562,
-   "ways": 330964,
-   "relations": 4379
+   "nodes": 2147794,
+   "ways": 331603,
+   "relations": 4387
   }
  }
 }
