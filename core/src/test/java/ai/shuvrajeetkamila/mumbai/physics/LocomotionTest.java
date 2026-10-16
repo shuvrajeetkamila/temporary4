@@ -283,17 +283,32 @@ final class LocomotionTest {
         assertTrue(left < 0, "left pedal did not yaw the nose left: " + left);
     }
 
+    /**
+     * How far the pedal puts the nose to the airframe's RIGHT, radians.
+     *
+     * <p>Not a heading difference. {@code heading()} is
+     * {@code atan2(x, -z)}, which runs the opposite way to the turn in
+     * this frame: yaw right and the number goes down. Measuring the
+     * sign of a heading delta therefore tested the wrong direction,
+     * and passed only because the yaw was running away at 168 deg/s
+     * and four seconds of it wrapped the angle right round.
+     */
     private double heliYaw(double pedal) {
         HelicopterPhysics h = new HelicopterPhysics();
         HelicopterPhysics.GroundProbe ground = (x, z) -> 0.0;
         h.position.set(0, 200, 0);
         h.engineOn = true;
-        h.collective = 0.62;
+        h.collective = HelicopterPhysics.HOVER_COLLECTIVE;
         for (int i = 0; i < 60 * 3; i++) { h.step(DT, ground, 0, 0); }
-        double h0 = h.orientation.heading();
+        ai.shuvrajeetkamila.mumbai.math.Vec3 r0 =
+                new ai.shuvrajeetkamila.mumbai.math.Vec3();
+        h.orientation.right(r0);
         h.pedal = pedal;
         for (int i = 0; i < 60 * 4; i++) { h.step(DT, ground, 0, 0); }
-        return headingDelta(h0, h.orientation.heading());
+        ai.shuvrajeetkamila.mumbai.math.Vec3 f =
+                new ai.shuvrajeetkamila.mumbai.math.Vec3();
+        h.orientation.forward(f);
+        return Math.asin(Math.max(-1, Math.min(1, f.x * r0.x + f.z * r0.z)));
     }
 
     @Test

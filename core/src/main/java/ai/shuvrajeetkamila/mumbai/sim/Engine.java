@@ -270,6 +270,10 @@ public final class Engine {
         this.streamer = new WorldStreamer(world);
         this.agents = new Agents(world);
         this.transit = new Transit(world);
+        // Ferries ride the sea, not a fixed datum. Without this they
+        // sat at exactly zero while the tide swung 1.9 m either way,
+        // so a vessel spent half the day half submerged.
+        this.transit.setOcean(ocean);
         this.minimap = new Minimap(world);
         this.mapView.setWorldBounds(world);
         this.missions = new Missions(world, minimap, 0x5A1_5E77EL);
@@ -1013,7 +1017,12 @@ public final class Engine {
      */
     public boolean boardTransit() {
         if (profile != ControlProfile.ON_FOOT || aboard >= 0) { return false; }
-        int i = transit.boardableAt(human.position.x, human.position.z);
+        // Feet, not centre: boarding is a height test now, so that a
+        // player on the pavement cannot step onto a Metro on the
+        // viaduct over their head or one in the tunnel under their
+        // feet just by standing in the right place.
+        int i = transit.boardableAt(human.position.x,
+                human.position.y - human.height * 0.5, human.position.z);
         if (i < 0) { return false; }
         aboard = i;
         return true;
@@ -1038,6 +1047,11 @@ public final class Engine {
         double ex = sv.x + Math.cos(sv.heading) * side;
         double ez = sv.z + Math.sin(sv.heading) * side;
         double gy = world.inBounds(ex, ez) ? world.height(ex, ez) : 0;
+        // Onto the platform, which is where the train is, not onto the
+        // ground under it. Step off an elevated Metro and the ground is
+        // eight metres down; step off a bored one and it is twelve
+        // metres up, and the player was left standing inside a hill.
+        if (Math.abs(sv.y - gy) > 1.5) { gy = sv.y - 0.9; }
         human.reset();
         human.position.set(ex, gy + human.height * 0.5, ez);
         return true;
@@ -1373,7 +1387,8 @@ public final class Engine {
                         ? "EXIT to get off"
                         : "riding " + transit.routeName(riding.route);
             } else {
-                int tr = transit.boardableAt(b.position.x, b.position.z);
+                int tr = transit.boardableAt(b.position.x,
+                        b.position.y - human.height * 0.5, b.position.z);
                 if (tr >= 0) {
                     t.prompt = "ENTER - board "
                             + transit.routeName(transit.services()[tr].route);

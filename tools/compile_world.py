@@ -121,8 +121,11 @@ def simplify(pts, tol):
         a, b = stack.pop()
         if b <= a + 1:
             continue
-        ax, az = pts[a]
-        bx, bz = pts[b]
+        # Column indexing, not tuple unpacking: a transit vertex carries
+        # its bridge/tunnel/layer tags in columns 2..4 and the simplifier
+        # has to pass them through untouched.
+        ax, az = pts[a][0], pts[a][1]
+        bx, bz = pts[b][0], pts[b][1]
         dx, dz = bx - ax, bz - az
         seg = dx * dx + dz * dz
         sec = pts[a + 1:b]
@@ -828,7 +831,187 @@ def _clip_runs(chain, x0, z0, x1, z1):
     return runs
 
 
-def build_transit(lay):
+# Ruling gradient by line class, metres climbed per metre run. A railway
+# is not a road: it cannot follow the ground. Indian Railways works to
+# about 1 in 100 on main line and 1 in 37 in the ghats; a metro viaduct
+# is laid to its own gradient and a monorail can be steeper still.
+RAIL_MAX_GRADE = {15: 0.025, 16: 0.035, 17: 0.035, 18: 0.060}
+
+# Rail head above the formation where the line is at grade, metres.
+RAIL_SLEEPER_M = 0.9
+
+# Deck clearance above the ground for an elevated structure, by class.
+# Mumbai's Metro viaducts clear the road below by about eight metres and
+# the monorail runs a little higher again.
+VIADUCT_CLEAR_M = {15: 6.0, 16: 7.8, 17: 7.8, 18: 8.5}
+
+# A railway bridge over water clears the highest tide, not the mean. The
+# ocean here swings +-1.9 m and the Vasai and Thane creek crossings are
+# well clear of it.
+WATER_CLEAR_M = 5.5
+
+# How far a bored tunnel sits below the surface, metres.
+TUNNEL_DEPTH_M = -12.0
+
+
+def _rolling(vals, cum, half, op):
+    """Rolling ``op`` over an arc-length window, two-pointer scan."""
+    n = len(vals)
+    out = np.empty(n, dtype="f8")
+    lo = hi = 0
+    for i in range(n):
+        while cum[lo] < cum[i] - half:
+            lo += 1
+        while hi + 1 < n and cum[hi + 1] <= cum[i] + half:
+            hi += 1
+        out[i] = op(vals[lo:hi + 1])
+    return out
+
+
+def _formation_level(ground, cum, win=140.0):
+    """Ground a railway would actually be built on.
+
+    The DEM is a surface model with buildings and noise in it: along the
+    suburban alignments it steps by up to 18 m between neighbouring
+    vertices twenty metres apart. A 2.5 per cent ruling gradient can
+    only climb half a metre in that distance, so one bad cell forces the
+    slope-limited envelope to stay high for seven hundred metres either
+    side of it, and the whole network comes out on stilts.
+
+    A morphological opening - rolling minimum, then rolling maximum -
+    deletes any spike narrower than the window while leaving a genuine
+    hill alone, which is the distinction that matters here.
+    """
+    eroded = _rolling(ground, cum, win * 0.5, np.min)
+    opened = _rolling(eroded, cum, win * 0.5, np.max)
+    return _rolling(opened, cum, win * 0.35, np.mean)
+
+
+def _slope_limited_envelope(lower, ds, grade):
+    """Lowest profile that is >= ``lower`` and never steeper than ``grade``.
+
+    Two sweeps of a max-plus relaxation. This is what turns a line that
+    was following the raw terrain - 91 per cent gradients, 18 m steps
+    between neighbouring vertices - into a railway: it rides up onto an
+    embankment where the ground dips away and holds a legal gradient
+    through it. Where a vertex is unconstrained (a bored tunnel) the
+    bound is -inf and the profile simply passes through the hill.
+    """
+    n = len(lower)
+    t = np.array(lower, dtype="f8")
+    for i in range(1, n):
+        t[i] = max(t[i], t[i - 1] - grade * ds[i - 1])
+    for i in range(n - 2, -1, -1):
+        t[i] = max(t[i], t[i + 1] - grade * ds[i])
+    return t
+
+
+def _vertical_curve(profile, ds, passes=6):
+    """Rounds the kinks where two gradients meet.
+
+    The envelope is piecewise linear and its corners are sharp; real
+    track is laid on a vertical curve. An arc-length weighted three
+    point smoother is enough to stop a carriage visibly hinging as it
+    crosses a summit, and it cannot move the profile far because the
+    corners are the only places with any curvature to remove.
+    """
+    t = np.array(profile, dtype="f8")
+    n = len(t)
+    if n < 3:
+        return t
+    for _ in range(passes):
+        prev = t.copy()
+        for i in range(1, n - 1):
+            a, b = ds[i - 1], ds[i]
+            if a + b < 1e-6:
+                continue
+            lin = (prev[i - 1] * b + prev[i + 1] * a) / (a + b)
+            t[i] = prev[i] * 0.5 + lin * 0.5
+    return t
+
+
+def build_rail_profile(pts, struct, cls, landmask, dtm, rstats):
+    """Rail head height for every vertex of one route.
+
+    The alignment is real OSM geometry but OSM has no elevation, so the
+    height had to come from somewhere. It used to come from the terrain
+    directly - ground plus a per-class constant - which is wrong in
+    three separate ways at once. It made the track a roller coaster
+    following every hillock the DEM had. It put the suburban line into
+    the water at every creek crossing, because the ground under a
+    bridge is the seabed. And it buried the whole of the Mumbai Metro
+    twelve metres down, because the class said "subway" while 147 of
+    the 355 ways that make it up are tagged as bridges carrying layer
+    +1 to +3 - which is to say, a viaduct.
+
+    So the structure tags decide what the line is doing, and the
+    profile is then the slope-limited envelope of that requirement.
+    """
+    n = len(pts)
+    nx, nz = int(rstats["nx"]), int(rstats["nz"])
+    minx, minz = float(rstats["min_x"]), float(rstats["min_z"])
+    x = np.asarray([p[0] for p in pts], dtype="f8")
+    z = np.asarray([p[1] for p in pts], dtype="f8")
+    i = np.clip(((x - minx) / GRID_M).astype(np.int32), 0, nx - 1)
+    j = np.clip(((z - minz) / GRID_M).astype(np.int32), 0, nz - 1)
+    # Decimetres in the raster, metres everywhere else. build_craft
+    # divides by ten for the same reason; forgetting it here made the
+    # ground under the railways read 54 m where it is 5.4, and put
+    # 1167 km of the 1690 km network up on an imaginary embankment.
+    ground = dtm[j, i].astype("f8") / 10.0
+    wet = landmask[j, i] == 0
+
+    bridge = np.asarray([s[0] for s in struct], dtype=bool)
+    tunnel = np.asarray([s[1] for s in struct], dtype=bool)
+    layer = np.asarray([s[2] for s in struct], dtype="f8")
+
+    # A metro is a viaduct in this city unless OSM says otherwise, and a
+    # monorail always is. Only an explicit tunnel tag goes underground.
+    elevated = bridge | (layer > 0)
+    if cls in (16, 17, 18):
+        elevated = elevated | ~tunnel
+
+    ds = np.hypot(np.diff(x), np.diff(z))
+    ds = np.maximum(ds, 1e-3)
+    cum = np.concatenate([[0.0], np.cumsum(ds)])
+    grade = RAIL_MAX_GRADE.get(cls, 0.03)
+
+    # The level the formation is built to, with the DEM's spikes taken
+    # out. Using the raw sample put 1243 km of the 1690 km network up on
+    # an embankment, because a single noisy cell drags the envelope up
+    # for most of a kilometre in both directions.
+    formation = _formation_level(ground, cum)
+
+    lower = np.empty(n, dtype="f8")
+    clear = VIADUCT_CLEAR_M.get(cls, 7.0)
+    for k in range(n):
+        if tunnel[k]:
+            # Bounded. Leaving this as -inf and letting the envelope
+            # find the depth meant a long tunnel at the start of a route
+            # had no lower bound anywhere near it, so the backward sweep
+            # walked away from the nearest constraint at the ruling
+            # gradient for sixteen kilometres and put the track 397 m
+            # under the Arabian Sea.
+            lower[k] = formation[k] + TUNNEL_DEPTH_M
+        elif elevated[k]:
+            base = 0.0 if wet[k] else formation[k]
+            lower[k] = base + clear + max(0.0, layer[k] - 1.0) * 2.5
+        elif wet[k]:
+            lower[k] = WATER_CLEAR_M    # crossing water means a bridge
+        else:
+            lower[k] = formation[k] + RAIL_SLEEPER_M
+
+    prof = _slope_limited_envelope(lower, ds, grade)
+    # Where OSM says tunnel, keep the line under the surface even if the
+    # envelope lifted it out into daylight on its way to a neighbour.
+    bored = tunnel.copy()
+    if bored.any():
+        prof[bored] = np.minimum(prof[bored], formation[bored] - 4.0)
+        prof = _slope_limited_envelope(prof, ds, grade)
+    return _vertical_curve(prof, ds).astype("<f4")
+
+
+def build_transit(lay, landmask, dtm, rstats):
     """Stitched rail, metro, monorail and ferry routes.
 
     These are deliberately NOT in the road graph: the graph is filtered to
@@ -855,14 +1038,21 @@ def build_transit(lay):
         pts = r_xy[r_off[i]:r_off[i + 1]]
         if len(pts) < 2:
             continue
-        frags.setdefault(cls, []).append([(float(a), float(b)) for a, b in pts])
+        # Carry the structure tags on every vertex. They are what say
+        # whether this stretch is a viaduct, a tunnel or plain track,
+        # and build_transit used to throw them away - which is how the
+        # Mumbai Metro ended up buried.
+        at = r_attr[i]
+        layer, bridge, tunnel = float(at[5]), float(at[6]), float(at[7])
+        frags.setdefault(cls, []).append(
+            [(float(a), float(b), bridge, tunnel, layer) for a, b in pts])
 
     def key(pt):
         return (int(round(pt[0])), int(round(pt[1])))
 
     bx0, bz0, bx1, bz1 = aoi.aoi_bounds_xz()
 
-    lines, classes = [], []
+    lines, classes, structs = [], [], []
     for cls in sorted(frags):
         pool = frags[cls]
         # Endpoint index: which fragments start or end at each node.
@@ -944,11 +1134,26 @@ def build_transit(lay):
                     simple = simplify(np.asarray(piece, dtype="f8"), 0.8)
                     if len(simple) < 2:
                         continue
-                    lines.append(np.asarray(simple, dtype="<f4"))
+                    # Columns 0,1 are the alignment; 2,3,4 are bridge,
+                    # tunnel and layer, carried through the chaining and
+                    # the Douglas-Peucker untouched.
+                    lines.append(np.asarray(simple[:, :2], dtype="<f4"))
+                    structs.append(simple[:, 2:5])
                     classes.append(cls)
+
+    # ---- vertical alignment -------------------------------------------
+    # Every route gets a rail head height per vertex, laid to a legal
+    # gradient over the terrain rather than draped on it.
+    elevs = []
+    for ln, st, cls in zip(lines, structs, classes):
+        if ROAD_CLASSES[cls][5] == "water":
+            elevs.append(np.zeros(len(ln), dtype="<f4"))
+        else:
+            elevs.append(build_rail_profile(ln, st, cls, landmask, dtm, rstats))
 
     if lines:
         pts = np.concatenate(lines, axis=0)
+        elev = np.concatenate(elevs, axis=0)
         off = np.zeros(len(lines) + 1, dtype="<u4")
         run = 0
         for i, ln in enumerate(lines):
@@ -957,7 +1162,30 @@ def build_transit(lay):
         off[-1] = run
     else:
         pts = np.zeros((0, 2), dtype="<f4")
+        elev = np.zeros(0, dtype="<f4")
         off = np.zeros(1, dtype="<u4")
+
+    # What the vertical alignment actually produced, so a regression in
+    # it shows up in the build report instead of in the game.
+    nx_, nz_ = int(rstats["nx"]), int(rstats["nz"])
+    minx_, minz_ = float(rstats["min_x"]), float(rstats["min_z"])
+    worst_grade = 0.0
+    elevated_km = 0.0
+    bored_km = 0.0
+    grade_km = 0.0
+    for ln, ev, cls in zip(lines, elevs, classes):
+        if ROAD_CLASSES[cls][5] == "water" or len(ln) < 2:
+            continue
+        d = np.hypot(np.diff(ln[:, 0]), np.diff(ln[:, 1]))
+        d = np.maximum(d, 1e-3)
+        worst_grade = max(worst_grade, float(np.max(np.abs(np.diff(ev)) / d)))
+        ii = np.clip(((ln[:, 0] - minx_) / GRID_M).astype(np.int32), 0, nx_ - 1)
+        jj = np.clip(((ln[:, 1] - minz_) / GRID_M).astype(np.int32), 0, nz_ - 1)
+        above = ev - dtm[jj, ii] / 10.0
+        mid = 0.5 * (above[:-1] + above[1:])
+        elevated_km += float(np.sum(d[mid > 2.5])) / 1000.0
+        bored_km += float(np.sum(d[mid < -2.0])) / 1000.0
+        grade_km += float(np.sum(d[(mid >= -2.0) & (mid <= 2.5)])) / 1000.0
 
     by_class = {}
     total = 0.0
@@ -970,11 +1198,18 @@ def build_transit(lay):
         e["km"] = round(e["km"] + d / 1000.0, 1)
 
     meta = {"routes": len(lines), "km": round(total / 1000.0, 1),
-            "by_class": by_class}
+            "by_class": by_class,
+            "worst_grade_pct": round(worst_grade * 100, 2),
+            "elevated_km": round(elevated_km, 1),
+            "at_grade_km": round(grade_km, 1),
+            "bored_km": round(bored_km, 1)}
     _log(f"transit: {len(lines)} routes, {total / 1000:.0f} km "
          + ", ".join(f"{k} {v['routes']}" for k, v in sorted(by_class.items())))
+    _log(f"transit vertical: worst grade {worst_grade * 100:.2f}%, "
+         f"{elevated_km:.0f} km elevated, {grade_km:.0f} km at grade, "
+         f"{bored_km:.0f} km bored")
     return (pts.astype("<f4"), off,
-            np.asarray(classes, dtype="<u4"), meta)
+            np.asarray(classes, dtype="<u4"), elev.astype("<f4"), meta)
 
 
 def build_road_graph(lay, names):
@@ -1063,7 +1298,7 @@ def main():
                                                  rstats, names)
     nxy, ea, eattr, gmeta = build_road_graph(lay, names)
     craft, craft_meta = build_craft(craft_raw, landmask, dtm, rstats)
-    tpts, toff, tcls, tmeta = build_transit(lay)
+    tpts, toff, tcls, telev, tmeta = build_transit(lay, landmask, dtm, rstats)
 
     nx, nz = rstats["nx"], rstats["nz"]
     build_id = hashlib.sha256(
@@ -1103,6 +1338,7 @@ def main():
     w.add("tpts", wf.KIND_VECTOR, tpts.tobytes())
     w.add("toff", wf.KIND_VECTOR, toff.tobytes())
     w.add("tcls", wf.KIND_VECTOR, tcls.tobytes())
+    w.add("telev", wf.KIND_VECTOR, telev.tobytes())
     w.add("tmeta", wf.KIND_JSON, json.dumps(tmeta).encode())
     npath = os.path.join(args.out, "network.mwl")
     nbytes = w.write(npath)

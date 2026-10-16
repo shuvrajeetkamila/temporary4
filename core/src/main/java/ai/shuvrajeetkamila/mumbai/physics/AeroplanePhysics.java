@@ -27,6 +27,15 @@ public final class AeroplanePhysics extends RigidBody {
     public double cd0 = 0.027;                   // parasite drag, clean
     public double clAlpha = 5.1;                 // per radian
     public double cl0 = 0.22;
+    /** Pitch rate damping, N m per rad/s per unit of q S / V. */
+    public static final double PITCH_DAMP = 2.2;
+
+    /** Roll rate damping, same units. */
+    public static final double ROLL_DAMP = 1.1;
+
+    /** Yaw rate damping, same units. */
+    public static final double YAW_DAMP = 1.6;
+
     public double stallAngleDeg = 15.5;
     public double clMax = 1.52;
 
@@ -225,6 +234,34 @@ public final class AeroplanePhysics extends RigidBody {
             // at the expense of being able to hold a heading.
             double dihedral = sideslip * auth * 0.068;
             addTorque(tmp1.x * dihedral, tmp1.y * dihedral, tmp1.z * dihedral);
+
+            // --- aerodynamic rate damping -----------------------------------
+            // The restoring moments above all scale with dynamic
+            // pressure. The only damping was a fixed rate term, so the
+            // faster the aeroplane went the stiffer the spring got
+            // while the damper stayed the same size - which is an
+            // oscillator with the damping ratio falling away as the
+            // square of the speed. In the cruise it porpoised through
+            // plus and minus fifty metres a second and never settled.
+            //
+            // Real damping derivatives (Cmq, Clp, Cnr) go as q/V, not
+            // as q: the tail's angle of attack from a pitch rate is
+            // (q c / 2V), so one power of V cancels. Written that way
+            // here, with the rates resolved on the body axes they
+            // actually act about.
+            double rateDamp = auth / Math.max(25.0, v);
+            double pRate = angularVelocity.x * tmp1.x + angularVelocity.y * tmp1.y
+                    + angularVelocity.z * tmp1.z;
+            double qRate = angularVelocity.x * tmp3.x + angularVelocity.y * tmp3.y
+                    + angularVelocity.z * tmp3.z;
+            double rRate = angularVelocity.x * tmp2.x + angularVelocity.y * tmp2.y
+                    + angularVelocity.z * tmp2.z;
+            double mp = -pRate * rateDamp * ROLL_DAMP;
+            double mq = -qRate * rateDamp * PITCH_DAMP;
+            double mr = -rRate * rateDamp * YAW_DAMP;
+            addTorque(tmp1.x * mp + tmp3.x * mq + tmp2.x * mr,
+                    tmp1.y * mp + tmp3.y * mq + tmp2.y * mr,
+                    tmp1.z * mp + tmp3.z * mq + tmp2.z * mr);
         } else {
             angleOfAttack = 0;
             sideslip = 0;

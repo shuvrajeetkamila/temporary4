@@ -87,15 +87,28 @@ final class FlightControlsTest {
     void pedalsYawTheRightWay() {
         Engine e = hovering();
         double h0 = e.heli.orientation.heading();
+        ai.shuvrajeetkamila.mumbai.math.Vec3 r0 =
+                new ai.shuvrajeetkamila.mumbai.math.Vec3();
+        e.heli.orientation.right(r0);
         InputState in = new InputState();
         in.collective = 1.0;
         in.pedal = 1.0;
         for (int i = 0; i < 60 * 3; i++) { e.frame(1.0 / 60, in); }
-        double d = e.heli.orientation.heading() - h0;
-        while (d > Math.PI) { d -= 2 * Math.PI; }
-        while (d < -Math.PI) { d += 2 * Math.PI; }
-        assertTrue(d > 0.2, "right pedal turned the nose " + Math.toDegrees(d)
-                + " degrees");
+        // Measured against the airframe's own right axis, not against
+        // heading(). heading() is atan2(x, -z), which RUNS BACKWARDS
+        // relative to the turn: a right yaw makes it smaller. Testing
+        // the sign of a heading difference therefore asserted the
+        // wrong direction, and only passed because three seconds of
+        // the old runaway 168 deg/s yaw wrapped the angle round past
+        // 180 degrees and back into positive.
+        ai.shuvrajeetkamila.mumbai.math.Vec3 f =
+                new ai.shuvrajeetkamila.mumbai.math.Vec3();
+        e.heli.orientation.forward(f);
+        double toRight = f.x * r0.x + f.z * r0.z;
+        assertTrue(toRight > 0.2,
+                "right pedal did not put the nose to the right: " + toRight
+                        + " (heading went " + Math.toDegrees(h0) + " -> "
+                        + Math.toDegrees(e.heli.orientation.heading()) + ")");
     }
 
     @Test
@@ -201,25 +214,37 @@ final class FlightControlsTest {
         // autorotating, it is falling with the rotor turning. What
         // matters is that the rotor is still there to be used, which is
         // the separate test below.
-        for (double collective : new double[]{0.30, 0.40, 0.50}) {
+        for (double collective : new double[]{0.10, 0.20, 0.30}) {
             HelicopterPhysics h = new HelicopterPhysics();
-            h.placeAt(0, 800, 0, 0);
-            h.collective = 0.58;
-            for (int i = 0; i < 60 * 8; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
-            h.velocity.set(0, 0, -28);
+            h.placeAt(0, 900, 0, 0);
+            // Fly it up to a cruise first, with the stick where it has
+            // to be to stay there. Dropping the engine on a machine
+            // that is then left hands-off is not an autorotation: the
+            // flapback washes the airspeed off within seconds and what
+            // is left is a vertical descent, which really is 20 m/s and
+            // really is unsurvivable. You keep the speed on.
+            h.collective = 0.47;
+            h.cyclicPitch = -0.7;
+            for (int i = 0; i < 60 * 30; i++) { h.step(1.0 / 60, FLAT_H, 0, 0); }
+            double cruise = Math.hypot(h.velocity.x, h.velocity.z);
+            assertTrue(cruise > 30,
+                    "it never reached a cruise to glide from: " + cruise);
             h.engineOn = false;
             h.collective = collective;
             double y0 = 0;
             double t0 = 0;
             double rate = 0;
-            for (int i = 0; i < 60 * 90 && h.position.y > 30; i++) {
+            for (int i = 0; i < 60 * 60 && h.position.y > 30; i++) {
                 h.step(1.0 / 60, FLAT_H, 0, 0);
-                if (i == 60 * 4) { y0 = h.position.y; t0 = i / 60.0; }
-                if (i > 60 * 4) { rate = (y0 - h.position.y) / (i / 60.0 - t0); }
+                if (i == 60 * 6) { y0 = h.position.y; t0 = i / 60.0; }
+                if (i > 60 * 6) { rate = (y0 - h.position.y) / (i / 60.0 - t0); }
             }
-            assertTrue(rate > 2 && rate < 18,
+            double glide = Math.hypot(h.velocity.x, h.velocity.z) / rate;
+            assertTrue(rate > 4 && rate < 14,
                     "engine-off descent at collective " + collective + " is "
                             + rate + " m/s");
+            assertTrue(glide > 2.5,
+                    "glide ratio of only " + glide + ":1, which is a brick");
             assertTrue(h.rotorRpm > 180,
                     "the rotor stopped: " + h.rotorRpm + " rpm");
         }

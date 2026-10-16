@@ -63,40 +63,129 @@ final class TransitStationTest {
     @Test
     @DisplayName("lines run over, on and under the ground")
     void allThreeGradesExist() throws Exception {
-        assertEquals(TransitStops.Grade.SURFACE,
-                TransitStops.gradeOf(WorldData.CLS_RAIL),
-                "the suburban network is at grade in Mumbai");
-        assertEquals(TransitStops.Grade.ELEVATED,
-                TransitStops.gradeOf(WorldData.CLS_LIGHT_RAIL),
-                "Metro Line 1 is a viaduct the whole way; it was being"
-                        + " run along the carriageway");
-        assertEquals(TransitStops.Grade.ELEVATED,
-                TransitStops.gradeOf(WorldData.CLS_MONORAIL));
-        assertEquals(TransitStops.Grade.UNDERGROUND,
-                TransitStops.gradeOf(WorldData.CLS_SUBWAY));
+        WorldData w = WorldFixture.world();
+        assertTrue(w.hasTransitProfile(),
+                "the world has no compiled vertical alignment, so every"
+                        + " train is draped over the raw terrain");
 
-        assertTrue(TransitStops.railHeight(WorldData.CLS_SUBWAY) < -5,
-                "the bored line is not underground");
-        assertTrue(TransitStops.railHeight(WorldData.CLS_LIGHT_RAIL) > 5,
-                "the Metro viaduct is not above the street");
-        assertTrue(TransitStops.railHeight(WorldData.CLS_MONORAIL) > 5,
-                "the monorail guideway is not above the street");
-        assertTrue(Math.abs(TransitStops.railHeight(WorldData.CLS_RAIL)) < 2,
-                "surface rail is not on the surface");
+        // Grade is a property of a PLACE on a line, not of its OSM
+        // class. A single suburban route is at grade, then up on an
+        // embankment, then over a creek on a bridge. Deciding it from
+        // the class alone is what buried the whole Mumbai Metro.
+        assertEquals(TransitStops.Grade.ELEVATED,
+                TransitStops.gradeAt(WorldData.CLS_SUBWAY, 18.0, 10.0, true),
+                "a metro eight metres over the street is on a viaduct");
+        assertEquals(TransitStops.Grade.UNDERGROUND,
+                TransitStops.gradeAt(WorldData.CLS_SUBWAY, -2.0, 10.0, true));
+        assertEquals(TransitStops.Grade.SURFACE,
+                TransitStops.gradeAt(WorldData.CLS_RAIL, 10.9, 10.0, true));
+        assertEquals(TransitStops.Grade.WATER,
+                TransitStops.gradeAt(WorldData.CLS_FERRY, 0, 0, false));
 
         // And the network really has all three in it.
-        WorldData w = WorldFixture.world();
         boolean over = false, on = false, under = false;
-        for (int r = 0; r < w.transitCount(); r++) {
-            switch (TransitStops.gradeOf(w.transitClass(r))) {
+        TransitStops stops = w.transitStops();
+        for (int i = 0; i < stops.count(); i++) {
+            switch (stops.get(i).grade) {
                 case ELEVATED: over = true; break;
                 case SURFACE: on = true; break;
                 case UNDERGROUND: under = true; break;
                 default: break;
             }
         }
-        assertTrue(over && on, "the city has no elevated or surface rail");
-        assertTrue(under, "the city has no bored line");
+        assertTrue(over, "no elevated station in the city");
+        assertTrue(on, "no surface station in the city");
+        assertTrue(under, "no bored station in the city");
+    }
+
+    @Test
+    @DisplayName("the track is laid to a gradient a train could climb")
+    void theTrackIsNotARollerCoaster() throws Exception {
+        // The alignment used to be the terrain plus a constant, which
+        // gave a worst gradient of 91 per cent and 18 m steps between
+        // vertices twenty metres apart. Nothing on steel wheels climbs
+        // that. Six per cent is the loosest class here, the monorail.
+        WorldData w = WorldFixture.world();
+        double worst = 0;
+        int worstRoute = -1;
+        for (int r = 0; r < w.transitCount(); r++) {
+            if (w.transitClass(r) == WorldData.CLS_FERRY) { continue; }
+            int n = w.transitPointCount(r);
+            for (int i = 1; i < n; i++) {
+                double d = Math.hypot(w.transitX(r, i) - w.transitX(r, i - 1),
+                        w.transitZ(r, i) - w.transitZ(r, i - 1));
+                if (d < 0.5) { continue; }
+                double g = Math.abs(w.transitY(r, i) - w.transitY(r, i - 1)) / d;
+                if (g > worst) { worst = g; worstRoute = r; }
+            }
+        }
+        assertTrue(worst <= 0.065,
+                "worst gradient is " + Math.round(worst * 100) + "% on route "
+                        + worstRoute + "; a railway cannot climb that");
+    }
+
+    @Test
+    @DisplayName("the railway crosses water on a bridge, not through it")
+    void theTrackDoesNotFordTheCreeks() throws Exception {
+        // Nearly nine per cent of the suburban network is over water -
+        // Vasai Creek, Thane Creek, the Mahim causeway. Taking the
+        // height from the terrain put the rail head at 0.9 m there,
+        // which is inside a tide that swings 1.9 m either way.
+        WorldData w = WorldFixture.world();
+        int wet = 0, low = 0;
+        double lowest = Double.MAX_VALUE;
+        for (int r = 0; r < w.transitCount(); r++) {
+            if (w.transitClass(r) == WorldData.CLS_FERRY) { continue; }
+            int n = w.transitPointCount(r);
+            for (int i = 0; i < n; i++) {
+                double x = w.transitX(r, i), z = w.transitZ(r, i);
+                if (w.isLand(x, z)) { continue; }
+                double y = w.transitY(r, i);
+                // A bored line passing under a creek is not fording it.
+                // Metro Line 3 runs under Mahalaxmi, and under the water
+                // there, at about nine metres down - which is a tunnel,
+                // not a train in the sea.
+                if (TransitStops.gradeAt(w.transitClass(r), y, 0.0, false)
+                        == TransitStops.Grade.UNDERGROUND) {
+                    continue;
+                }
+                wet++;
+                lowest = Math.min(lowest, y);
+                if (y < 2.5) { low++; }
+            }
+        }
+        assertTrue(wet > 200, "only " + wet + " rail vertices over water");
+        assertEquals(0, low,
+                low + " of " + wet + " over-water rail vertices are under"
+                        + " 2.5 m, the lowest at " + String.format("%.2f", lowest)
+                        + " m - that is a train wading through the sea");
+    }
+
+    @Test
+    @DisplayName("the Mumbai Metro is on its viaduct, not buried")
+    void theMetroIsAboveGround() throws Exception {
+        // 147 of the 355 OSM ways making up the metro are tagged as
+        // bridges carrying layer +1 to +3. The class says "subway" and
+        // the code believed it, so all 196 km of line ran twelve metres
+        // underground with no platforms and nothing to see.
+        WorldData w = WorldFixture.world();
+        int above = 0, below = 0;
+        for (int r = 0; r < w.transitCount(); r++) {
+            if (w.transitClass(r) != WorldData.CLS_SUBWAY) { continue; }
+            int n = w.transitPointCount(r);
+            for (int i = 0; i < n; i++) {
+                double x = w.transitX(r, i), z = w.transitZ(r, i);
+                double g = w.isLand(x, z) ? w.height(x, z) : 0.0;
+                double rel = w.transitY(r, i) - g;
+                if (rel > TransitStops.ELEVATED_M) { above++; }
+                if (rel < TransitStops.UNDERGROUND_M) { below++; }
+            }
+        }
+        assertTrue(above + below > 500, "the metro has barely any geometry");
+        assertTrue(above > below,
+                "only " + above + " of " + (above + below) + " metro vertices"
+                        + " are on a viaduct; Mumbai's metro is mostly"
+                        + " elevated, not bored");
     }
 
     @Test

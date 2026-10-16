@@ -44,6 +44,15 @@ public final class Transit {
     public static final double BOARD_M = 9.0;
 
     /**
+     * How far above or below the doors you may be and still board, m.
+     *
+     * <p>Generous enough to cover standing on a platform beside a train
+     * whose floor is a metre up, and tight enough that the street is
+     * not a platform for the viaduct above it.
+     */
+    public static final double BOARD_RISE_M = 4.0;
+
+    /**
      * Distance between stops, metres, by mode.
      *
      * <p>Real spacings. Churchgate to Marine Lines is 1.2 km and the
@@ -203,6 +212,21 @@ public final class Transit {
      * round.
      */
     public int boardableAt(double px, double pz) {
+        return boardableAt(px, Double.NaN, pz);
+    }
+
+    /**
+     * The service a player standing here could board, or -1.
+     *
+     * <p>Height matters. Without it this was a flat two-dimensional
+     * test, so a player on the street could board a Metro on a 7.8 m
+     * viaduct over their head, or one in a tunnel twelve metres under
+     * their feet, simply by standing in the right place on the
+     * pavement. You have to be on the platform.
+     *
+     * @param py the player's feet; pass NaN to skip the height test
+     */
+    public int boardableAt(double px, double py, double pz) {
         int best = -1;
         double bestD2 = BOARD_M * BOARD_M;
         for (int i = 0; i < services.length; i++) {
@@ -215,7 +239,12 @@ public final class Transit {
                 double[] q = pointAt(sv.route, sv.s - back * sv.dir);
                 double dx = q[0] - px, dz = q[1] - pz;
                 double d2 = dx * dx + dz * dz;
-                if (d2 < bestD2) { bestD2 = d2; best = i; }
+                if (d2 >= bestD2) { continue; }
+                if (!Double.isNaN(py)
+                        && Math.abs(heightAt(sv, q[2]) - py) > BOARD_RISE_M) {
+                    continue;
+                }
+                bestD2 = d2; best = i;
             }
         }
         return best;
@@ -484,30 +513,43 @@ public final class Transit {
         if (Math.hypot(dx, dz) > 1e-6) {
             sv.heading = Math.atan2(dx, -dz);
         }
-        sv.y = heightFor(sv);
+        sv.y = heightAt(sv, p[2]);
     }
 
     /**
      * Where a service sits vertically.
      *
-     * <p>A subway is underground and must not be drawn ploughing through
-     * the street; a monorail runs on a viaduct well above it; a ship sits
-     * at sea level whatever the terrain says. Only surface rail follows
-     * the ground.
+     * <p>Straight off the compiled vertical alignment, which is the
+     * only place in the game that knows whether this stretch of line
+     * is at grade, on an embankment, over a creek on a bridge, up on
+     * a viaduct or bored through a hill.
+     *
+     * <p>It used to be ground plus a constant per class, which was
+     * wrong three ways at once: it draped the track over every bump in
+     * the DEM - 91 per cent gradients and 18 m steps between
+     * neighbouring vertices - it put the suburban line in the water at
+     * every creek crossing because the ground under a bridge is the
+     * seabed, and it buried the entire Mumbai Metro twelve metres down.
+     *
+     * <p>A vessel rides the sea, so it answers to the ocean, not the
+     * alignment: sitting it at a fixed zero left ferries wading through
+     * a 1.9 m tide.
      */
-    private double heightFor(Service sv) {
-        if (sv.vessel) { return 0.0; }
-        double ground = world.height(sv.x, sv.z);
-        switch (sv.cls) {
-            // One table, in TransitStops, because the platforms are
-            // built from it too. Mumbai's Metro is a viaduct, not a
-            // street tram - Line 1 runs above the Andheri-Ghatkopar
-            // road the whole way - and it was falling through to the
-            // surface case and ploughing along the carriageway.
-            default: return ground
-                    + ai.shuvrajeetkamila.mumbai.world.TransitStops
-                            .railHeight(sv.cls);
+    private double heightAt(Service sv, double railY) {
+        if (sv.vessel) {
+            return ocean == null ? 0.0 : ocean.heightAt(sv.x, sv.z) + 0.35;
         }
+        return railY;
+    }
+
+    /**
+     * The sea, for vessels. Optional: a Transit built without one still
+     * runs its trains, and its ferries sit at datum.
+     */
+    private ai.shuvrajeetkamila.mumbai.physics.Ocean ocean;
+
+    public void setOcean(ai.shuvrajeetkamila.mumbai.physics.Ocean o) {
+        this.ocean = o;
     }
 
     /**
@@ -521,9 +563,10 @@ public final class Transit {
      */
     public double[] pointAt(int route, double s) {
         int n = world.transitPointCount(route);
-        if (n < 2) { return new double[]{0, 0}; }
+        if (n < 2) { return new double[]{0, 0, 0}; }
         if (s <= 0) {
-            return new double[]{world.transitX(route, 0), world.transitZ(route, 0)};
+            return new double[]{world.transitX(route, 0), world.transitZ(route, 0),
+                    world.transitY(route, 0)};
         }
         double acc = 0;
         for (int i = 1; i < n; i++) {
@@ -532,11 +575,15 @@ public final class Transit {
             double seg = Math.hypot(bx - ax, bz - az);
             if (acc + seg >= s) {
                 double t = seg < 1e-9 ? 0 : (s - acc) / seg;
-                return new double[]{ax + (bx - ax) * t, az + (bz - az) * t};
+                double ay = world.transitY(route, i - 1);
+                double by = world.transitY(route, i);
+                return new double[]{ax + (bx - ax) * t, az + (bz - az) * t,
+                        ay + (by - ay) * t};
             }
             acc += seg;
         }
-        return new double[]{world.transitX(route, n - 1), world.transitZ(route, n - 1)};
+        return new double[]{world.transitX(route, n - 1), world.transitZ(route, n - 1),
+                world.transitY(route, n - 1)};
     }
 
     /**
@@ -560,9 +607,16 @@ public final class Transit {
             double[] q = pointAt(sv.route, at + 4.0 * sv.dir);
             double dx = q[0] - p[0], dz = q[1] - p[1];
             double h = Math.hypot(dx, dz) > 1e-6 ? Math.atan2(dx, -dz) : sv.heading;
+            // Each carriage sits at its OWN point on the vertical
+            // alignment. Giving the whole rake the nose's height made a
+            // nine-car train a rigid 195 m horizontal bar: on the worst
+            // stretch of the network the ground under it changes by
+            // 142 m, so the tail was buried in a hillside while the nose
+            // was over a valley. A train bends vertically as well as
+            // horizontally.
             int o = (offset + wrote) * 4;
             out[o] = (float) (p[0] - ox);
-            out[o + 1] = (float) (sv.y - oy);
+            out[o + 1] = (float) (heightAt(sv, p[2]) - oy);
             out[o + 2] = (float) (p[1] - oz);
             out[o + 3] = (float) h;
             wrote++;

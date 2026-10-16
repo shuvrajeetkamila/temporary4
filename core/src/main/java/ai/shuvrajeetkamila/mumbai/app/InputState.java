@@ -35,11 +35,13 @@ public final class InputState {
      *
      * <p>Deliberately not cleared by {@link #reset()}: it is the
      * position of a physical control, not a per-frame input. It is set
-     * back to the hover by {@link #resetLevers()} when the player
-     * changes seat.
+     * back to the ground position by {@link #resetLevers()} when the
+     * player changes seat - a helicopter you have just climbed into is
+     * sitting on its skids, and resting the lever at the hover value
+     * floated it off the pad untouched.
      */
     public double collectiveLever = ai.shuvrajeetkamila.mumbai.physics
-            .HelicopterPhysics.HOVER_COLLECTIVE;
+            .HelicopterPhysics.GROUND_COLLECTIVE;
     /** Pedals: yaw or rudder, -1..1. */
     public double pedal;
 
@@ -90,7 +92,7 @@ public final class InputState {
     /** Puts the held controls back where a fresh aircraft has them. */
     public void resetLevers() {
         collectiveLever = ai.shuvrajeetkamila.mumbai.physics
-                .HelicopterPhysics.HOVER_COLLECTIVE;
+                .HelicopterPhysics.GROUND_COLLECTIVE;
     }
 
     public void reset() {

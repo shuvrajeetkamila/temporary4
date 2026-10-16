@@ -211,9 +211,11 @@ final class HelicopterTrimTest {
         assertTrue(h.position.y > 25,
                 "eight seconds at nearly full collective and it is only "
                         + h.position.y + " m up");
-        // Back down under control: a little under the hover.
+        // Back down under control. The lever has to come properly down
+        // to descend - a few hundredths below the hover is a few tenths
+        // of a metre a second, which is trimming, not landing.
         for (int i = 0; i < 60 * 30; i++) {
-            h.collective = HelicopterPhysics.HOVER_COLLECTIVE - 0.07;
+            h.collective = HelicopterPhysics.GROUND_COLLECTIVE;
             h.step(1.0 / 60.0, FLAT, 0, 0);
         }
         assertTrue(h.position.y < 25,

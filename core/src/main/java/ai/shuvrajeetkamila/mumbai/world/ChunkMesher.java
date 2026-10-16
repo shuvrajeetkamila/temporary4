@@ -470,6 +470,19 @@ public final class ChunkMesher {
     /** Height of the platform above the running rail, m. */
     static final float PLATFORM_H_M = 1.0f;
 
+    /** Deck width of an elevated guideway, by line class, metres. */
+    private static final java.util.Map<Integer, Double> DECK_W_M =
+            java.util.Map.of(WorldData.CLS_RAIL, 9.0,
+                    WorldData.CLS_LIGHT_RAIL, 8.4,
+                    WorldData.CLS_SUBWAY, 8.4,
+                    WorldData.CLS_MONORAIL, 2.6);
+
+    /** Depth of the deck slab, metres. */
+    private static final double DECK_T_M = 1.6;
+
+    /** Distance between viaduct piers, metres. */
+    private static final double PIER_SPACING_M = 26.0;
+
     /**
      * A platform either side of the line at every station.
      *
@@ -488,14 +501,14 @@ public final class ChunkMesher {
         if (lod == LOD_LOW) { return; }
         for (TransitStops.Stop st : world.transitStops()
                 .inBox(ox - 100, oz - 100, ox + size + 100, oz + size + 100)) {
-            if (TransitStops.gradeOf(st.cls) == TransitStops.Grade.UNDERGROUND) {
-                continue;
-            }
+            if (st.grade == TransitStops.Grade.UNDERGROUND) { continue; }
             double lx = st.x - ox;
             double lz = st.z - oz;
-            double ground = world.isLand(st.x, st.z)
-                    ? world.height(st.x, st.z) : 0.0;
-            double rail = ground + TransitStops.railHeight(st.cls);
+            // The rail head height is the compiled vertical alignment,
+            // the same number the train is running at. Deriving it here
+            // from the class and the terrain is how a platform ends up
+            // twelve metres below its own train.
+            double rail = st.y;
             // Along the line, and across it.
             double fx = Math.sin(st.bearing), fz = -Math.cos(st.bearing);
             double nx = fz, nz = -fx;
@@ -506,6 +519,77 @@ public final class ChunkMesher {
                 double cz = lz + nz * (gap + PLATFORM_W_M * 0.5) * side;
                 slab(cx, cz, fx, fz, nx, nz, halfLen, PLATFORM_W_M * 0.5,
                         rail - 0.2, rail + PLATFORM_H_M);
+                // An elevated platform needs something holding it up.
+                if (st.grade == TransitStops.Grade.ELEVATED) {
+                    for (int k = -1; k <= 1; k++) {
+                        double px = cx + fx * halfLen * 0.62 * k;
+                        double pz = cz + fz * halfLen * 0.62 * k;
+                        slab(px, pz, fx, fz, nx, nz, 1.5, 1.5,
+                                st.ground - 0.5, rail - 0.2);
+                    }
+                }
+            }
+        }
+        viaducts(ox, oz, size, lod);
+    }
+
+    /**
+     * The structure carrying an elevated line between its stations.
+     *
+     * <p>Without this the Metro and the monorail were trains running
+     * along nothing, eight metres up in clear air. The deck follows the
+     * compiled vertical alignment and the piers drop from it to the
+     * ground, which is also how the player can tell at a glance which
+     * of the three levels a line is on.
+     */
+    private void viaducts(double ox, double oz, double size, int lod) {
+        if (lod == LOD_LOW) { return; }
+        double pad = 60.0;
+        for (int r = 0; r < world.transitCount(); r++) {
+            int cls = world.transitClass(r);
+            if (cls == WorldData.CLS_FERRY) { continue; }
+            int n = world.transitPointCount(r);
+            if (n < 2) { continue; }
+            double pierRun = 0;
+            for (int i = 1; i < n; i++) {
+                double ax = world.transitX(r, i - 1), az = world.transitZ(r, i - 1);
+                double bx = world.transitX(r, i), bz = world.transitZ(r, i);
+                // Cheap reject before any height work.
+                if (Math.max(ax, bx) < ox - pad || Math.min(ax, bx) > ox + size + pad
+                        || Math.max(az, bz) < oz - pad
+                        || Math.min(az, bz) > oz + size + pad) {
+                    continue;
+                }
+                double ay = world.transitY(r, i - 1), by = world.transitY(r, i);
+                double mx = (ax + bx) * 0.5, mz = (az + bz) * 0.5;
+                double g = world.isLand(mx, mz) ? world.height(mx, mz) : 0.0;
+                double above = (ay + by) * 0.5 - g;
+                if (above < TransitStops.ELEVATED_M) {
+                    // At grade, on an embankment or bored: no structure.
+                    continue;
+                }
+                double seg = Math.hypot(bx - ax, bz - az);
+                if (seg < 1e-6) { continue; }
+                double fx = (bx - ax) / seg, fz = (bz - az) / seg;
+                double nx = fz, nz = -fx;
+                double half = DECK_W_M.get(cls) * 0.5;
+                // The deck itself, one slab per alignment segment.
+                slab((mx - ox), (mz - oz), fx, fz, nx, nz, seg * 0.5, half,
+                        (ay + by) * 0.5 - DECK_T_M, (ay + by) * 0.5 - 0.1);
+                // Piers at a fixed spacing along the run.
+                for (double t = 0; t < seg; t += 1.0) {
+                    pierRun += 1.0;
+                    if (pierRun < PIER_SPACING_M) { continue; }
+                    pierRun = 0;
+                    double px = ax + fx * t, pz = az + fz * t;
+                    if (px < ox - 8 || px > ox + size + 8
+                            || pz < oz - 8 || pz > oz + size + 8) { continue; }
+                    double pg = world.isLand(px, pz) ? world.height(px, pz) : -1.0;
+                    double top = ay + (by - ay) * (t / seg) - DECK_T_M;
+                    if (top - pg < 1.5) { continue; }
+                    slab(px - ox, pz - oz, fx, fz, nx, nz, 1.1, 1.1,
+                            pg - 0.6, top);
+                }
             }
         }
     }

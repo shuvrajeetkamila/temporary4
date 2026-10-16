@@ -234,8 +234,16 @@ final class ControlMappingTest {
         boolean[] h = held(), e = held();
         InputState in = new InputState();
 
-        assertEquals(HelicopterPhysics.HOVER_COLLECTIVE, in.collectiveLever,
-                1e-9, "a fresh machine does not start at the hover");
+        // On the GROUND setting, not the hover one. A parked helicopter
+        // is in ground effect, where the same blade pitch makes about a
+        // quarter more thrust, so a lever resting at the hover value
+        // floated the machine off the pad and up to seventeen metres
+        // with nobody touching the controls.
+        assertEquals(HelicopterPhysics.GROUND_COLLECTIVE, in.collectiveLever,
+                1e-9, "a fresh machine does not start on the ground setting");
+        assertTrue(HelicopterPhysics.GROUND_COLLECTIVE
+                        < HelicopterPhysics.HOVER_COLLECTIVE,
+                "the parked setting is not below the hover");
 
         // Hold the stick up for a second and it must reach the stop.
         for (int i = 0; i < 120; i++) {
@@ -272,10 +280,11 @@ final class ControlMappingTest {
             }
         }
 
-        // Changing seat puts it back at the hover, or the next
-        // helicopter inherits wherever the last one's lever was left.
+        // Changing seat puts it back on the ground setting, or the
+        // next helicopter inherits wherever the last one's lever was
+        // left - and the one you are climbing into is parked.
         in.resetLevers();
-        assertEquals(HelicopterPhysics.HOVER_COLLECTIVE, in.collectiveLever,
+        assertEquals(HelicopterPhysics.GROUND_COLLECTIVE, in.collectiveLever,
                 1e-9, "the lever survived a change of vehicle");
     }
 

@@ -73,6 +73,23 @@ public final class WorldData {
     public final int[] transitOff;
     public final int[] transitClassId;
 
+    /**
+     * Rail head height at every transit vertex, metres above datum.
+     *
+     * <p>The vertical alignment, laid by the compiler to a gradient the
+     * class can actually work to. Before this existed the height came
+     * from the terrain directly - ground plus a constant per class -
+     * which draped the track over every hillock the DEM had, put the
+     * suburban line into the water at each creek crossing, and buried
+     * all 230 km of the Mumbai Metro twelve metres down because its OSM
+     * class says "subway" while 147 of its 355 ways are tagged as
+     * bridges on layer +1 to +3.
+     *
+     * <p>Empty for a world compiled before the profile existed; callers
+     * must go through {@link #transitY} rather than indexing it.
+     */
+    public final float[] transitElev;
+
     public static final int ATTR_STRIDE = 5;
     public static final int ATTR_CLASS = 0;
     public static final int ATTR_LANES = 1;
@@ -167,6 +184,26 @@ public final class WorldData {
         return transitPts[(transitOff[route] + i) * 2 + 1];
     }
 
+    /** True if this world carries a compiled vertical alignment. */
+    public boolean hasTransitProfile() {
+        return transitElev.length == transitPts.length / 2
+                && transitElev.length > 0;
+    }
+
+    /**
+     * Rail head height at a vertex, metres.
+     *
+     * <p>Falls back to the terrain for a world compiled before the
+     * profile existed, so an older package still runs - badly, but it
+     * runs.
+     */
+    public double transitY(int route, int i) {
+        if (hasTransitProfile()) {
+            return transitElev[transitOff[route] + i];
+        }
+        return height(transitX(route, i), transitZ(route, i)) + 0.9;
+    }
+
     /** Length of a route in metres. */
     public double transitLength(int route) {
         double d = 0;
@@ -255,10 +292,20 @@ public final class WorldData {
             for (int i = 0; i < transitClassId.length; i++) {
                 transitClassId[i] = tc.getInt();
             }
+            if (network.has("telev")) {
+                ByteBuffer te = network.readBuffer("telev");
+                transitElev = new float[te.remaining() / 4];
+                for (int i = 0; i < transitElev.length; i++) {
+                    transitElev[i] = te.getFloat();
+                }
+            } else {
+                transitElev = new float[0];
+            }
         } else {
             transitPts = new float[0];
             transitOff = new int[]{0};
             transitClassId = new int[0];
+            transitElev = new float[0];
         }
 
         places = Places.parse(network.readString("places"));

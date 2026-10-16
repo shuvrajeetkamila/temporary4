@@ -74,6 +74,26 @@ public final class HelicopterPhysics extends RigidBody {
     public double tailRotorRadius = 1.0;
     public double tailArm = 6.3;
 
+    /**
+     * Yawing moment at full pedal, N m.
+     *
+     * <p>Sized against the yaw inertia and the yaw damping so that full
+     * pedal settles at roughly sixty degrees a second, which is what a
+     * light single will give you. This used to be 55 per cent of
+     * whatever the main rotor happened to be drawing, which at hover
+     * power is nearly three times as much.
+     */
+    public static final double PEDAL_AUTHORITY_NM = 2750;
+
+    /**
+     * Yaw damping, N m per rad/s.
+     *
+     * <p>Sets how quickly the nose settles after a pedal input. At 1500
+     * the yaw time constant was nearly two seconds, so the machine kept
+     * swinging long after the pedals were centred.
+     */
+    public static final double YAW_DAMPING = 2600;
+
     public double fuselageDragArea = 2.1;        // Cd * A
 
     // ---- inputs, all -1..1 except collective which is 0..1 ---------------
@@ -86,6 +106,14 @@ public final class HelicopterPhysics extends RigidBody {
     // ---- state / outputs -------------------------------------------------
     public double rotorRpm;
     public double inducedVelocity;
+
+    /**
+     * Axial flow through the disc the solver actually used, m/s.
+     *
+     * <p>Equal to the real axial airspeed in normal flight, and
+     * saturated at the edge of momentum theory in a steep descent.
+     */
+    public double axialInflow;
     public double thrust;
     public double groundEffectFactor = 1.0;
     public double translationalLift = 1.0;
@@ -101,7 +129,20 @@ public final class HelicopterPhysics extends RigidBody {
      * {@code HelicopterTrimTest} flies the machine and fails if this
      * number stops being the hover.
      */
-    public static final double HOVER_COLLECTIVE = 0.56;
+    public static final double HOVER_COLLECTIVE = 0.636;
+
+    /**
+     * Where the lever sits in a helicopter parked on its skids.
+     *
+     * <p>A machine sitting on a pad is not at the hover setting. It is
+     * in ground effect, where the same blade pitch makes about 27 per
+     * cent more thrust, so resting the lever at the hover value floated
+     * the aircraft off the ground and up to seventeen metres before it
+     * climbed out of the cushion and settled - with the player's hands
+     * nowhere near the controls. You now have to raise the lever to go
+     * flying, which is also how it works.
+     */
+    public static final double GROUND_COLLECTIVE = 0.40;
 
     /**
      * Disc flapback per metre per second of airspeed, as a fraction of
@@ -161,8 +202,40 @@ public final class HelicopterPhysics extends RigidBody {
      */
     public static final double HUB_ABOVE_COM = 1.4;
 
-    public double minCollectivePitchDeg = 0.4;
-    public double maxCollectivePitchDeg = 14.5;
+    /**
+     * How far the cyclic can tilt the disc off the shaft, radians.
+     *
+     * <p>A real swashplate gets a few degrees, and the fuselage then
+     * follows the disc. Nine degrees of free tilt let the machine fly
+     * at 230 km/h while sitting almost level - 2.6 degrees nose down at
+     * full stick - which is not what a helicopter looks like. Five
+     * degrees puts the work back on the airframe, so going fast means
+     * putting the nose down, as it does in the real thing.
+     */
+    public static final double DISC_TILT_RAD = Math.toRadians(5.0);
+
+    /**
+     * Blade pitch at the bottom of the lever, degrees.
+     *
+     * <p>Not zero. Flat pitch on a real rotor still has enough angle on
+     * it to keep the blades turning in an autorotation; at 0.4 degrees
+     * this one made no thrust, the autorotative drive went with it, the
+     * rotor decayed to 58 per cent and an engine failure with the lever
+     * down was a 95 m/s free fall.
+     */
+    public double minCollectivePitchDeg = 2.0;
+
+    /**
+     * Blade pitch at the top of the lever, degrees.
+     *
+     * <p>Sized so that full lever asks for about what the engine can
+     * actually deliver. At 14.5 degrees the top third of the travel was
+     * past the torque limit: the governor saturated, rotor RPM drooped
+     * to 82 per cent, the low-RPM warning sat on permanently and the
+     * climb rate got WORSE the harder you pulled - 9.7 m/s at the stop
+     * against 12.1 m/s a little below it.
+     */
+    public double maxCollectivePitchDeg = 12.2;
 
     private final Vec3 tmp1 = new Vec3();
     private final Vec3 tmp2 = new Vec3();
@@ -216,9 +289,24 @@ public final class HelicopterPhysics extends RigidBody {
         // Clamping the inflow at the edge of validity holds thrust at
         // roughly its hover value through the descent, which is both what
         // the empirical curves show and what makes autorotation flyable.
-        double lambdaHover = Math.sqrt(Math.max(1e-9,
-                solidity() * liftSlope / 16.0));
+        // The real hover inflow for this collective, not sqrt(sigma a / 16)
+        // - which is the coefficient in front of that expression, not the
+        // answer, and came out 3.2 times too big. With it wrong the
+        // windmill-brake clamp sat at a 67 m/s descent and never engaged.
+        double k = solidity() * liftSlope / 16.0;
+        double lambdaHover = k * (Math.sqrt(Math.max(0, 1.0
+                + 24.0 * Math.max(0, collectivePitchRad) / Math.max(1e-9,
+                        solidity() * liftSlope))) - 1.0);
+        lambdaHover = Math.max(1e-4, lambdaHover);
         if (lambdaC < -2.0 * lambdaHover) { lambdaC = -2.0 * lambdaHover; }
+        // What the solver settled on, for the torque equation. Charging
+        // the rotor for the full descent rate while the thrust was
+        // computed from the clamped one is a free energy source: in a
+        // 70 m/s drop it drove the rotor to its 122 per cent limiter and
+        // held it there. Past the edge of momentum theory the wake is
+        // turbulent and the rotor is not being driven harder; the drive
+        // saturates with the inflow.
+        axialInflow = lambdaC * tipSpeed;
         double lambda = Math.max(0.001, Math.sqrt(Math.max(1e-6,
                 sigma * liftSlope / 16.0)));                 // first guess
 
@@ -281,33 +369,74 @@ public final class HelicopterPhysics extends RigidBody {
         double relX = velocity.x - windX;
         double relZ = velocity.z - windZ;
         double horizontal = Math.hypot(relX, relZ);
-        double climb = velocity.y;
-
-        // --- translational lift -----------------------------------------------
-        // Above roughly 8 m/s the rotor meets enough new air that induced
-        // losses fall away. Felt as a distinct lightening through 15-20 knots.
-        translationalLift = 1.0 + 0.26 * MathUtil.smoothstep(2.0, 14.0, horizontal);
 
         double pitchRad = Math.toRadians(MathUtil.lerp(minCollectivePitchDeg,
                 maxCollectivePitchDeg, MathUtil.clamp(collective, 0, 1)));
 
-        thrust = solveThrust(pitchRad, climb, horizontal, rho, omega)
-                * groundEffectFactor * translationalLift;
-        if (!Double.isFinite(thrust) || thrust < 0) { thrust = 0; }
-
+        // --- where the disc is pointing -----------------------------------------
         // Thrust acts along the rotor shaft, which is the body's up axis
         // tilted by the cyclic. Tilting the disc is what moves a helicopter:
         // there is no separate forward force.
         // Negated: cyclicPitch is the screen axis, where negative is the
         // stick pushed forward. Forward stick tilts the disc forward, so
         // the thrust vector has to gain a component along the nose.
-        double tiltF = -MathUtil.clamp(cyclicPitch, -1, 1) * Math.toRadians(9.0);
-        double tiltR = MathUtil.clamp(cyclicRoll, -1, 1) * Math.toRadians(9.0);
+        double tiltF = -MathUtil.clamp(cyclicPitch, -1, 1) * DISC_TILT_RAD;
+        double tiltR = MathUtil.clamp(cyclicRoll, -1, 1) * DISC_TILT_RAD;
         tmp1.scaleSelf(Math.cos(tiltF) * Math.cos(tiltR));
         tmp1.addScaledSelf(tmp2, Math.sin(tiltF));
         tmp1.addScaledSelf(tmp3, Math.sin(tiltR));
-        tmp1.normalizeSelf().scaleSelf(thrust);
-        addForce(tmp1);
+        tmp1.normalizeSelf();
+        double dnx = tmp1.x, dny = tmp1.y, dnz = tmp1.z;
+
+        // --- flow through the disc ----------------------------------------------
+        // The axial flow is the air-relative velocity resolved along the
+        // DISC NORMAL, not the world vertical. That distinction is the
+        // whole of a helicopter's speed behaviour and it was missing.
+        //
+        // Flying forward, the disc is tilted forward to pull the machine
+        // along, so the oncoming air arrives from slightly above the disc
+        // plane and blows down through it. That is axial flow in the same
+        // sense as a climb, it cuts the blade's angle of attack, and it is
+        // what stops thrust running away as speed builds. Taking only
+        // velocity.y, the term vanished in level flight: at 40 m/s the
+        // rotor made 163 per cent of the aircraft's weight, so pushing the
+        // stick forward was a climb at 12 m/s and the machine could not be
+        // flown level at any speed.
+        //
+        // In a hover, or in a pure vertical climb with the disc level,
+        // this reduces exactly to velocity.y, which is what it used to be.
+        double climb = relX * dnx + velocity.y * dny + relZ * dnz;
+        // And the in-plane component is what the advance ratio is built
+        // from - the speed the blades see sweeping through the air,
+        // which is the airspeed with the axial part taken out.
+        double planeX = relX - climb * dnx;
+        double planeY = velocity.y - climb * dny;
+        double planeZ = relZ - climb * dnz;
+        double inPlane = Math.sqrt(planeX * planeX + planeY * planeY
+                + planeZ * planeZ);
+
+        // --- thrust -------------------------------------------------------------
+        // Translational lift is NOT applied as a multiplier here. It is
+        // already in the solver: forward speed raises the mass flow
+        // through the disc, the induced inflow collapses, the blades meet
+        // the air at a bigger angle and the thrust goes up. Multiplying
+        // the solved thrust by a second 1.26 on top of that counted the
+        // same effect twice.
+        thrust = solveThrust(pitchRad, climb, inPlane, rho, omega)
+                * groundEffectFactor;
+        if (!Double.isFinite(thrust) || thrust < 0) { thrust = 0; }
+        double vi = inducedVelocity;
+
+        // Reported, not applied: how much of the thrust the rotor owes to
+        // having flown out of its own downwash. The solver is called a
+        // second time at zero airspeed for the comparison, so the induced
+        // velocity it leaves behind has to be put back.
+        double still = solveThrust(pitchRad, climb, 0, rho, omega)
+                * groundEffectFactor;
+        inducedVelocity = vi;
+        translationalLift = still <= 1e-6 ? 1.0 : thrust / still;
+
+        addForce(dnx * thrust, dny * thrust, dnz * thrust);
 
         // The disc is above the centre of mass, so a tilted disc also produces
         // the pitching and rolling moment that follows the stick.
@@ -383,6 +512,13 @@ public final class HelicopterPhysics extends RigidBody {
         // torque. The term is signed on purpose: in a descent the airflow
         // drives the rotor instead, which is precisely what keeps the
         // blades turning in autorotation.
+        // C_P = lambda * C_T + sigma Cd0 / 8, with lambda the TOTAL
+        // inflow ratio and signed. In a climb it charges for the work
+        // against gravity; in a descent it goes negative and the air
+        // drives the rotor, which is autorotation falling out of the
+        // same line that pays for a climb. Feeding it the clamped
+        // inflow instead removed the drive altogether and every
+        // engine-off descent became a 91 m/s free fall.
         double cq = solidity() * bladeDragCoefficient / 8.0
                 + ct * (inducedVelocity + climb)
                         / Math.max(1e-6, omega * rotorRadius);
@@ -399,8 +535,15 @@ public final class HelicopterPhysics extends RigidBody {
         // cent of it. With the engine too weak to hover this never showed,
         // because torqueRequired stayed small; with an engine that can
         // actually lift the machine, feet off the pedals span it up.
-        double tailThrust = (1.0 + MathUtil.clamp(pedal, -1, 1) * 0.55)
-                * torqueRequired / tailArm;
+        //
+        // The pedal's own authority is an absolute moment rather than a
+        // fraction of the main rotor torque. As a fraction it scaled
+        // with how hard the rotor was working - and it was far too much
+        // of one: full pedal gave 134 degrees a second, so the machine
+        // span like a top and a touch of pedal to line up a landing
+        // threw it a quarter turn. A light helicopter does about sixty.
+        double tailThrust = torqueRequired / tailArm
+                + MathUtil.clamp(pedal, -1, 1) * PEDAL_AUTHORITY_NM / tailArm;
         // Tail rotor authority falls off in a strong crosswind from the wrong
         // side, which is the loss-of-tail-rotor-effectiveness pilots train for.
         orientation.right(tmp2);
@@ -417,33 +560,21 @@ public final class HelicopterPhysics extends RigidBody {
             engineTorque = MathUtil.clamp(torqueRequired + err * maxEngineTorque * 2.4,
                     0, maxEngineTorque);
         }
-        // Autorotation: a fast enough descent drives the rotor from underneath.
-        double autoTorque = 0;
+        // Autorotation needs no term of its own, and adding one was the
+        // bug. The climb power in cq above is signed: in a descent the
+        // air comes up through the disc, ct * (vi + climb) goes
+        // negative, torqueRequired goes negative, and the rotor is being
+        // driven by the airflow. That IS autorotation, straight out of
+        // the same equation that charges for a climb.
+        //
+        // Bolting an explicit drive on top of it counted the same energy
+        // twice: the rotor pinned at its 122 per cent limiter and the
+        // machine still fell at 25 m/s, because overspeeding the rotor
+        // does not hold an aircraft up. Removing it lets the rotor find
+        // the speed at which the upflow and the blade drag balance,
+        // which is what sets the real descent rate.
         inAutorotation = !engineOn;
-        if (inAutorotation) {
-            // How hard the upflow drives the rotor. This used to reach
-            // full drive only at 35 m/s of descent, which meant the
-            // machine had to be falling at 120 km/h before the blades
-            // were being turned properly - so an engine failure was a
-            // crash with extra steps rather than an autorotation. A
-            // light helicopter autorotates at about 12 m/s, so that is
-            // where the drive is full.
-            double drive = MathUtil.remap(-climb, 3.0, 13.0, 0.0, 1.25);
-            // Driven against what the rotor actually costs to turn, which
-            // at low pitch is the blades' own profile drag and almost
-            // nothing else. Scaling the drive by torqueRequired alone
-            // made it collapse exactly when the collective was lowered,
-            // so dropping the lever - the first thing anybody does when
-            // the engine quits - stopped the rotor dead and the machine
-            // fell at 90 m/s. Lowering the collective should speed the
-            // rotor up, and now does.
-            double profileTorque = solidity() * bladeDragCoefficient / 8.0
-                    * rho * discArea() * Math.pow(omega * rotorRadius, 2)
-                    * rotorRadius;
-            autoTorque = drive * (torqueRequired + profileTorque)
-                    * MathUtil.clamp(1.4 - collective, 0.2, 1.4);
-        }
-        double netTorque = engineTorque + autoTorque - torqueRequired;
+        double netTorque = engineTorque - torqueRequired;
         rotorRpm += netTorque / rotorInertia * dt * 60.0 / (2 * Math.PI);
         rotorRpm = MathUtil.clamp(rotorRpm, 0, nominalRotorRpm * 1.22);
 
@@ -454,7 +585,7 @@ public final class HelicopterPhysics extends RigidBody {
             addForce(-relX * q * fuselageDragArea, -velocity.y * q * fuselageDragArea * 1.6,
                     -relZ * q * fuselageDragArea);
         }
-        addTorque(-angularVelocity.x * 2400, -angularVelocity.y * 1500,
+        addTorque(-angularVelocity.x * 2400, -angularVelocity.y * YAW_DAMPING,
                 -angularVelocity.z * 2100);
 
         // --- skids ---------------------------------------------------------------

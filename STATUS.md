@@ -1,9 +1,9 @@
 # Status — what is built, what is not
 
-Current release **v2.0.38** (CI run `38618818277`). 18,321 lines of Java
-across 45 core classes and 11 Android classes, 44 test files holding
-**455 core tests + 24 Android tests**, and **145 world verification
-gates**. All green.
+Current release **v2.0.48** (CI run pending at the time of writing).
+34870 lines of Java across 48 core classes and 11 Android classes,
+53 test files holding **517 core tests + 28 Android tests**, and **145
+world verification gates**. All green locally.
 
 This file is the honest inventory. Anything not listed under "Built" is
 not built, whatever the commit messages may sound like.
@@ -131,6 +131,9 @@ no backend.
    departure. There is still no shelter, no signage, no footbridge and
    no concourse, and the 380 OSM platform ways are not used - the
    platforms are derived from the alignment.
+   **There are also no stairs.** An elevated platform is reachable on
+   foot only by walking up the embankment where one exists; the 66
+   bored stations have no entrance at all and cannot be used.
 7. **The timetable is a headway, not a calling pattern.** Each line
    departs on a fixed interval from a fixed phase, so a board is
    always right, but there are no real timings, no fast/slow services
@@ -143,6 +146,18 @@ no backend.
     exist despite Mumbai having many.
 
 ### Simulation gaps
+
+0. **The aeroplane has a very lightly damped phugoid.** With the stick
+   held still it exchanges speed for height on a roughly half-minute
+   cycle and wanders some 750 m of altitude over three minutes; no
+   fixed elevator setting holds a level cruise. Real light aircraft do
+   porpoise this way with the controls fixed and a pilot damps it with
+   the elevator, so it is flyable, but the amplitude here is larger
+   than it should be. The short-period damping was measured and fixed
+   this release (the rate derivatives now scale with q/V, as Cmq does,
+   instead of being a constant); the phugoid itself was not, and the
+   drag polar is the likely cause. Not yet measured against a real
+   aircraft.
 
 11. **Collision is footprint-ring extruded.** Balconies, archways and
     overhangs are solid; you cannot walk under a building that you

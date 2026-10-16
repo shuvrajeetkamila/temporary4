@@ -1,11 +1,11 @@
 {
- "seconds": 52.6,
- "total_bytes": 14648963,
+ "seconds": 45.9,
+ "total_bytes": 14688904,
  "files": {
   "terrain.mwl": 3058655,
   "chunks.mwl": 7866293,
-  "network.mwl": 3720325,
-  "manifest.mwl": 3690
+  "network.mwl": 3760220,
+  "manifest.mwl": 3736
  },
  "manifest": {
   "format": "MWL2",
@@ -107,7 +107,11 @@
      "routes": 10,
      "km": 59.9
     }
-   }
+   },
+   "worst_grade_pct": 3.94,
+   "elevated_km": 382.4,
+   "at_grade_km": 1167.1,
+   "bored_km": 80.3
   },
   "places": 1283,
   "craft": {

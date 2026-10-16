@@ -18,8 +18,15 @@ import java.util.HashMap;
  *
  * <p>The spacing rule is the one in {@code Transit}, restated here
  * rather than imported because {@code sim} depends on {@code world}
- * and not the other way round. {@code TransitStopsTest} compares the
+ * and not the other way round. {@code TransitStationTest} compares the
  * two and fails if they ever drift apart.
+ *
+ * <p>Height comes from the compiled vertical alignment rather than
+ * from a per-class constant. The constant was wrong for most of the
+ * network: it put every metro station twelve metres underground when
+ * the overwhelming majority of the Mumbai Metro is on a viaduct, and
+ * it set surface stations on the raw terrain, which at a creek
+ * crossing is the seabed.
  */
 public final class TransitStops {
 
@@ -29,47 +36,37 @@ public final class TransitStops {
     /** Longest rake, used to keep stations clear of the line ends. */
     private static final double CLEAR_M = 9 * (20.5 + 1.2) + 10;
 
-    /** How far below the street a bored tunnel runs, m. */
-    public static final double SUBWAY_DEPTH_M = -12.0;
+    /**
+     * How far above the ground a station has to sit before it counts as
+     * elevated, metres. Below this it gets a kerb-height platform on
+     * the ground; above it, a viaduct with piers underneath.
+     */
+    public static final double ELEVATED_M = 2.5;
 
-    /** Height of a monorail guideway above the street, m. */
-    public static final double MONORAIL_H_M = 8.5;
+    /** How far below the ground a station counts as bored, metres. */
+    public static final double UNDERGROUND_M = -2.0;
 
-    /** Height of a Metro viaduct above the street, m. */
-    public static final double METRO_H_M = 7.8;
-
-    /** Grade a class of line runs at. */
+    /** Which of the three levels a station sits on. */
     public enum Grade { UNDERGROUND, SURFACE, ELEVATED, WATER }
 
     /**
-     * Which of the three levels a line runs on.
+     * Where a stretch of line sits relative to the ground under it.
      *
      * <p>Mumbai has all of them and they are not interchangeable: the
-     * suburban network is at grade, Metro Line 1 and the monorail are
-     * on viaducts, and Line 3 is bored. It lives here, in the world
-     * package, because the mesher builds the platforms and the
-     * simulation runs the trains and the two deciding separately is
-     * how a platform ends up twelve metres above its own train.
+     * suburban network is mostly at grade but crosses the creeks on
+     * bridges, Metro Line 1 and the monorail are on viaducts, and Line
+     * 3 is bored. This used to be a function of the OSM class alone,
+     * which cannot express any of that - a single line is at grade,
+     * then on an embankment, then over water on a bridge - so it is
+     * now a function of the compiled profile and the terrain under it.
      */
-    public static Grade gradeOf(int cls) {
-        switch (cls) {
-            case WorldData.CLS_SUBWAY: return Grade.UNDERGROUND;
-            case WorldData.CLS_MONORAIL:
-            case WorldData.CLS_LIGHT_RAIL: return Grade.ELEVATED;
-            case WorldData.CLS_FERRY: return Grade.WATER;
-            default: return Grade.SURFACE;
-        }
-    }
-
-    /** Height of the running surface above the ground, m. */
-    public static double railHeight(int cls) {
-        switch (cls) {
-            case WorldData.CLS_SUBWAY: return SUBWAY_DEPTH_M;
-            case WorldData.CLS_MONORAIL: return MONORAIL_H_M;
-            case WorldData.CLS_LIGHT_RAIL: return METRO_H_M;
-            case WorldData.CLS_FERRY: return 0.0;
-            default: return 0.9;
-        }
+    public static Grade gradeAt(int cls, double railY, double groundY,
+                                boolean land) {
+        if (cls == WorldData.CLS_FERRY) { return Grade.WATER; }
+        double above = railY - (land ? groundY : 0.0);
+        if (above > ELEVATED_M) { return Grade.ELEVATED; }
+        if (above < UNDERGROUND_M) { return Grade.UNDERGROUND; }
+        return Grade.SURFACE;
     }
 
     /** Station spacing by line class, metres. 0 means terminals only. */
@@ -89,17 +86,25 @@ public final class TransitStops {
         public final int index;
         public final int cls;
         public final double x, z;
+        /** Rail head height at the platform, metres. */
+        public final double y;
+        /** Ground level under the station, metres. */
+        public final double ground;
         /** Bearing of the line through the station, radians. */
         public final double bearing;
+        public final Grade grade;
 
-        Stop(int route, int index, int cls, double x, double z,
-             double bearing) {
+        Stop(int route, int index, int cls, double x, double z, double y,
+             double ground, double bearing, Grade grade) {
             this.route = route;
             this.index = index;
             this.cls = cls;
             this.x = x;
             this.z = z;
+            this.y = y;
+            this.ground = ground;
             this.bearing = bearing;
+            this.grade = grade;
         }
     }
 
@@ -120,7 +125,10 @@ public final class TransitStops {
                 double[] p = pointAt(w, r, s);
                 double[] q = pointAt(w, r, Math.min(len, s + 12));
                 double b = Math.atan2(q[0] - p[0], -(q[1] - p[1]));
-                all.add(new Stop(r, k, cls, p[0], p[1], b));
+                boolean land = w.isLand(p[0], p[1]);
+                double g = land ? w.height(p[0], p[1]) : 0.0;
+                all.add(new Stop(r, k, cls, p[0], p[1], p[2], g, b,
+                        gradeAt(cls, p[2], g, land)));
             }
         }
         HashMap<Long, ArrayList<Integer>> acc = new HashMap<>();
@@ -136,12 +144,17 @@ public final class TransitStops {
         }
     }
 
-    /** Arc-length walk along a route, matching {@code Transit.pointAt}. */
-    private static double[] pointAt(WorldData w, int route, double s) {
+    /**
+     * Arc-length walk along a route, matching {@code Transit.pointAt}.
+     *
+     * @return x, z and the rail head height there
+     */
+    static double[] pointAt(WorldData w, int route, double s) {
         int n = w.transitPointCount(route);
-        if (n == 0) { return new double[]{0, 0}; }
+        if (n == 0) { return new double[]{0, 0, 0}; }
         if (n == 1 || s <= 0) {
-            return new double[]{w.transitX(route, 0), w.transitZ(route, 0)};
+            return new double[]{w.transitX(route, 0), w.transitZ(route, 0),
+                    w.transitY(route, 0)};
         }
         double acc = 0;
         for (int i = 1; i < n; i++) {
@@ -150,11 +163,15 @@ public final class TransitStops {
             double d = Math.hypot(bx - ax, bz - az);
             if (acc + d >= s) {
                 double t = d < 1e-9 ? 0 : (s - acc) / d;
-                return new double[]{ax + (bx - ax) * t, az + (bz - az) * t};
+                double ay = w.transitY(route, i - 1);
+                double by = w.transitY(route, i);
+                return new double[]{ax + (bx - ax) * t, az + (bz - az) * t,
+                        ay + (by - ay) * t};
             }
             acc += d;
         }
-        return new double[]{w.transitX(route, n - 1), w.transitZ(route, n - 1)};
+        return new double[]{w.transitX(route, n - 1), w.transitZ(route, n - 1),
+                w.transitY(route, n - 1)};
     }
 
     private static long key(double x, double z) {

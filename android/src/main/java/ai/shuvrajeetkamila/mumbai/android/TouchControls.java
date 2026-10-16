@@ -95,9 +95,10 @@ final class TouchControls extends View {
             // Carrying a throttle or a collective across a profile change
             // leaves a control applied that the new vehicle never set.
             out.reset();
-            // And the collective lever goes back to the hover, so a
-            // fresh helicopter is not inheriting where the last one's
-            // lever happened to be left.
+            // And the collective lever goes back to the ground
+            // position, so a fresh helicopter is not inheriting where
+            // the last one's lever happened to be left - and is not
+            // lifting off on its own before the player has touched it.
             out.resetLevers();
             for (int i = 0; i < held.length; i++) { held[i] = false; edge[i] = false; }
             for (int i = 0; i < ControlMapping.MAX_SLOTS; i++) { slotPointer[i] = -1; }

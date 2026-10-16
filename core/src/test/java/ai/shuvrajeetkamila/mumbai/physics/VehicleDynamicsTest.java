@@ -351,14 +351,43 @@ final class VehicleDynamicsTest {
     @Test
     @DisplayName("over-pitching droops the rotor instead of making more lift")
     void overPitchingDroopsTheRotor() {
+        // At sea level full collective is now sized to roughly what the
+        // engine can actually drive, so it does NOT droop: the top of
+        // the lever used to be well past the torque limit, which meant
+        // the governor saturated, the low-rotor warning sat on
+        // permanently, and pulling harder made the climb worse rather
+        // than better - 9.7 m/s at the stop against 12.1 just below it.
         HelicopterPhysics.GroundProbe deep = (x, z) -> -100000;
-        HelicopterPhysics h = new HelicopterPhysics();
-        h.position.set(0, 500, 0);
-        h.collective = 1.0;
-        for (int i = 0; i < 60 * 40; i++) { h.step(DT, deep, 0, 0); }
-        assertTrue(h.rotorPercent() < 97,
-                "full collective held the rotor at " + h.rotorPercent()
-                        + "%, so the engine is not being asked for the torque");
+        HelicopterPhysics low = new HelicopterPhysics();
+        low.position.set(0, 500, 0);
+        low.collective = 1.0;
+        for (int i = 0; i < 60 * 40; i++) { low.step(DT, deep, 0, 0); }
+        assertTrue(low.rotorPercent() > 93,
+                "full collective at sea level drooped the rotor to "
+                        + low.rotorPercent() + "%, so the lever asks for more"
+                        + " than the engine has");
+
+        assertTrue(low.torqueRequired > low.maxEngineTorque * 0.92,
+                "full collective only asks for " + low.torqueRequired
+                        + " N m of the " + low.maxEngineTorque + " available,"
+                        + " so the lever is not using the engine");
+
+        // And the governor must still be ABLE to run out: pitch the
+        // blades past the stop the lever is geared to and the rotor has
+        // to droop, because the engine cannot hold the RPM against a
+        // torque it does not have. Over-pitching is a real way to lose
+        // a helicopter and the model has to reproduce it.
+        HelicopterPhysics over = new HelicopterPhysics();
+        over.position.set(0, 500, 0);
+        over.maxCollectivePitchDeg = 18.0;
+        over.collective = 1.0;
+        for (int i = 0; i < 60 * 40; i++) { over.step(DT, deep, 0, 0); }
+        assertTrue(over.rotorPercent() < 90,
+                "pitching the blades to 18 degrees held the rotor at "
+                        + over.rotorPercent() + "%, so the engine is never"
+                        + " being asked for the torque");
+        assertTrue(over.torqueRequired > over.maxEngineTorque * 0.95,
+                "the engine is not at its limit even over-pitched");
     }
 
     @Test
