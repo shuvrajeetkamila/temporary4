@@ -19,19 +19,19 @@
    "group": "files",
    "name": "chunks.mwl exists",
    "status": "PASS",
-   "detail": "7.87 MB"
+   "detail": "7.88 MB"
   },
   {
    "group": "files",
    "name": "network.mwl exists",
    "status": "PASS",
-   "detail": "3.76 MB"
+   "detail": "3.78 MB"
   },
   {
    "group": "files",
    "name": "all four files share one build id",
    "status": "PASS",
-   "detail": "2abf2fa1570887a378d34f0369f6e472"
+   "detail": "b2f3a175af984b6299345ed4777af0e4"
   },
   {
    "group": "files",
@@ -49,13 +49,13 @@
    "group": "provenance",
    "name": "OSM retrieval date recorded",
    "status": "PASS",
-   "detail": "2026-10-13T15:41:05+00:00"
+   "detail": "2026-10-16T08:30:35+00:00"
   },
   {
    "group": "provenance",
    "name": "OSM extract sha256 recorded",
    "status": "PASS",
-   "detail": "49995cfaa5edb7cc..."
+   "detail": "a69fe0da47c5ef89..."
   },
   {
    "group": "provenance",
@@ -151,13 +151,13 @@
    "group": "chunks",
    "name": "at least 100k real buildings",
    "status": "PASS",
-   "detail": "195,743"
+   "detail": "195,725"
   },
   {
    "group": "chunks",
    "name": "at least 50k road runs",
    "status": "PASS",
-   "detail": "124,616"
+   "detail": "125,296"
   },
   {
    "group": "cp:vasai_creek",
@@ -469,13 +469,13 @@
    "group": "coverage",
    "name": "airports: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "4425 buildings + 3391 road runs in the 3x3 chunks around 2 checkpoints"
+   "detail": "4425 buildings + 3392 road runs in the 3x3 chunks around 2 checkpoints"
   },
   {
    "group": "coverage",
    "name": "airports: roads near its checkpoints",
    "status": "PASS",
-   "detail": "3391 road runs"
+   "detail": "3392 road runs"
   },
   {
    "group": "coverage",
@@ -487,49 +487,49 @@
    "group": "coverage",
    "name": "bandra_bkc: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "17236 buildings + 12432 road runs in the 3x3 chunks around 5 checkpoints"
+   "detail": "17234 buildings + 12751 road runs in the 3x3 chunks around 5 checkpoints"
   },
   {
    "group": "coverage",
    "name": "bandra_bkc: roads near its checkpoints",
    "status": "PASS",
-   "detail": "12432 road runs"
+   "detail": "12751 road runs"
   },
   {
    "group": "coverage",
    "name": "bandra_bkc: buildings near its checkpoints",
    "status": "PASS",
-   "detail": "17236 buildings"
+   "detail": "17234 buildings"
   },
   {
    "group": "coverage",
    "name": "central_mumbai: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "7582 buildings + 7722 road runs in the 3x3 chunks around 4 checkpoints"
+   "detail": "7577 buildings + 7834 road runs in the 3x3 chunks around 4 checkpoints"
   },
   {
    "group": "coverage",
    "name": "central_mumbai: roads near its checkpoints",
    "status": "PASS",
-   "detail": "7722 road runs"
+   "detail": "7834 road runs"
   },
   {
    "group": "coverage",
    "name": "central_mumbai: buildings near its checkpoints",
    "status": "PASS",
-   "detail": "7582 buildings"
+   "detail": "7577 buildings"
   },
   {
    "group": "coverage",
    "name": "eastern_suburbs: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "11845 buildings + 11127 road runs in the 3x3 chunks around 7 checkpoints"
+   "detail": "11845 buildings + 11144 road runs in the 3x3 chunks around 7 checkpoints"
   },
   {
    "group": "coverage",
    "name": "eastern_suburbs: roads near its checkpoints",
    "status": "PASS",
-   "detail": "11127 road runs"
+   "detail": "11144 road runs"
   },
   {
    "group": "coverage",
@@ -553,49 +553,49 @@
    "group": "coverage",
    "name": "north_salsette: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "6662 buildings + 1822 road runs in the 3x3 chunks around 3 checkpoints"
+   "detail": "6663 buildings + 1826 road runs in the 3x3 chunks around 3 checkpoints"
   },
   {
    "group": "coverage",
    "name": "north_salsette: roads near its checkpoints",
    "status": "PASS",
-   "detail": "1822 road runs"
+   "detail": "1826 road runs"
   },
   {
    "group": "coverage",
    "name": "north_salsette: buildings near its checkpoints",
    "status": "PASS",
-   "detail": "6662 buildings"
+   "detail": "6663 buildings"
   },
   {
    "group": "coverage",
    "name": "northern_belt: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "12693 buildings + 10330 road runs in the 3x3 chunks around 5 checkpoints"
+   "detail": "12696 buildings + 10394 road runs in the 3x3 chunks around 5 checkpoints"
   },
   {
    "group": "coverage",
    "name": "northern_belt: roads near its checkpoints",
    "status": "PASS",
-   "detail": "10330 road runs"
+   "detail": "10394 road runs"
   },
   {
    "group": "coverage",
    "name": "northern_belt: buildings near its checkpoints",
    "status": "PASS",
-   "detail": "12693 buildings"
+   "detail": "12696 buildings"
   },
   {
    "group": "coverage",
    "name": "south_mumbai: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "7670 buildings + 6832 road runs in the 3x3 chunks around 5 checkpoints"
+   "detail": "7670 buildings + 6835 road runs in the 3x3 chunks around 5 checkpoints"
   },
   {
    "group": "coverage",
    "name": "south_mumbai: roads near its checkpoints",
    "status": "PASS",
-   "detail": "6832 road runs"
+   "detail": "6835 road runs"
   },
   {
    "group": "coverage",
@@ -631,19 +631,19 @@
    "group": "coverage",
    "name": "western_suburbs: real geometry near its checkpoints",
    "status": "PASS",
-   "detail": "8238 buildings + 6192 road runs in the 3x3 chunks around 4 checkpoints"
+   "detail": "8237 buildings + 6235 road runs in the 3x3 chunks around 4 checkpoints"
   },
   {
    "group": "coverage",
    "name": "western_suburbs: roads near its checkpoints",
    "status": "PASS",
-   "detail": "6192 road runs"
+   "detail": "6235 road runs"
   },
   {
    "group": "coverage",
    "name": "western_suburbs: buildings near its checkpoints",
    "status": "PASS",
-   "detail": "8238 buildings"
+   "detail": "8237 buildings"
   },
   {
    "group": "coverage",
@@ -673,31 +673,31 @@
    "group": "network",
    "name": "graph has >= 100k nodes",
    "status": "PASS",
-   "detail": "370,546"
+   "detail": "372,963"
   },
   {
    "group": "network",
    "name": "graph has >= 100k edges",
    "status": "PASS",
-   "detail": "352,391"
+   "detail": "354,542"
   },
   {
    "group": "network",
    "name": "edge endpoints are in range",
    "status": "PASS",
-   "detail": "max index 370545"
+   "detail": "max index 372962"
   },
   {
    "group": "network",
    "name": ">= 3000 km of drivable road",
    "status": "PASS",
-   "detail": "13,984 km"
+   "detail": "14,020 km"
   },
   {
    "group": "network",
    "name": "95% of road nodes are on land",
    "status": "PASS",
-   "detail": "99.0% of 4028 sampled"
+   "detail": "99.0% of 4011 sampled"
   },
   {
    "group": "transit",
@@ -775,7 +775,7 @@
    "group": "places",
    "name": "at least 400 named places",
    "status": "PASS",
-   "detail": "1283"
+   "detail": "1284"
   },
   {
    "group": "places",
@@ -805,13 +805,13 @@
    "group": "heights",
    "name": "building height provenance is recorded",
    "status": "PASS",
-   "detail": "{\"osm_height\": 20582, \"osm_levels\": 7363, \"neighbour_median\": 134171, \"class_default\": 33627}"
+   "detail": "{\"osm_height\": 20582, \"osm_levels\": 7368, \"neighbour_median\": 134148, \"class_default\": 33627}"
   },
   {
    "group": "heights",
    "name": "at least 10% of heights come from OSM tags",
    "status": "PASS",
-   "detail": "27,945 of 195,743 = 14.3%"
+   "detail": "27,950 of 195,725 = 14.3%"
   },
   {
    "group": "craft",
