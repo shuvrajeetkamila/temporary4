@@ -1,9 +1,9 @@
 # Status — what is built, what is not
 
-Current release **v2.0.49** (CI run `PENDING`).
+Current release **v2.0.50** (CI run `38882611667`, both jobs green).
 Java across 49 core classes and 11 Android classes,
-55 test files holding **535 core tests + 28 Android tests**, and **145
-world verification gates**. All green locally.
+55 test files holding **537 core tests + 28 Android tests**, and **145
+world verification gates**. All green, against the same world CI builds.
 
 This file is the honest inventory. Anything not listed under "Built" is
 not built, whatever the commit messages may sound like.
