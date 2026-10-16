@@ -341,41 +341,57 @@ final class LivingCityTest {
     void trafficObeysTheLights() throws Exception {
         WorldData w = WorldFixture.world();
         Junctions j = w.junctions();
-        // A signalled junction with traffic able to reach it.
-        int id = -1;
-        for (int i = 0; i < j.count() && id < 0; i++) {
-            if (j.signalled(i)) { id = i; }
+
+        // Several junctions, not the first one in the list. The first
+        // signalled junction in the city is wherever the compiler
+        // happened to put it, and whether traffic reaches it in twenty
+        // seconds depends on the road layout around that one point -
+        // which made this test pass on one build of the world and fail
+        // on another from the same inputs. What is being tested is the
+        // signal logic, so sample enough junctions that the answer is
+        // about the logic.
+        int[] ids = new int[12];
+        int found = 0;
+        for (int i = 0; i < j.count() && found < ids.length; i++) {
+            if (j.signalled(i)) { ids[found++] = i; }
         }
-        assertTrue(id >= 0, "no signalled junction in the city");
+        assertTrue(found > 0, "no signalled junction in the city");
 
-        Agents a = new Agents(w);
-        a.setJunctions(j);
-        a.setCaps(40, 0);
-        double jx = j.x(id), jz = j.z(id);
-
-        // Run the city round the junction through two full cycles and
-        // watch what the cars nearest it are doing against the light.
         int stoppedOnRed = 0;
         int movingOnRed = 0;
         int movingOnGreen = 0;
-        for (int step = 0; step < (int) (Junctions.CYCLE_S * 2 * 60); step++) {
-            a.signalClock = step / 60.0;
-            a.update(1.0 / 60.0, jx, jz, 0, 0, 260, 520);
-            if (step < 60 * 20) { continue; }      // let traffic populate
-            for (Agents.Car c : a.cars()) {
-                if (!c.active || c.parked || c.police) { continue; }
-                double d = Math.hypot(c.x - jx, c.z - jz);
-                // In the approach, past the stop line, close enough that
-                // a red light is unambiguously theirs.
-                if (d > 16 || d < Junctions.STOP_LINE_M) { continue; }
-                int asp = j.aspectFor(id, a.signalClock, c.heading);
-                if (asp == 2) {
-                    if (c.speed < 1.5) { stoppedOnRed++; } else { movingOnRed++; }
-                } else if (asp == 0 && c.speed > 2.0) {
-                    movingOnGreen++;
+        int junctionsWithTraffic = 0;
+        for (int n = 0; n < found; n++) {
+            int id = ids[n];
+            Agents a = new Agents(w);
+            a.setJunctions(j);
+            a.setCaps(40, 0);
+            double jx = j.x(id), jz = j.z(id);
+            int before = stoppedOnRed + movingOnGreen;
+            for (int step = 0; step < (int) (Junctions.CYCLE_S * 2 * 60); step++) {
+                a.signalClock = step / 60.0;
+                a.update(1.0 / 60.0, jx, jz, 0, 0, 260, 520);
+                if (step < 60 * 20) { continue; }      // let traffic populate
+                for (Agents.Car c : a.cars()) {
+                    if (!c.active || c.parked || c.police) { continue; }
+                    double d = Math.hypot(c.x - jx, c.z - jz);
+                    // In the approach, past the stop line, close enough
+                    // that a red light is unambiguously theirs.
+                    if (d > 16 || d < Junctions.STOP_LINE_M) { continue; }
+                    int asp = j.aspectFor(id, a.signalClock, c.heading);
+                    if (asp == 2) {
+                        if (c.speed < 1.5) { stoppedOnRed++; } else { movingOnRed++; }
+                    } else if (asp == 0 && c.speed > 2.0) {
+                        movingOnGreen++;
+                    }
                 }
             }
+            if (stoppedOnRed + movingOnGreen > before) { junctionsWithTraffic++; }
         }
+        assertTrue(junctionsWithTraffic > 0,
+                "no traffic reached the stop line at any of " + found
+                        + " signalled junctions");
+
         assertTrue(stoppedOnRed > 0,
                 "not one car was ever stopped on a red light in two"
                         + " full cycles at a signalled junction");
