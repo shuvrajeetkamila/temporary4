@@ -13,12 +13,12 @@ package ai.shuvrajeetkamila.mumbai.app;
  * dishonest.
  */
 public enum Quality {
-    //          fps  high   med    far   scale cars peds seaGrid uploads
-    LOW(         30,  300,  1200,  9000, 0.75f,  40,  30,  64, 2),
-    BALANCED(    30,  520,  2200, 14000, 0.90f,  90,  70,  96, 3),
-    HIGH(        30,  800,  3200, 22000, 1.00f, 140, 120, 128, 4),
-    ECO(         20,  280,  1100,  8000, 0.70f,  35,  20,  64, 1),
-    ECO_SEVERE(  15,  220,   800,  6000, 0.60f,  18,  10,  48, 1);
+    //          fps  high   med    far   scale cars peds seaGrid uploads resident
+    LOW(         30,  300,  1200,  9000, 0.75f,  40,  30,  64, 2, 280),
+    BALANCED(    30,  520,  2200, 14000, 0.90f,  90,  70,  96, 3, 420),
+    HIGH(        30,  800,  3200, 22000, 1.00f, 140, 120, 128, 4, 560),
+    ECO(         20,  280,  1100,  8000, 0.70f,  35,  20,  64, 1, 220),
+    ECO_SEVERE(  15,  220,   800,  6000, 0.60f,  18,  10,  48, 1, 150);
 
     public final int targetFps;
     public final double highRadius;
@@ -30,8 +30,25 @@ public enum Quality {
     public final int seaGrid;
     public final int uploadsPerFrame;
 
+    /**
+     * How many chunks may be on the GPU at once.
+     *
+     * <p>Per tier, and actually applied, which it was not: every tier
+     * used the streamer's own 420 and nothing ever called
+     * setMaxResident. That went unnoticed because a bug in the request
+     * queue stranded tiles in QUEUED_IO and residency never climbed
+     * past about forty, so the budget was never reached by anything.
+     * With the queue fixed the budget is real, and a 420-chunk working
+     * set is far too much for the tier that asked for LOW.
+     *
+     * <p>It also sets the draw distance: the streamer clamps its far
+     * radius to the radius this many tiles can actually cover, because
+     * streaming further than the budget is how you get holes.
+     */
+    public final int maxResident;
+
     Quality(int fps, double high, double med, double far, float scale,
-            int cars, int peds, int seaGrid, int uploads) {
+            int cars, int peds, int seaGrid, int uploads, int resident) {
         this.targetFps = fps;
         this.highRadius = high;
         this.medRadius = med;
@@ -41,6 +58,7 @@ public enum Quality {
         this.maxPedestrians = peds;
         this.seaGrid = seaGrid;
         this.uploadsPerFrame = uploads;
+        this.maxResident = resident;
     }
 
     public boolean isEco() { return this == ECO || this == ECO_SEVERE; }

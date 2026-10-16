@@ -335,7 +335,7 @@ jobs:
     # 22.04 is the well-trodden runner for the emulator action; AVD creation
     # on 24.04 is where the previous attempts died before reaching the script.
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -373,6 +373,11 @@ jobs:
       - name: Launch, load the world, render
         continue-on-error: true
         id: emu
+        # The step, not just the job. A job-level timeout kills the
+        # reporter with it and the run ends with no log and no verdict,
+        # which is what happened when a streaming change made the app
+        # work hard enough to stall the software renderer for an hour.
+        timeout-minutes: 25
         run: |
           set -uo pipefail
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"

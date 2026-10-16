@@ -405,6 +405,7 @@ public final class Engine {
     public void applyQuality(Quality q) {
         quality = q;
         streamer.setRadii(q.highRadius, q.medRadius, q.farRadius);
+        streamer.setMaxResident(q.maxResident);
         agents.setCaps(q.maxCars, q.maxPedestrians);
     }
 
