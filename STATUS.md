@@ -1,6 +1,6 @@
 # Status — what is built, what is not
 
-Current release **v2.0.48** (CI run pending at the time of writing).
+Current release **v2.0.48** (CI run `38874026795`, both jobs green).
 34870 lines of Java across 48 core classes and 11 Android classes,
 53 test files holding **517 core tests + 28 Android tests**, and **145
 world verification gates**. All green locally.
