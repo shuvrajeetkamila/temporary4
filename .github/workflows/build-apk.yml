@@ -418,45 +418,62 @@ jobs:
             ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity \
             2>&1 | tee start.txt
 
-          # SwiftShader renders single digit frame rates, so the budget is
-          # generous. The markers matter, not the speed.
+          # Capture the first half minute of log BEFORE anything else.
           #
-          # Every adb call here is wrapped in `timeout`. An unbounded
-          # `adb logcat -d` against a device that has stopped answering
-          # blocks for its own internal timeout, and ninety of those in
-          # a polling loop is a step that runs for half an hour and
-          # produces nothing - which is exactly what happened twice.
-          for i in $(seq 1 90); do
-            if timeout 20 adb logcat -d 2>/dev/null | grep -q MUMBAI_RENDER_OK; then
-              echo "render marker seen after $((i*2))s"; break
+          # Three runs in a row produced an empty app log and a step
+          # killed at its timeout. With every adb call bounded it became
+          # clear why: the polls were each hitting their own timeout, so
+          # the device had stopped answering, and the diagnostics at the
+          # end were never reached. Evidence has to be taken early, while
+          # the device is still talking, not after the thing that breaks
+          # it. 'am start -W' has already returned by here, so this is
+          # the app's own first seconds.
+          sleep 30
+          timeout 45 adb logcat -d > logcat-early.txt 2>&1 || \
+            echo "(early logcat timed out)" >> logcat-early.txt
+          echo "--- first 30 s ---" | tee -a install.txt
+          grep -E 'MUMBAI_|FATAL|AndroidRuntime|islandcity' logcat-early.txt \
+            | head -40 | tee -a install.txt || true
+          timeout 20 adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \
+            | tee -a install.txt || echo "(process gone)" | tee -a install.txt
+
+          # SwiftShader renders single digit frame rates, so the budget is
+          # generous - but bounded. Each poll has its own timeout and the
+          # whole loop cannot outlast the step.
+          for i in $(seq 1 30); do
+            if timeout 15 adb logcat -d 2>/dev/null | grep -q MUMBAI_RENDER_OK; then
+              echo "render marker seen after $((30 + i*4))s" | tee -a install.txt
+              break
             fi
-            sleep 2
+            sleep 4
           done
 
-          timeout 60 adb logcat -d > logcat-full.txt 2>&1 || \
-            echo "(logcat -d timed out: the device stopped answering)" >> logcat-full.txt
-          timeout 60 adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
+          timeout 45 adb logcat -d > logcat-full.txt 2>&1 || \
+            cp logcat-early.txt logcat-full.txt
+          timeout 45 adb logcat -d -s Mumbai:V MumbaiGL:V AndroidRuntime:E System.err:V \
             > logcat-app.txt 2>&1 || true
+          # The early capture is the authority if the late one came back
+          # empty because the device stopped answering.
+          if [ ! -s logcat-app.txt ]; then
+            grep -E 'Mumbai|MumbaiGL|AndroidRuntime|System.err' logcat-early.txt \
+              > logcat-app.txt 2>&1 || true
+          fi
+          if ! grep -q MUMBAI_WORLD_READY logcat-full.txt; then
+            grep -q MUMBAI_WORLD_READY logcat-early.txt && cp logcat-early.txt logcat-full.txt
+          fi
           tail -120 logcat-app.txt || true
 
-          # If the app produced no markers at all, find out why rather
-          # than guessing: is the process alive, what is it doing, and
-          # how much memory is it holding?
           if ! grep -q MUMBAI_WORLD_READY logcat-full.txt; then
             echo "--- no world marker: diagnosing ---" | tee -a install.txt
-            timeout 30 adb shell ps -A 2>&1 | grep -i islandcity | tee -a install.txt || true
-            timeout 30 adb shell dumpsys meminfo ai.shuvrajeetkamila.mumbai.islandcity \
-              2>&1 | head -40 | tee -a install.txt || true
-            PID=$(timeout 20 adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity | tr -d '\r')
+            timeout 25 adb shell dumpsys meminfo ai.shuvrajeetkamila.mumbai.islandcity \
+              2>&1 | head -24 | tee -a install.txt || true
+            PID=$(timeout 15 adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity | tr -d '\r')
             if [ -n "$PID" ]; then
-              timeout 20 adb shell kill -3 "$PID" || true
-              sleep 8
-              timeout 60 adb logcat -d -s art:V System.err:V 2>&1 | tail -80 \
-                | tee -a install.txt || true
-              timeout 30 adb shell cat /data/anr/traces.txt 2>/dev/null \
-                | head -120 | tee -a install.txt || true
+              timeout 15 adb shell kill -3 "$PID" || true
+              sleep 6
+              timeout 40 adb logcat -d 2>&1 | tail -60 | tee -a install.txt || true
             fi
-            timeout 60 adb logcat -d 2>&1 | tail -80 | tee -a install.txt || true
+            tail -40 logcat-early.txt | tee -a install.txt || true
           fi
 
           STATUS=0
@@ -541,6 +558,7 @@ jobs:
           path: |
             logcat-full.txt
             logcat-app.txt
+            logcat-early.txt
             install.txt
             start.txt
           if-no-files-found: ignore
