@@ -1,6 +1,6 @@
 # Status — what is built, what is not
 
-Current release **v2.0.51** (CI run `PENDING`).
+Current release **v2.0.58** (CI run `PENDING`).
 Java across 49 core classes and 11 Android classes,
 57 test files holding **543 core tests + 28 Android tests**, and **145
 world verification gates**. All green, against the same world CI builds.
@@ -90,10 +90,11 @@ the plane against the ferry's 13 kn.
   arrest, fine. Batons, no guns.
 - **Missions:** taxi fares, deliveries, street races, with checkpoints
   and money.
-- **Trains, Metro and monorail you can actually see.** Services start on
-  the stretch of route that is near you rather than at a random point
-  along it, and everything the renderer uploads is converted to render
-  space correctly, which it was not.
+- **Pedestrians, blob shadows, moored craft and the aircraft you are
+  flying are drawn** — for the first time. Four upload paths converted
+  world coordinates to render space with the camera instead of the
+  floating origin, so all four were placed tens of kilometres away and
+  culled or clipped. You could not see the helicopter you were in.
 - **Transit you can ride:** stations at real spacing (1.6 km rail,
   1.15 km Metro, 900 m monorail), 16-second dwells, board and alight.
   All 821 stations are boardable from the street outside them;
@@ -153,7 +154,17 @@ no backend.
    always right, but there are no real timings, no fast/slow services
    and no destinations beyond the two terminals the line is named
    after.
-8. **5.1 % of at-grade track is buried in the terrain.** 78 km of the
+8. **Trains, Metro and monorail are not drawn.** They run, call at
+   every station and can be boarded; the carriages are simply not
+   rendered. Isolated on a device: the frame that first draws a rake
+   is the last frame the emulator survives, with no Java exception and
+   no crash log, which is what a fault inside SwiftShader looks like.
+   Controlled against the other candidate — halving the resident chunk
+   budget moved nothing. Not an instance overrun (9 against a buffer of
+   160), not non-finite data (144,540 pose floats checked, 0 bad), not
+   upload volume. Cause not yet found, so the draw is off rather than
+   shipping a build that kills the driver two frames in.
+9. **5.1 % of at-grade track is buried in the terrain.** 78 km of the
    1,519 km that runs at grade sits more than 0.3 m inside the drawn
    ground, worst case 1.97 m; the median clearance is +0.86 m. The
    compiled formation is a morphological opening of the DEM, so a
@@ -161,10 +172,10 @@ no backend.
    through it. Fixing it properly means either carving cuttings into
    the terrain heightfield or putting the line on stilts wherever the
    surface model has a spike. Measured, not fixed.
-9. **No music and no voices.** Everything audible is synthesised.
-10. **Upper Thane and Vasai Creek are land,** because OSM maps them as
+10. **No music and no voices.** Everything audible is synthesised.
+11. **Upper Thane and Vasai Creek are land,** because OSM maps them as
    intertidal mudflat. Not navigable in this build.
-11. **Rooftop helipads are rejected** by the spawn validator, so none
+12. **Rooftop helipads are rejected** by the spawn validator, so none
     exist despite Mumbai having many.
 
 ### Simulation gaps

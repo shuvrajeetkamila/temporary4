@@ -131,6 +131,13 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     /** Carriages of one kind that can be on screen at once. */
     private static final int MAX_CARRIAGES = 160;
 
+    /**
+     * Whether carriages are drawn. Off: see the comment at the transit
+     * draw. The simulation is unaffected - trains still run, call and
+     * board.
+     */
+    private static final boolean TRANSIT_DRAWN = false;
+
     /** Squared distance of the furthest instance uploaded this frame. */
     private double maxInstSq;
 
@@ -635,7 +642,30 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
 
         // --- trains, metros and vessels ----------------------------------------
-        int carriages = uploadTransit(e);
+        //
+        // NOT DRAWN, and this is a known defect rather than an
+        // oversight. Isolated on a real device: the app is healthy -
+        // 5/5 shaders linked, world loaded, audio open, land mask
+        // built - frame one draws shadows, traffic and craft and
+        // survives, and frame two draws all of that plus the first
+        // nine-carriage rake and the emulator is gone four tenths of a
+        // second later. No Java exception and no crash log, because
+        // SwiftShader runs inside the emulator process and a fault
+        // there takes the device with it.
+        //
+        // Controlled against the other candidate: halving the resident
+        // chunk budget, which more than halves upload churn, moved
+        // nothing. The last line is MUMBAI_DRAWSTEP transit0 either
+        // way. The instance count is nine against a buffer of 160, the
+        // carriage poses were checked for non-finite values and there
+        // are none across 144,540 floats, and the heights span -6.6 to
+        // +9.4 m. So it is not an overrun, not NaN and not volume.
+        //
+        // Until that is understood, the trains run, call at stations
+        // and can be boarded - they are simply not rendered. Shipping
+        // them invisible is honest; shipping a build that kills the
+        // GPU driver two frames in is not.
+        int carriages = TRANSIT_DRAWN ? uploadTransit(e) : 0;
         if (carriages > 0) {
             if (instances <= 0) { setupInstanced(e, viewProj, ox, oy, oz,
                     sunDir, sun, sky, fog, fogDensity, nightFactor); }
