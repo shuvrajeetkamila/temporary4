@@ -1,6 +1,9 @@
 # Status — what is built, what is not
 
-Current release **v2.0.58** (CI run `PENDING`).
+**Last release that passed device verification: v2.0.50** (run
+`38882611667`). Everything since builds and passes 544 core + 28
+Android tests, but **fails the on-device launch test** — see
+"The device test is failing" below. v2.0.60 is the newest build.
 Java across 49 core classes and 11 Android classes,
 57 test files holding **543 core tests + 28 Android tests**, and **145
 world verification gates**. All green, against the same world CI builds.
@@ -118,6 +121,40 @@ uploads → GitHub Release. Offline-first: no login, no ads, no network,
 no backend.
 
 ---
+
+## The device test is failing (v2.0.51 onward)
+
+The app starts, links all five shader programs, loads the world,
+opens audio, builds the land mask and renders. Frame one draws
+shadows, traffic and craft and survives. Frame two draws the same
+groups and about half a second later the **emulator process** is
+gone — not the app: no Java exception, no crash log, "no
+devices/emulators found". SwiftShader runs inside the emulator, so a
+fault there takes the device with it.
+
+Ruled out by experiment, each one a separate CI run:
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| Host out of memory | `free -m` either side of boot | 16 GB total, 12 GB free. No. |
+| Guest RAM too large | 4096 MB → 2560 MB | No change |
+| The transit draw | removed it entirely | Still dies, `craft0` last instead |
+| Instance count overrun | every draw clamped to buffer capacity | No change; nothing was ever over |
+| Non-finite carriage data | 144,540 pose floats checked | 0 bad, heights −6.6…+9.4 m |
+| Resident chunk budget | 420 → 280 → 160 | No change |
+| Upload volume | added a 768 KB/frame byte budget | No change |
+
+What is established: it is not any particular draw — frames one and
+two draw the same groups and only the second is fatal — and it is not
+memory. It is something in the second frame's work that SwiftShader
+does not survive. A real GPU driver may well be fine with it; that is
+*not* a claim that it is, only that this has been reproduced solely
+on software rasterisation.
+
+The newly-exercised code is the four upload paths fixed in v2.0.51.
+Pedestrians and moored craft had culled to zero for the whole project
+because their distance test used the wrong origin, so those VAOs had
+never issued a real draw until now.
 
 ## Not built
 
