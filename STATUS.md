@@ -58,7 +58,9 @@ interpolation. SI units throughout.
 Measured: sedan 198 km/h, 0–60 in 6.0 s, 100–0 in 44 m at 0.90 g;
 kaali-peeli 135/6.8/13.2; autorickshaw 65; double-decker 74; scooter
 85 km/h at 0.62 g; autorotation 11.1 → 7.3 m/s; takeoff roll 894 m
-clean, 591 m at flap 25°; helicopter cruise 202 km/h, full pedal
+clean, 591 m at flap 25°; aeroplane level cruise at throttle 0.59,
+269 km/h, 0.00 m/s climb, with a 36 s phugoid that decays from
+11.7 m/s peak to 0.9 m/s in twelve minutes; helicopter cruise 202 km/h, full pedal
 58 °/s, hands-off hover holds within 2.5 m/s; harbour launch 28 kn on
 the plane against the ferry's 13 kn.
 
@@ -162,18 +164,6 @@ no backend.
     exist despite Mumbai having many.
 
 ### Simulation gaps
-
-0. **The aeroplane has a very lightly damped phugoid.** With the stick
-   held still it exchanges speed for height on a roughly half-minute
-   cycle and wanders some 750 m of altitude over three minutes; no
-   fixed elevator setting holds a level cruise. Real light aircraft do
-   porpoise this way with the controls fixed and a pilot damps it with
-   the elevator, so it is flyable, but the amplitude here is larger
-   than it should be. The short-period damping was measured and fixed
-   this release (the rate derivatives now scale with q/V, as Cmq does,
-   instead of being a constant); the phugoid itself was not, and the
-   drag polar is the likely cause. Not yet measured against a real
-   aircraft.
 
 12. **Collision is footprint-ring extruded.** Balconies, archways and
     overhangs are solid; you cannot walk under a building that you

@@ -257,4 +257,93 @@ class AircraftPhysicsTest {
                     "rotor rpm went bad at " + t + " s");
         }
     }
+
+    /** Five thousand metres below, i.e. nothing to hit. */
+    private static final AeroplanePhysics.GroundProbe AIR = (x, z) -> -5000;
+
+    private static AeroplanePhysics cruising(double throttle) {
+        AeroplanePhysics p = new AeroplanePhysics();
+        p.reset();
+        p.position.set(0, 1500, 0);
+        p.velocity.set(0, 0, 70);
+        p.throttle = throttle;
+        p.gearDown = false;
+        p.elevator = 0;
+        return p;
+    }
+
+    @Test
+    @DisplayName("the phugoid damps out instead of running away")
+    void thePhugoidDamps() {
+        // This was written down as an open fault - "no fixed elevator
+        // holds level flight, 757 m of altitude wander over three
+        // minutes" - on the strength of a measurement taken from a
+        // badly chosen starting condition. Flown from a sensible one it
+        // is a textbook phugoid: a long slow exchange of speed for
+        // height that decays. Measured here so the claim is checked
+        // rather than repeated.
+        AeroplanePhysics p = cruising(0.72);
+        double firstPeak = 0, lastPeak = 0;
+        for (int minute = 0; minute < 12; minute++) {
+            double peak = 0;
+            for (int i = 0; i < 60 * 60; i++) {
+                p.step(1.0 / 60, AIR, 0, 0);
+                peak = Math.max(peak, Math.abs(p.velocity.y));
+            }
+            if (minute == 0) { firstPeak = peak; }
+            lastPeak = peak;
+        }
+        assertTrue(firstPeak > 4.0,
+                "the disturbance was too small to prove anything, "
+                        + firstPeak + " m/s");
+        assertTrue(lastPeak < firstPeak * 0.25,
+                "the phugoid is not damping: peak climb rate went from "
+                        + firstPeak + " to " + lastPeak + " m/s over twelve"
+                        + " minutes");
+    }
+
+    @Test
+    @DisplayName("a fixed throttle and a centred stick hold a level cruise")
+    void itTrimsLevel() {
+        // Bracket the level-flight throttle, then fly the middle of the
+        // bracket and demand that it actually holds height.
+        double lo = 0.40, hi = 0.80;
+        for (int k = 0; k < 11; k++) {
+            double mid = (lo + hi) * 0.5;
+            if (settledClimb(mid) > 0) { hi = mid; } else { lo = mid; }
+        }
+        double throttle = (lo + hi) * 0.5;
+        assertTrue(throttle > 0.42 && throttle < 0.78,
+                "level flight needs an implausible throttle: " + throttle);
+
+        AeroplanePhysics p = cruising(throttle);
+        for (int i = 0; i < 60 * 540; i++) { p.step(1.0 / 60, AIR, 0, 0); }
+        double y0 = p.position.y;
+        double peak = 0;
+        for (int i = 0; i < 60 * 120; i++) {
+            p.step(1.0 / 60, AIR, 0, 0);
+            peak = Math.max(peak, Math.abs(p.velocity.y));
+        }
+        double drift = p.position.y - y0;
+        assertTrue(Math.abs(drift) < 60,
+                "trimmed at " + throttle + " it still drifted " + drift
+                        + " m in two minutes");
+        assertTrue(peak < 1.0,
+                "the oscillation never settled, peak " + peak + " m/s");
+        double kmh = p.velocity.length() * 3.6;
+        assertTrue(kmh > 200 && kmh < 340,
+                "cruise speed is not an aeroplane's: " + kmh + " km/h");
+    }
+
+    /** Mean climb rate over the tenth minute of a flight at this throttle. */
+    private static double settledClimb(double throttle) {
+        AeroplanePhysics p = cruising(throttle);
+        for (int i = 0; i < 60 * 540; i++) { p.step(1.0 / 60, AIR, 0, 0); }
+        double sum = 0;
+        for (int i = 0; i < 60 * 60; i++) {
+            p.step(1.0 / 60, AIR, 0, 0);
+            sum += p.velocity.y;
+        }
+        return sum / (60 * 60);
+    }
 }
