@@ -372,7 +372,29 @@ public final class WorldStreamer {
     }
 
     /** Take the next tile to decode, or null. Called by worker threads. */
+    /**
+     * How many finished meshes may be waiting for the GPU at once.
+     *
+     * <p>The uploader takes two to four tiles a frame, deliberately, so
+     * that buffer creation never stalls the driver. Decoding is not
+     * throttled by anything else, so workers will run as far ahead as
+     * the request queue lets them and park finished meshes in memory -
+     * measured at a peak of eighty, which at a megabyte for a
+     * high-detail chunk is tens of megabytes of CPU-side geometry that
+     * nothing can use yet. It went unnoticed while a bug in the request
+     * queue meant almost nothing was ever requested; with that fixed,
+     * the backlog is real, and on a 512 MB heap it is the difference
+     * between running and being killed.
+     *
+     * <p>Six frames of upload is plenty to keep the uploader fed.
+     */
+    private static final int MAX_DECODED_BACKLOG = 12;
+
     public Tile nextForDecode() {
+        // Pace the workers against the upload budget rather than the
+        // request queue. Decoding further ahead than this buys nothing
+        // and costs memory that the device may not have.
+        if (decoded.size() >= MAX_DECODED_BACKLOG) { return null; }
         synchronized (ioQueue) {
             Tile t = ioQueue.poll();
             while (t != null && t.state != S_QUEUED_IO && !t.rebuilding) {

@@ -426,4 +426,41 @@ final class StreamingHolesTest {
                         + (claiming - s.pendingIo()) + " can never be"
                         + " requested again");
     }
+
+    @Test
+    @DisplayName("decoding is paced against the upload budget")
+    void theDecodeBacklogIsBounded() throws Exception {
+        // Workers will run as far ahead as the request queue allows and
+        // park finished meshes in memory. The uploader deliberately
+        // takes only a few tiles a frame, so everything beyond that is
+        // CPU-side geometry nothing can use yet - measured at a peak of
+        // eighty meshes, tens of megabytes on a 512 MB heap. It went
+        // unnoticed while the queue bug meant almost nothing was ever
+        // requested.
+        WorldData w = WorldFixture.world();
+        WorldStreamer s = new WorldStreamer(w);
+        ChunkMesher[] m = {new ChunkMesher(w), new ChunkMesher(w), new ChunkMesher(w)};
+        s.setRadii(300, 1200, 9000);
+        s.setMaxResident(280);
+        int peak = 0;
+        for (int frame = 0; frame < 30 * 60; frame++) {
+            s.update(-5729, 14762, 0, 0, 0);
+            for (int k = 0; k < 3; k++) {
+                WorldStreamer.Tile t = s.nextForDecode();
+                if (t == null) { break; }
+                try { s.decode(t, m[k]); } catch (RuntimeException ignored) { }
+            }
+            for (WorldStreamer.Tile t : s.pollReady(2)) {
+                s.markUploaded(t, new Object());
+            }
+            for (WorldStreamer.Tile t : s.pollEvictions(6)) { s.markReleased(t); }
+            s.pollDisplaced(12);
+            peak = Math.max(peak, s.readyCpuCount());
+        }
+        assertTrue(peak <= 16,
+                "decode ran " + peak + " meshes ahead of the uploader");
+        // And it must still fill up: pacing must not mean starving.
+        assertTrue(s.residentCount() > 150,
+                "only " + s.residentCount() + " tiles became resident");
+    }
 }

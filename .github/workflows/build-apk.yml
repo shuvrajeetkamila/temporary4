@@ -385,9 +385,19 @@ jobs:
           : > install.txt; : > start.txt; : > logcat-app.txt; : > logcat-full.txt
           : > emulator.txt
 
+          free -m | tee -a install.txt
+          # 2560 MB, not 4096. A hosted runner has 7 GB in total and has
+          # to fit qemu, SwiftShader's host-side buffers and its own
+          # processes into it. Four gigabytes of guest RAM survived only
+          # while a streaming bug meant the app never loaded more than
+          # about forty chunks; with that fixed the guest touches its
+          # whole allocation, qemu's resident size follows, and the host
+          # OOM killer takes it - which is why three runs ended with the
+          # emulator simply gone, no error, no crash log, "no
+          # devices/emulators found".
           nohup emulator -avd mumbai -no-window -no-audio -no-boot-anim \
                 -no-snapshot -gpu swiftshader_indirect -camera-back none \
-                -accel on -qemu -m 4096 > emulator.txt 2>&1 &
+                -accel on -qemu -m 2560 > emulator.txt 2>&1 &
           echo "emulator pid $!" | tee -a install.txt
 
           adb wait-for-device
@@ -400,6 +410,12 @@ jobs:
             sleep 5
           done
           echo "booted=$BOOTED after $((i*5))s" | tee -a install.txt
+          # sys.boot_completed flips before the system is actually idle.
+          for j in $(seq 1 24); do
+            [ "$(timeout 15 adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')" = "stopped" ] && break
+            sleep 5
+          done
+          free -m | tee -a install.txt
           [ "$BOOTED" = "1" ] || { tail -60 emulator.txt | tee -a install.txt; exit 1; }
 
           adb shell wm size      | tee -a install.txt
