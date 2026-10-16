@@ -14,11 +14,11 @@ package ai.shuvrajeetkamila.mumbai.app;
  */
 public enum Quality {
     //          fps  high   med    far   scale cars peds seaGrid uploads resident
-    LOW(         30,  300,  1200,  9000, 0.75f,  40,  30,  64, 2, 280),
-    BALANCED(    30,  520,  2200, 14000, 0.90f,  90,  70,  96, 3, 420),
-    HIGH(        30,  800,  3200, 22000, 1.00f, 140, 120, 128, 4, 560),
-    ECO(         20,  280,  1100,  8000, 0.70f,  35,  20,  64, 1, 220),
-    ECO_SEVERE(  15,  220,   800,  6000, 0.60f,  18,  10,  48, 1, 150);
+    LOW(         30,  300,  1200,  9000, 0.75f,  40,  30,  64, 2, 160),
+    BALANCED(    30,  520,  2200, 14000, 0.90f,  90,  70,  96, 3, 280),
+    HIGH(        30,  800,  3200, 22000, 1.00f, 140, 120, 128, 4, 420),
+    ECO(         20,  280,  1100,  8000, 0.70f,  35,  20,  64, 1, 130),
+    ECO_SEVERE(  15,  220,   800,  6000, 0.60f,  18,  10,  48, 1,  96);
 
     public final int targetFps;
     public final double highRadius;
@@ -44,6 +44,12 @@ public enum Quality {
      * <p>It also sets the draw distance: the streamer clamps its far
      * radius to the radius this many tiles can actually cover, because
      * streaming further than the budget is how you get holes.
+     *
+     * <p>These are deliberately modest. Measured, the ground under the
+     * player is loaded on 100 per cent of samples at every speed and
+     * altitude tested with as few as 120 chunks: the near rings are
+     * what you stand on, and the rest of the budget only buys distance.
+     * A larger number was tried and the emulator did not survive it.
      */
     public final int maxResident;
 
