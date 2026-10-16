@@ -1,23 +1,28 @@
-run 38918618956  emulator step: failure
-files present: ASSET_LICENSES.md AUDIT.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.53.apk Mumbai-The-Island-City-v2.0.53.apk.sha256 README.md STATUS.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-full.txt settings.gradle start.txt tools 
+run 38923080597  emulator step: failure
+files present: ASSET_LICENSES.md AUDIT.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.54.apk Mumbai-The-Island-City-v2.0.54.apk.sha256 README.md STATUS.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-early.txt logcat-full.txt settings.gradle start.txt tools 
 --- install ---
-emulator pid 2252
+emulator pid 2247
 device appeared
-booted=1 after 15s
+booted=1 after 20s
 Physical size: 1080x2280
 30
-apk=[Mumbai-The-Island-City-v2.0.53.apk] 14912352 bytes
+apk=[Mumbai-The-Island-City-v2.0.54.apk] 14912352 bytes
 Performing Streamed Install
 Success
+--- first 30 s ---
+(process gone)
+--- no world marker: diagnosing ---
+adb: no devices/emulators found
 --- am start ---
 Starting: Intent { cmp=ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity
-TotalTime: 2870
-WaitTime: 2874
+TotalTime: 3914
+WaitTime: 3915
 Complete
 --- app log ---
+- waiting for device -
 --- emulator ---
     enable ETC2 emulation: true
 INFO         |     enable Ycbcr emulation: false
@@ -25,10 +30,10 @@ INFO         |     guestVulkanOnly: false
 INFO         |     useDedicatedAllocations: false
 INFO         |     guestVulkanMaxApiVersion: 1.3.0
 INFO         |     enableProtectedMemoryEmulation: false
-INFO         | GrapWARNING: cannnot unmap ptr 0x7f0fcd601000 as it is in the protected range from 0x7f0ecd600000 to 0x7f0fcd800000
+INFO         | Graphics Adapter Vendor Google (Google Inc.)
+INFO         | GraphWARNING: cannnot unmap ptr 0x7ff00f801000 as it is in the protected range from 0x7fef0f800000 to 0x7ff00fa00000
 pc_memory_init: above 4g size: 40000000
-hics Adapter Vendor Google (Google Inc.)
-INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
+ics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
 INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
 INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
 INFO         | Graphics Device Extensions N/A
@@ -64,16 +69,16 @@ INFO         |   qemu.wifi=1
 INFO         | Monitoring duration of emulator setup.
 WARNING      | The emulator now requires a signed jwt token for gRPC access! Use the -grpc flag if you really want an open unprotected grpc port
 INFO         | Using security allow list from: /usr/local/lib/android/sdk/emulator/lib/emulator_access.json
-INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2252/jwks/fd21ebc8-5423-44e2-bf16-c978e3e9cc74/active.jwk
-INFO         | Scanning /run/user/1001/avd/running/2252/jwks/fd21ebc8-5423-44e2-bf16-c978e3e9cc74 for jwk keys.
+INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2247/jwks/cd866a07-6737-4359-ae51-e81e076705f0/active.jwk
+INFO         | Scanning /run/user/1001/avd/running/2247/jwks/cd866a07-6737-4359-ae51-e81e076705f0 for jwk keys.
 INFO         | Started GRPC server at 127.0.0.1:8554, security: Local, auth: +token
-INFO         | Advertising in: /run/user/1001/avd/running/pid_2252.ini
+INFO         | Advertising in: /run/user/1001/avd/running/pid_2247.ini
 INFO         | Setting display: 0 configuration to: 1080x2280, dpi: 440x440 
 INFO         | setDisplayActiveConfig: id:0, 1080x2280
 INFO         | emulatorSetupEnvironment: Environment scene is not required
 USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
-INFO         | Boot completed in 32250 ms
+INFO         | Boot completed in 39489 ms
 INFO         | Increasing screen off timeout, logcat buffer size to 2M.
 --- crashes/GL ---
