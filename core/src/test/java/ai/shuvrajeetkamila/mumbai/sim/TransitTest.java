@@ -370,4 +370,71 @@ final class TransitTest {
         Assumptions.assumeTrue(checkedSub + checkedMono + checkedShip > 0,
                 "no underground, elevated or floating service appeared");
     }
+
+    @Test
+    @DisplayName("trains turn up where the player is standing")
+    void servicesSpawnNearThePlayer() throws Exception {
+        // The spawner found a vertex of a route within range of the
+        // player, and then threw it away: the train was started at a
+        // uniformly random point along a route that can be fifty
+        // kilometres long. So the distance test passed and the train was
+        // put down somewhere else entirely. Standing on a platform you
+        // saw nothing, while the departure board - a pure function of
+        // the clock, which knows about no actual service - counted a
+        // train in and out.
+        WorldData w = WorldFixture.world();
+        ai.shuvrajeetkamila.mumbai.world.TransitStops stops = w.transitStops();
+        java.util.Random pick = new java.util.Random(5);
+        double radius = 1200;            // Quality.LOW medRadius
+
+        int platforms = 0, withATrain = 0;
+        for (int k = 0; k < 8; k++) {
+            ai.shuvrajeetkamila.mumbai.world.TransitStops.Stop st =
+                    stops.get(pick.nextInt(stops.count()));
+            Transit t = new Transit(w);
+            t.setOcean(new ai.shuvrajeetkamila.mumbai.physics.Ocean());
+            platforms++;
+            double closest = Double.MAX_VALUE;
+            for (int i = 0; i < 60 * 300; i++) {
+                t.update(1.0 / 60, st.x, st.z, radius);
+                if (i % 60 != 0) { continue; }
+                for (Transit.Service sv : t.services()) {
+                    if (!sv.active) { continue; }
+                    closest = Math.min(closest,
+                            Math.hypot(sv.x - st.x, sv.z - st.z));
+                }
+            }
+            if (closest < 250) { withATrain++; }
+        }
+        assertTrue(withATrain >= platforms - 2,
+                "only " + withATrain + " of " + platforms + " platforms ever"
+                        + " had a train come within 250 m in five minutes");
+    }
+
+    @Test
+    @DisplayName("a service starts on the part of the route that is in range")
+    void aServiceStartsWhereItWasFound() throws Exception {
+        // The property the spawner has to have, independent of luck:
+        // whatever it puts on the map must be within range of the point
+        // it was asked about, not merely on a route that passes there.
+        WorldData w = WorldFixture.world();
+        Transit t = new Transit(w);
+        t.setOcean(new ai.shuvrajeetkamila.mumbai.physics.Ocean());
+        double radius = 1200;
+        // Somewhere with a lot of railway: the world's own spawn point.
+        double px = -5729, pz = 14762;
+        int sampled = 0, inRange = 0;
+        for (int i = 0; i < 60 * 120; i++) {
+            t.update(1.0 / 60, px, pz, radius);
+        }
+        for (Transit.Service sv : t.services()) {
+            if (!sv.active) { continue; }
+            sampled++;
+            if (Math.hypot(sv.x - px, sv.z - pz) < radius * 1.8) { inRange++; }
+        }
+        assertTrue(sampled > 0, "no service was ever started");
+        assertEquals(sampled, inRange,
+                (sampled - inRange) + " of " + sampled + " running services"
+                        + " are outside the radius they were spawned for");
+    }
 }

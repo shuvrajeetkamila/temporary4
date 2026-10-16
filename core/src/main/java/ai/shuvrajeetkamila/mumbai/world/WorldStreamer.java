@@ -86,6 +86,8 @@ public final class WorldStreamer {
         /** The detail level {@link #pendingMesh} was built at. */
         public volatile int pendingLod;
         volatile int lastWantedFrame;
+        /** The frame this tile was last put into the I/O queue. */
+        volatile int queuedFrame = -1;
         volatile int generation;
         double priority;
 
@@ -116,6 +118,8 @@ public final class WorldStreamer {
     private final ArrayDeque<Tile> ioQueue = new ArrayDeque<>();
     private final ConcurrentLinkedQueue<Tile> decoded = new ConcurrentLinkedQueue<>();
     private final List<Tile> resident = new ArrayList<>();
+    /** Scratch: what was in the I/O queue before this frame rebuilt it. */
+    private final List<Tile> requeue = new ArrayList<>();
     /**
      * GPU handles replaced by a rebuild, waiting for the host to free
      * them. A displaced handle that nobody frees is leaked for the rest
@@ -240,7 +244,22 @@ public final class WorldStreamer {
         int cz = (int) Math.floor(z / world.chunkM) - world.chunkMinZ;
         int span = (int) Math.ceil(rLow / world.chunkM) + 1;
 
-        ioQueue.clear();
+        // The request queue is rebuilt from scratch every frame so that
+        // it is always in priority order for where the player is NOW.
+        // Everything that was in it has to be either put back or reset:
+        // a tile left marked S_QUEUED_IO after the clear is in no queue
+        // and matches no branch below - the re-add only fired for
+        // S_UNLOADED - so it could never be requested again. That is
+        // what made the ground disappear. Walking the city, the tile the
+        // player was standing on was stuck in QUEUED_IO with an empty
+        // queue for 413 of 450 samples, and the longer the session ran
+        // the more of the map was permanently stranded, which is why
+        // only restarting the app brought it back.
+        requeue.clear();
+        synchronized (ioQueue) {
+            requeue.addAll(ioQueue);
+            ioQueue.clear();
+        }
         List<Tile> wanted = new ArrayList<>();
         for (int j = cz - span; j <= cz + span; j++) {
             if (j < 0 || j >= world.chunkNz) { continue; }
@@ -270,13 +289,20 @@ public final class WorldStreamer {
 
         wanted.sort(Comparator.comparingDouble(a -> a.priority));
 
+        synchronized (ioQueue) {
         for (Tile t : wanted) {
             int s = t.state;
-            if (s == S_UNLOADED) {
+            if (s == S_QUEUED_IO) {
+                // Already requested and not yet picked up by a worker.
+                // Put it back, in this frame's priority order.
+                ioQueue.add(t);
+                t.queuedFrame = frame;
+            } else if (s == S_UNLOADED) {
                 if (inFlight.get() + ioQueue.size() < MAX_IN_FLIGHT
                         && residentCount() < maxResident) {
                     t.state = S_QUEUED_IO;
                     ioQueue.add(t);
+                    t.queuedFrame = frame;
                     statRequested++;
                 }
             } else if (t.isActive() && t.lod != t.wantLod && !t.rebuilding) {
@@ -289,10 +315,26 @@ public final class WorldStreamer {
                 if (inFlight.get() + ioQueue.size() < MAX_IN_FLIGHT) {
                     t.rebuilding = true;
                     ioQueue.add(t);
+                    t.queuedFrame = frame;
                     statRequested++;
                 }
             }
         }
+        }
+
+        // Anything that was queued and did not make it back in - because
+        // the player walked away from it, or because the in-flight cap
+        // was reached first - goes back to UNLOADED so that it can be
+        // asked for again later. Leaving it in QUEUED_IO strands it.
+        for (int i = 0; i < requeue.size(); i++) {
+            Tile t = requeue.get(i);
+            if (t.state == S_QUEUED_IO && t.queuedFrame != frame) {
+                t.state = S_UNLOADED;
+                t.cancelled = false;
+                statCancelled++;
+            }
+        }
+        requeue.clear();
 
         evictStale();
     }

@@ -1,8 +1,8 @@
 # Status — what is built, what is not
 
-Current release **v2.0.50** (CI run `38882611667`, both jobs green).
+Current release **v2.0.51** (CI run `PENDING`).
 Java across 49 core classes and 11 Android classes,
-55 test files holding **537 core tests + 28 Android tests**, and **145
+57 test files holding **543 core tests + 28 Android tests**, and **145
 world verification gates**. All green, against the same world CI builds.
 
 This file is the honest inventory. Anything not listed under "Built" is
@@ -90,6 +90,10 @@ the plane against the ferry's 13 kn.
   arrest, fine. Batons, no guns.
 - **Missions:** taxi fares, deliveries, street races, with checkpoints
   and money.
+- **Trains, Metro and monorail you can actually see.** Services start on
+  the stretch of route that is near you rather than at a random point
+  along it, and everything the renderer uploads is converted to render
+  space correctly, which it was not.
 - **Transit you can ride:** stations at real spacing (1.6 km rail,
   1.15 km Metro, 900 m monorail), 16-second dwells, board and alight.
   All 821 stations are boardable from the street outside them;

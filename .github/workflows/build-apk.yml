@@ -439,6 +439,24 @@ jobs:
           # buffer size that no unit test can see.
           grep -q 'MUMBAI_AUDIO_OK' logcat-full.txt || {
             echo "FAIL: the audio output never started"; STATUS=1; }
+          # The render-space tripwire. Everything handed to the GPU is in
+          # the floating-origin frame, which snaps to a 512 m grid near
+          # the player, so no instance can legitimately be further than a
+          # draw distance from the origin. Four upload paths subtracted
+          # the camera's render-space position instead of the origin
+          # offset and put every pedestrian, blob shadow, moored craft and
+          # train tens of kilometres away - drawn, counted in draw calls,
+          # and never once on screen. Nothing but a real frame catches it.
+          MAXINST=$(grep -o 'maxinst=[0-9]*' logcat-full.txt | tail -1 | cut -d= -f2)
+          if [ -z "$MAXINST" ]; then
+            echo "FAIL: the renderer never reported maxinst"; STATUS=1
+          elif [ "$MAXINST" -gt 25000 ]; then
+            echo "FAIL: an instance was uploaded ${MAXINST} m from the render"
+            echo "      origin, so a world coordinate reached the GPU unrebased"
+            STATUS=1
+          else
+            echo "ok: furthest uploaded instance ${MAXINST} m from the origin"
+          fi
           if grep -q 'FATAL EXCEPTION' logcat-full.txt; then
             echo "FAIL: a fatal exception was thrown"; STATUS=1; fi
           adb shell pidof ai.shuvrajeetkamila.mumbai.islandcity \

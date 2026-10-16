@@ -39,6 +39,21 @@ public final class Telemetry {
     public volatile long geometryBytes;
     public volatile int rebases;
     public volatile int drawCalls;
+
+    /**
+     * Furthest any instance was placed from the render origin this
+     * frame, metres.
+     *
+     * <p>A tripwire for the world-to-render conversion. Render space is
+     * the world shifted by the floating origin, which snaps to a 512 m
+     * grid near the player, so nothing the renderer uploads can
+     * legitimately be more than a draw distance away. Four upload paths
+     * spent the whole project subtracting the camera's render-space
+     * position instead of the origin offset, which put pedestrians,
+     * blob shadows, moored craft and every train in the city tens of
+     * kilometres away - drawn, counted, and never once on screen.
+     */
+    public volatile double maxInstanceM;
     public volatile int trianglesK;
 
     public volatile int cars;

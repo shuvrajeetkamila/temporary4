@@ -1,5 +1,6 @@
 package ai.shuvrajeetkamila.mumbai.sim;
 
+import ai.shuvrajeetkamila.mumbai.math.MathUtil;
 import ai.shuvrajeetkamila.mumbai.world.WorldData;
 
 import java.util.Random;
@@ -208,6 +209,16 @@ public final class Transit {
         return stopS[route][i];
     }
 
+    /** Distance along a route to one of its vertices, metres. */
+    private double arcLengthTo(int route, int vertex) {
+        double acc = 0;
+        for (int i = 1; i <= vertex; i++) {
+            acc += Math.hypot(world.transitX(route, i) - world.transitX(route, i - 1),
+                    world.transitZ(route, i) - world.transitZ(route, i - 1));
+        }
+        return acc;
+    }
+
     /**
      * The service a player standing here could board, or -1.
      *
@@ -396,9 +407,26 @@ public final class Transit {
         }
     }
 
-    /** Puts a service on a route that passes near the player. */
+    /**
+     * Puts a service on a route that passes near the player, <em>at</em>
+     * the part of it that is near the player.
+     *
+     * <p>This used to find a vertex within range and then throw it away:
+     * the train was started at {@code lo + random * (hi - lo)}, a
+     * uniformly random point along a route that can be fifty kilometres
+     * long. So the distance test passed and the train was then put down
+     * somewhere else entirely, usually most of the city away. Standing
+     * on a platform you saw no train, ever, while the departure board -
+     * which is a pure function of the clock and knows nothing about any
+     * actual service - cheerfully counted one in and out.
+     *
+     * <p>Now the start point is the arc length of the vertex that
+     * passed the test, backed off so the train arrives rather than
+     * appearing on top of you, and clamped so the whole consist fits on
+     * the route.
+     */
     private boolean spawn(Service sv, double px, double pz, double radius) {
-        for (int attempt = 0; attempt < 10; attempt++) {
+        for (int attempt = 0; attempt < 24; attempt++) {
             int r = usable[rng.nextInt(usableCount)];
             // Walk the route for a point in range, and start there.
             int n = world.transitPointCount(r);
@@ -406,6 +434,7 @@ public final class Transit {
             double qx = world.transitX(r, probe), qz = world.transitZ(r, probe);
             double d = Math.hypot(qx - px, qz - pz);
             if (d > radius) { continue; }
+            double probeS = arcLengthTo(r, probe);
 
             int cls = world.transitClass(r);
             sv.route = r;
@@ -424,7 +453,11 @@ public final class Transit {
             double lo = trainLen + 2.0;
             double hi = routeLength[r] - trainLen - 2.0;
             if (hi <= lo) { continue; }
-            sv.s = lo + rng.nextDouble() * (hi - lo);
+            // Start it a little short of the point that was in range, on
+            // the approach side, so it runs in towards the player rather
+            // than popping into existence beside them.
+            double back = (300.0 + rng.nextDouble() * 500.0) * sv.dir;
+            sv.s = MathUtil.clamp(probeS - back, lo, hi);
             sv.targetSpeed = cruiseFor(cls);
             sv.speed = sv.targetSpeed * (0.4 + rng.nextDouble() * 0.6);
             sv.active = true;

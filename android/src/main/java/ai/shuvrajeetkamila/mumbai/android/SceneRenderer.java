@@ -117,6 +117,15 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private final int[] transitCount = new int[4];
     /** Carriages of one kind that can be on screen at once. */
     private static final int MAX_CARRIAGES = 160;
+
+    /** Squared distance of the furthest instance uploaded this frame. */
+    private double maxInstSq;
+
+    /** Records one uploaded instance for the render-space tripwire. */
+    private void noteInstance(double x, double y, double z) {
+        double d = x * x + y * y + z * z;
+        if (d > maxInstSq) { maxInstSq = d; }
+    }
     private FloatBuffer markerScratch;
     /** Instance counts per kind, refilled every frame. */
     private final int[] vehCount = new int[VehicleKind.values().length];
@@ -384,6 +393,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLUtil.perspective(proj, 62f, width / (float) height, near, far);
         // The camera matrix is built in render space, the floating-origin
         // frame. World doubles never reach the GPU.
+        // The camera, in render space. This is what the view matrix and
+        // the shaders' uCamera want. It is NOT a world-to-render origin,
+        // and four of the upload paths used to treat it as one - see the
+        // uploadX calls below, which take e.origin.offsetX/Z.
         float ox = (float) (camPos.x - e.origin.offsetX());
         float oy = (float) camPos.y;
         float oz = (float) (camPos.z - e.origin.offsetZ());
@@ -529,7 +542,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         // which is what the games this is modelled on did and what the
         // frame budget here allows. Drawn before the traffic so the
         // vehicles sit on top of their own shadows.
-        int shadows = uploadShadows(e, ox, oy, oz);
+        int shadows = uploadShadows(e);
         if (shadows > 0) {
             setupInstanced(e, viewProj, ox, oy, oz, sunDir, sun, sky, fog,
                     fogDensity, nightFactor);
@@ -550,7 +563,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
 
         // --- people on the pavement ---------------------------------------------
-        int peds = uploadPeds(e, ox, oy, oz);
+        int peds = uploadPeds(e);
         if (peds > 0) {
             setupInstanced(e, viewProj, ox, oy, oz, sunDir, sun, sky, fog,
                     fogDensity, nightFactor);
@@ -600,7 +613,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
 
         // --- moored boats, parked helicopters and aeroplanes -------------------
-        int craftN = uploadCraft(e, ox, oy, oz);
+        int craftN = uploadCraft(e);
         if (craftN > 0) {
             if (instances <= 0) { setupInstanced(e, viewProj, ox, oy, oz,
                     sunDir, sun, sky, fog, fogDensity, nightFactor); }
@@ -617,7 +630,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
 
         // --- trains, metros and vessels ----------------------------------------
-        int carriages = uploadTransit(e, ox, oy, oz);
+        int carriages = uploadTransit(e);
         if (carriages > 0) {
             if (instances <= 0) { setupInstanced(e, viewProj, ox, oy, oz,
                     sunDir, sun, sky, fog, fogDensity, nightFactor); }
@@ -697,6 +710,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
         GLES30.glBindVertexArray(0);
         e.telemetry.drawCalls = drawn;
+        e.telemetry.maxInstanceM = Math.sqrt(maxInstSq);
+        maxInstSq = 0;
         e.telemetry.trianglesK = (int) (tris / 1000);
     }
 
@@ -1146,7 +1161,22 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      * <p>Frustum-culled and range-limited: a person is 1.7 m of geometry
      * and there is no point paying for one behind the camera.
      */
-    private int uploadPeds(Engine e, double ox, double oy, double oz) {
+    /**
+     * {@code ox}/{@code oz} are the FLOATING-ORIGIN offset, never the
+     * camera. Taking them as parameters is how this went wrong: the
+     * caller had an {@code ox} in scope - the camera in render space,
+     * which the view matrix and uCamera want - and passed that. The
+     * origin snaps to a 512 m grid near the player, so the camera in
+     * render space is a few hundred metres at most while the world
+     * coordinate being converted is tens of kilometres. Everything
+     * these four uploaded was drawn most of a city away and was never
+     * once visible: no pedestrians, no blob shadows, no moored boats or
+     * parked aircraft, and no trains, Metro or monorail.
+     */
+    private int uploadPeds(Engine e) {
+        final double ox = e.origin.offsetX();
+        final double oy = 0;
+        final double oz = e.origin.offsetZ();
         for (int i = 0; i < pedCount.length; i++) {
             pedCount[i] = 0;
             pedScratch[i].position(0);
@@ -1164,6 +1194,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             if (pedCount[slot] >= MAX_PEDS) { continue; }
             FloatBuffer b = pedScratch[slot];
             b.position(pedCount[slot] * GAIT_FLOATS);
+            noteInstance(x, p.y - oy, z);
             b.put(x);
             b.put((float) (p.y - oy));
             b.put(z);
@@ -1210,7 +1241,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      * car on a flyover throws its shadow onto the road below, which is
      * both cheaper and more nearly right than projecting onto the deck.
      */
-    private int uploadShadows(Engine e, double ox, double oy, double oz) {
+    private int uploadShadows(Engine e) {
+        final double ox = e.origin.offsetX();
+        final double oy = 0;
+        final double oz = e.origin.offsetZ();
         for (int i = 0; i < shadowCount.length; i++) {
             shadowCount[i] = 0;
             shadowScratch[i].position(0);
@@ -1263,7 +1297,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     }
 
     /** Packs every carriage and hull into its per-kind instance buffer. */
-    private int uploadTransit(Engine e, double ox, double oy, double oz) {
+    private int uploadTransit(Engine e) {
+        final double ox = e.origin.offsetX();
+        final double oy = 0;
+        final double oz = e.origin.offsetZ();
         for (int i = 0; i < transitCount.length; i++) { transitCount[i] = 0; }
         int total = 0;
         for (Transit.Service sv : e.transit.services()) {
@@ -1276,6 +1313,9 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             int wrote = e.transit.carriagePoses(sv, tmp, 0, ox, oy, oz);
             buf.position(at * 4);
             buf.put(tmp, 0, wrote * 4);
+            for (int c = 0; c < wrote; c++) {
+                noteInstance(tmp[c * 4], tmp[c * 4 + 1], tmp[c * 4 + 2]);
+            }
             transitCount[slot] = at + wrote;
             total += wrote;
         }
@@ -1363,7 +1403,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      * are a hundred-odd on the island and walking the whole list every
      * frame to reject ninety of them is work the frustum would do anyway.
      */
-    private int uploadCraft(Engine e, double ox, double oy, double oz) {
+    private int uploadCraft(Engine e) {
+        final double ox = e.origin.offsetX();
+        final double oy = 0;
+        final double oz = e.origin.offsetZ();
         for (int i = 0; i < craftCount.length; i++) {
             craftCount[i] = 0;
             craftScratch[i].position(0);
@@ -1383,6 +1426,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             float z = (float) (sp.z - oz);
             float y = (float) sp.y;
             if (!frustum.sphereVisible(x, y + 2.0f, z, 8.0f)) { continue; }
+            noteInstance(x, y, z);
             craftScratch[slot].put(x).put(y).put(z).put((float) sp.heading);
             craftCount[slot]++;
             total++;
@@ -1394,6 +1438,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             float x = (float) (rp.x - ox);
             float z = (float) (rp.z - oz);
             float y = (float) (rp.y - CRAFT_MESH_DROP[mine]);
+            noteInstance(x, y, z);
             craftScratch[mine].put(x).put(y).put(z)
                     .put((float) e.renderOrientation().heading());
             craftCount[mine]++;

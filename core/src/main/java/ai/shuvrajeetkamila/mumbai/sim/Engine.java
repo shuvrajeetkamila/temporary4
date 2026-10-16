@@ -1002,10 +1002,30 @@ public final class Engine {
         // And a gear to match, now that it has a speed. reset() leaves
         // it in first, which at traffic speed is past the redline.
         car.selectGearForSpeed();
+        // Put the camera behind the car, looking the way the car faces.
+        //
+        // This is why the car appeared to set off backwards. The
+        // chase camera sits at -sin(cameraYaw), +cos(cameraYaw) from
+        // the body - behind whatever cameraYaw points at - and getting
+        // into a car never touched cameraYaw, so it kept the heading
+        // the player had on foot. You walk up to a parked car, which
+        // means you are usually facing its nose, so the camera stayed
+        // in front of the bonnet looking back down it. Press forward
+        // and the car correctly drives along its own nose, which from
+        // that camera is straight at you and then away behind: exactly
+        // what reversing looks like. The physics was right the whole
+        // time and the view was 180 degrees out.
+        cameraYaw = c.heading;
         c.active = false;
         occupiedAgent = best;
         profile = ControlProfile.CAR;
         vehicleChanged = true;
+        // Start the render pose at the car rather than lerping into it
+        // from wherever the pedestrian was standing. boardCraft has
+        // always done this and getting into a car never did, so the
+        // first frame in a vehicle was a smear across the gap.
+        snapshot();
+        snapshot();
         return true;
     }
 

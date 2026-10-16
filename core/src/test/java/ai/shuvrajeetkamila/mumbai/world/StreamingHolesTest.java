@@ -329,4 +329,101 @@ final class StreamingHolesTest {
         }
         assertTrue(under, "there is no ground under the player any more");
     }
+
+    @Test
+    @DisplayName("the ground under the player is loaded, however long you play")
+    void thereIsAlwaysGroundUnderneath() throws Exception {
+        // Reported from play a second time: "playing for a while makes
+        // the ground disappear and go white; closing the app completely
+        // and starting it again fixes it".
+        //
+        // The request queue is rebuilt every frame so that it is always
+        // in priority order for where the player is now. Everything in
+        // it was cleared and only tiles in S_UNLOADED were re-added, so
+        // a tile that had been requested on an earlier frame and not yet
+        // picked up by a decode worker was left marked S_QUEUED_IO, in
+        // no queue, matching no branch - unrequestable for the rest of
+        // the session. Measured walking the city, the tile the player
+        // stood on was in that state for 413 of 450 samples with the
+        // queue empty, and it got worse the longer the session ran,
+        // which is exactly why only a restart fixed it.
+        WorldData w = WorldFixture.world();
+        WorldStreamer s = new WorldStreamer(w);
+        ChunkMesher mesher = new ChunkMesher(w);
+        s.setRadii(300, 1200, 9000);        // Quality.LOW
+        s.setMaxResident(420);
+
+        double x = -5729, z = 14762, ang = 0.7, speed = 12;
+        int sampled = 0, onActive = 0, worstNear = Integer.MAX_VALUE;
+        for (int frame = 0; frame < 30 * 60 * 6; frame++) {
+            double nx = x + Math.cos(ang) * speed / 30.0;
+            double nz = z + Math.sin(ang) * speed / 30.0;
+            if (!w.isLand(nx, nz)) { ang += 1.37; } else { x = nx; z = nz; }
+            s.update(x, z, Math.cos(ang) * speed, Math.sin(ang) * speed, 0);
+            for (int k = 0; k < 3; k++) {
+                WorldStreamer.Tile t = s.nextForDecode();
+                if (t == null) { break; }
+                try { s.decode(t, mesher); } catch (RuntimeException ignored) { }
+            }
+            for (WorldStreamer.Tile t : s.pollReady(2)) {
+                s.markUploaded(t, new Object());
+            }
+            for (WorldStreamer.Tile t : s.pollEvictions(6)) { s.markReleased(t); }
+            s.pollDisplaced(12);
+
+            // Thirty seconds of grace to fill in, then it must stay filled.
+            if (frame < 30 * 30 || frame % 30 != 0) { continue; }
+            if (!w.isLand(x, z)) { continue; }
+            sampled++;
+            int me = w.chunkIdAt(x, z);
+            if (s.tile(me).isActive()) { onActive++; }
+            int near = 0;
+            for (WorldStreamer.Tile t : s.residentTiles()) {
+                if (!t.isActive()) { continue; }
+                double cx = w.chunkOriginX(t.id) + w.chunkM * 0.5;
+                double cz = w.chunkOriginZ(t.id) + w.chunkM * 0.5;
+                if (Math.hypot(cx - x, cz - z) < 1600) { near++; }
+            }
+            worstNear = Math.min(worstNear, near);
+        }
+        assertTrue(sampled > 200, "only " + sampled + " samples");
+        assertTrue(onActive > sampled * 0.97,
+                "the player was standing over unloaded ground on "
+                        + (sampled - onActive) + " of " + sampled
+                        + " samples, which is a white hole in the world");
+        assertTrue(worstNear >= 3,
+                "at worst only " + worstNear + " tiles were loaded within"
+                        + " 1600 m of the player");
+    }
+
+    @Test
+    @DisplayName("no tile is left stranded in a queue it is not in")
+    void nothingStrandsInQueuedIo() throws Exception {
+        WorldData w = WorldFixture.world();
+        WorldStreamer s = new WorldStreamer(w);
+        ChunkMesher mesher = new ChunkMesher(w);
+        s.setRadii(300, 1200, 6000);
+        s.setMaxResident(300);
+        double x = -5729, z = 14762;
+        for (int frame = 0; frame < 30 * 90; frame++) {
+            x += 22.0 / 30.0;
+            s.update(x, z, 22, 0, 0);
+            WorldStreamer.Tile t = s.nextForDecode();
+            if (t != null) {
+                try { s.decode(t, mesher); } catch (RuntimeException ignored) { }
+            }
+            for (WorldStreamer.Tile u : s.pollReady(2)) {
+                s.markUploaded(u, new Object());
+            }
+            for (WorldStreamer.Tile u : s.pollEvictions(6)) { s.markReleased(u); }
+            s.pollDisplaced(12);
+        }
+        // Every tile claiming to be queued must really be in the queue.
+        int claiming = s.countInState(WorldStreamer.S_QUEUED_IO);
+        assertTrue(claiming <= s.pendingIo(),
+                claiming + " tiles are marked QUEUED_IO but only "
+                        + s.pendingIo() + " are actually in the queue, so "
+                        + (claiming - s.pendingIo()) + " can never be"
+                        + " requested again");
+    }
 }

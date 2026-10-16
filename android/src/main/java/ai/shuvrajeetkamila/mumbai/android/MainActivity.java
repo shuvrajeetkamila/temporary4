@@ -307,9 +307,16 @@ public final class MainActivity extends Activity
             ui.post(() -> mapOverlay.update(mv, m, wd, jobs, px, pz, hdg));
         }
         if (frameNumber == 30) {
+            // maxinst is the render-space tripwire: the furthest any
+            // instance was placed from the origin. Anything beyond a
+            // draw distance means a world coordinate reached the GPU
+            // without being rebased, which is how every train, every
+            // pedestrian and every moored boat was invisible for the
+            // whole project while still being counted as drawn.
             Log.i(TAG, "MUMBAI_RENDER_OK frames=30 quality=" + e.quality
                     + " resident=" + e.streamer.residentCount()
-                    + " draws=" + e.telemetry.drawCalls);
+                    + " draws=" + e.telemetry.drawCalls
+                    + " maxinst=" + Math.round(e.telemetry.maxInstanceM));
         }
     }
 
