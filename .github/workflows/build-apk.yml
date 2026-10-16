@@ -444,9 +444,21 @@ jobs:
           # the device is still talking, not after the thing that breaks
           # it. 'am start -W' has already returned by here, so this is
           # the app's own first seconds.
-          sleep 30
-          timeout 45 adb logcat -d > logcat-early.txt 2>&1 || \
-            echo "(early logcat timed out)" >> logcat-early.txt
+          # Three captures, early. The device has been disappearing
+          # within thirty seconds of the app starting, so one capture at
+          # thirty seconds is a capture of nothing. The first of these
+          # that comes back with anything in it is the evidence.
+          for WHEN in 6 14 26; do
+            sleep $((WHEN - ${LAST:-0}))
+            LAST=$WHEN
+            timeout 20 adb logcat -d > "logcat-t$WHEN.txt" 2>&1 \
+              || echo "(no device at ${WHEN}s)" > "logcat-t$WHEN.txt"
+            echo "t=${WHEN}s: $(wc -l < logcat-t$WHEN.txt) lines" | tee -a install.txt
+          done
+          cat logcat-t6.txt logcat-t14.txt logcat-t26.txt > logcat-early.txt 2>/dev/null || true
+          echo "--- markers and draw steps seen ---" | tee -a install.txt
+          grep -hE 'MUMBAI_|FATAL|AndroidRuntime' logcat-t6.txt logcat-t14.txt \
+            logcat-t26.txt 2>/dev/null | sort -u | head -40 | tee -a install.txt || true
           echo "--- first 30 s ---" | tee -a install.txt
           grep -E 'MUMBAI_|FATAL|AndroidRuntime|islandcity' logcat-early.txt \
             | head -40 | tee -a install.txt || true
@@ -575,6 +587,9 @@ jobs:
             logcat-full.txt
             logcat-app.txt
             logcat-early.txt
+            logcat-t6.txt
+            logcat-t14.txt
+            logcat-t26.txt
             install.txt
             start.txt
           if-no-files-found: ignore

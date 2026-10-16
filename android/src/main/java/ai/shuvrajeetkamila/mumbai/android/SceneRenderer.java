@@ -89,6 +89,19 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
     private static final class VehicleGpu {
         int vao, vbo, ibo, instVbo, indexCount;
         int instStride = 16;
+        /**
+         * How many instances the buffer was allocated for.
+         *
+         * <p>Drawing more instances than the buffer holds is a read past
+         * the end of a vertex buffer. A hardware driver usually returns
+         * rubbish; SwiftShader segfaults, and because it lives inside
+         * the emulator process the whole device vanishes with no crash
+         * log and no Java exception - which is precisely the failure
+         * being chased here.
+         */
+        int maxInstances;
+        /** Name, for the breadcrumb log. */
+        String what = "?";
     }
 
     private final VehicleGpu[] vehGpu = new VehicleGpu[VehicleKind.values().length];
@@ -552,9 +565,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             for (int i = 0; i < shadowGpu.length; i++) {
                 int n = shadowCount[i];
                 if (n <= 0) { continue; }
-                GLES30.glBindVertexArray(shadowGpu[i].vao);
-                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES,
-                        shadowGpu[i].indexCount, GLES30.GL_UNSIGNED_INT, 0, n);
+                if (!drawInstanced(shadowGpu[i], n, "shadow" + i)) { continue; }
                 drawn++;
                 tris += n * shadowGpu[i].indexCount / 3;
             }
@@ -570,9 +581,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             for (int i = 0; i < pedGpu.length; i++) {
                 int n = pedCount[i];
                 if (n <= 0) { continue; }
-                GLES30.glBindVertexArray(pedGpu[i].vao);
-                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES,
-                        pedGpu[i].indexCount, GLES30.GL_UNSIGNED_INT, 0, n);
+                if (!drawInstanced(pedGpu[i], n, "ped" + i)) { continue; }
                 drawn++;
                 tris += n * pedGpu[i].indexCount / 3;
             }
@@ -604,9 +613,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 int n = vehCount[ki];
                 if (n <= 0) { continue; }
                 VehicleGpu g = vehGpu[ki];
-                GLES30.glBindVertexArray(g.vao);
-                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
-                        GLES30.GL_UNSIGNED_INT, 0, n);
+                if (!drawInstanced(g, n, "traffic" + ki)) { continue; }
                 drawn++;
                 tris += (long) (g.indexCount / 3) * n;
             }
@@ -621,9 +628,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 int n = craftCount[k];
                 if (n <= 0) { continue; }
                 VehicleGpu g = craftGpu[k];
-                GLES30.glBindVertexArray(g.vao);
-                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
-                        GLES30.GL_UNSIGNED_INT, 0, n);
+                if (!drawInstanced(g, n, "craft" + k)) { continue; }
                 drawn++;
                 tris += (long) (g.indexCount / 3) * n;
             }
@@ -638,9 +643,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
                 int n = transitCount[k];
                 if (n <= 0) { continue; }
                 VehicleGpu g = transitGpu[k];
-                GLES30.glBindVertexArray(g.vao);
-                GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
-                        GLES30.GL_UNSIGNED_INT, 0, n);
+                if (!drawInstanced(g, n, "transit" + k)) { continue; }
                 drawn++;
                 tris += (long) (g.indexCount / 3) * n;
             }
@@ -709,6 +712,7 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         }
 
         GLES30.glBindVertexArray(0);
+        if (traceFrames > 0) { traceFrames--; }
         e.telemetry.drawCalls = drawn;
         e.telemetry.maxInstanceM = Math.sqrt(maxInstSq);
         maxInstSq = 0;
@@ -1044,6 +1048,8 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, g.instVbo);
         GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, maxInstances * istride, null,
                 GLES30.GL_DYNAMIC_DRAW);
+        g.maxInstances = maxInstances;
+        g.instStride = istride;
         GLES30.glVertexAttribPointer(4, 4, GLES30.GL_FLOAT, false, istride, 0);
         GLES30.glEnableVertexAttribArray(4);
         GLES30.glVertexAttribDivisor(4, 1);
@@ -1339,6 +1345,41 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
             case WorldData.CLS_FERRY: return Meshes.TR_SHIP;
             default: return Meshes.TR_RAIL;
         }
+    }
+
+
+    /** How many frames still log a breadcrumb before each instanced group. */
+    private int traceFrames = 3;
+
+    /**
+     * One instanced draw, clamped to what the buffer actually holds.
+     *
+     * <p>Every instanced draw in the renderer goes through here. Asking
+     * for more instances than were allocated reads past the end of a
+     * vertex buffer: a real driver returns rubbish, SwiftShader
+     * segfaults, and since it runs inside the emulator process the
+     * device disappears with no crash log, no Java exception and no
+     * logcat - the failure this was written to find.
+     *
+     * <p>For the first few frames it also says what it is about to
+     * draw, so that if something does take the process down the last
+     * line in the log names the group that did it.
+     */
+    private boolean drawInstanced(VehicleGpu g, int n, String what) {
+        if (g == null || n <= 0 || g.indexCount <= 0) { return false; }
+        if (n > g.maxInstances) {
+            Log.w(GLUtil.TAG, "clamped " + what + " draw from " + n + " to "
+                    + g.maxInstances + " instances");
+            n = g.maxInstances;
+        }
+        if (traceFrames > 0) {
+            Log.i(GLUtil.TAG, "MUMBAI_DRAWSTEP " + what + " n=" + n
+                    + " idx=" + g.indexCount + " cap=" + g.maxInstances);
+        }
+        GLES30.glBindVertexArray(g.vao);
+        GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, g.indexCount,
+                GLES30.GL_UNSIGNED_INT, 0, n);
+        return true;
     }
 
     private int uploadInstances(Engine e) {
