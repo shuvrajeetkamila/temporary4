@@ -1,127 +1,129 @@
-run 38935691397  emulator step: failure
-files present: ASSET_LICENSES.md AUDIT.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.59.apk Mumbai-The-Island-City-v2.0.59.apk.sha256 README.md STATUS.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-early.txt logcat-full.txt logcat-stream.txt settings.gradle start.txt tools 
+run 38937399758  emulator step: failure
+files present: ASSET_LICENSES.md AUDIT.md DATA_SOURCES.md DELIVERY.md Mumbai-The-Island-City-v2.0.60.apk Mumbai-The-Island-City-v2.0.60.apk.sha256 README.md STATUS.md android build.gradle core data emulator.txt gradle.properties install.txt logcat-app.txt logcat-early.txt logcat-full.txt logcat-stream.txt settings.gradle start.txt tools 
 --- install ---
                total        used        free      shared  buff/cache   available
-Mem:           15987         626        8510          47        6850       14967
+Mem:           15988         676        8447          46        6864       14918
 Swap:           3071           0        3071
-emulator pid 2398
+emulator pid 2411
 device appeared
 booted=1 after 15s
                total        used        free      shared  buff/cache   available
-Mem:           15987        3427        5217          47        7342       12165
+Mem:           15988        3441        5189          47        7357       12153
 Swap:           3071           0        3071
 Physical size: 1080x2280
 30
-apk=[Mumbai-The-Island-City-v2.0.59.apk] 14912696 bytes
+apk=[Mumbai-The-Island-City-v2.0.60.apk] 14912932 bytes
 Performing Streamed Install
 Success
---- stream: 1859 lines ---
+--- stream: 1943 lines ---
 --- markers and draw steps ---
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.access(BlockGuardOs.java:71)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.access(ForwardingOs.java:72)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.access(BlockGuardOs.java:71)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.access(ForwardingOs.java:72)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:249)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.IoBridge.open(IoBridge.java:478)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:252)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.IoBridge.open(IoBridge.java:478)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.fstat(BlockGuardOs.java:174)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.fstat(ForwardingOs.java:106)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.IoBridge.open(IoBridge.java:481)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.write(BlockGuardOs.java:417)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.write(ForwardingOs.java:240)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.IoBridge.write(IoBridge.java:535)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.chmod(BlockGuardOs.java:78)
-10-16 17:01:54.884 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.chmod(ForwardingOs.java:85)
-10-16 17:01:54.885 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.stat(BlockGuardOs.java:389)
-10-16 17:01:54.885 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.stat(ForwardingOs.java:221)
-10-16 17:01:54.885 D/StrictMode( 1726): 	at libcore.io.BlockGuardOs.remove(BlockGuardOs.java:340)
-10-16 17:01:54.885 D/StrictMode( 1726): 	at libcore.io.ForwardingOs.remove(ForwardingOs.java:185)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.IoBridge.open(IoBridge.java:492)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.Linux.open(Native Method)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:254)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
-10-16 17:01:56.079 E/BackupHelper(  747): 	at libcore.io.IoBridge.open(IoBridge.java:478)
-10-16 17:02:01.420 I/MumbaiGL( 2328): MUMBAI_SHADERS_OK programs=5/5
-10-16 17:02:03.867 I/Mumbai  ( 2328): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
-10-16 17:02:04.129 I/Mumbai  ( 2328): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-16 17:02:04.491 I/MumbaiGL( 2328): MUMBAI_LANDMASK_OK 1314x1814
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
-10-16 17:02:04.493 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
-10-16 17:02:05.261 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:42.048 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.access(BlockGuardOs.java:71)
+10-16 17:14:42.048 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.access(ForwardingOs.java:72)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.access(BlockGuardOs.java:71)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.access(ForwardingOs.java:72)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.access(BlockGuardOs.java:71)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.access(ForwardingOs.java:72)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:249)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.IoBridge.open(IoBridge.java:478)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:252)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.IoBridge.open(IoBridge.java:478)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.fstat(BlockGuardOs.java:174)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.fstat(ForwardingOs.java:106)
+10-16 17:14:42.049 D/StrictMode( 1565): 	at libcore.io.IoBridge.open(IoBridge.java:481)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.write(BlockGuardOs.java:417)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.write(ForwardingOs.java:240)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.IoBridge.write(IoBridge.java:535)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.chmod(BlockGuardOs.java:78)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.chmod(ForwardingOs.java:85)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.BlockGuardOs.stat(BlockGuardOs.java:389)
+10-16 17:14:42.050 D/StrictMode( 1565): 	at libcore.io.ForwardingOs.stat(ForwardingOs.java:221)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.IoBridge.open(IoBridge.java:492)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.Linux.open(Native Method)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:254)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:166)
+10-16 17:14:43.484 E/BackupHelper(  724): 	at libcore.io.IoBridge.open(IoBridge.java:478)
+10-16 17:14:48.658 I/MumbaiGL( 2367): MUMBAI_SHADERS_OK programs=5/5
+10-16 17:14:51.440 I/Mumbai  ( 2367): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
+10-16 17:14:51.519 I/Mumbai  ( 2367): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_LANDMASK_OK 1314x1814
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.055 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP transit0 n=9 idx=216 cap=160
 --- last 25 lines before the device went ---
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at android.content.ContentProvider.applyBatch(ContentProvider.java:2422)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaProvider.applyBatch(MediaProvider.java:3522)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at android.content.ContentProvider.applyBatch(ContentProvider.java:2413)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at android.content.ContentResolver.applyBatch(ContentResolver.java:2186)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.applyPending(ModernMediaScanner.java:699)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.maybeApplyPending(ModernMediaScanner.java:689)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.visitFile(ModernMediaScanner.java:649)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.visitFile(ModernMediaScanner.java:272)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.nio.file.Files.walkFileTree(Files.java:2670)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.nio.file.Files.walkFileTree(Files.java:2742)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.walkFileTree(ModernMediaScanner.java:366)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner$Scan.run(ModernMediaScanner.java:329)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.scan.ModernMediaScanner.scanDirectory(ModernMediaScanner.java:226)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaProvider.scanDirectory(MediaProvider.java:1111)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaService.onScanVolume(MediaService.java:148)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaService.onScanVolume(MediaService.java:117)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaService.onScanVolume(MediaService.java:108)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at com.android.providers.media.MediaService.onHandleWork(MediaService.java:71)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at androidx.core.app.JobIntentService$CommandProcessor.doInBackground(JobIntentService.java:391)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at androidx.core.app.JobIntentService$CommandProcessor.doInBackground(JobIntentService.java:382)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at android.os.AsyncTask$3.call(AsyncTask.java:394)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): 	at java.lang.Thread.run(Thread.java:923)
+10-16 17:14:52.294 I/MediaProvider( 1445): Scanned external_primary due to REASON_MOUNTED, found 14 items in 27ms, 2 inserts 0 updates 0 deletes
+10-16 17:14:52.296 I/MediaProvider( 1445): End Intent { act=android.intent.action.MEDIA_MOUNTED dat=file:///storage/emulated/0 flg=0x5000010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+10-16 17:14:52.296 I/MediaProvider( 1445): Begin Intent { act=android.intent.action.MEDIA_MOUNTED dat=file:///storage/emulated/0 flg=0x5000010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+10-16 17:14:52.298 W/ModernMediaScanner( 1445): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-16 17:14:52.299 I/MediaProvider( 1445): Scanned internal due to REASON_MOUNTED, found 0 items in 1ms, 0 inserts 0 updates 0 deletes
+10-16 17:14:52.299 W/ModernMediaScanner( 1445): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-16 17:14:52.301 I/MediaProvider( 1445): Scanned internal due to REASON_MOUNTED, found 0 items in 2ms, 0 inserts 0 updates 0 deletes
+10-16 17:14:52.465 D/AudioFlinger(  358): mixer(0x79b361533040) throttle end: throttle time(22)
+10-16 17:14:52.522 D/AudioFlinger(  358): mixer(0x79b361533040) throttle end: throttle time(12)
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.055 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP transit0 n=9 idx=216 cap=160
+10-16 17:14:53.093 I/system_server(  506): Explicit concurrent copying GC freed 49072(2137KB) AllocSpace objects, 4(80KB) LOS objects, 49% free, 9108KB/17MB, paused 24us total 33.714ms
+10-16 17:14:53.726 I/init    (    0): Sending signal 9 to service 'idmap2d' (pid 2029) process group...
+10-16 17:14:53.555 W/OverlayManager(  506): service 'idmap' died
+10-16 17:14:53.797 I/libprocessgroup(    0): Successfully killed process cgroup uid 1000 pid 2029 in 67ms
+10-16 17:14:53.801 I/init    (    0): Control message: Processed ctl.stop for 'idmap2d' from pid: 506 (system_server)
+10-16 17:14:53.576 W/Looper  (  506): Slow dispatch took 216ms android.fg h=android.os.Handler c=com.android.server.om.-$$Lambda$IdmapDaemon$Connection$4U-n0RSv1BPv15mvu8B8zXARcpk@43ddf9b m=0
+10-16 17:14:53.815 I/init    (    0): Service 'idmap2d' (pid 2029) received signal 9
 --- am start ---
 Starting: Intent { cmp=ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: ai.shuvrajeetkamila.mumbai.islandcity/ai.shuvrajeetkamila.mumbai.android.MainActivity
-TotalTime: 3380
-WaitTime: 3681
+TotalTime: 3104
+WaitTime: 3539
 Complete
 --- app log ---
-10-16 17:01:59.723 I/Mumbai  ( 2328): thermal status 0 (none)
-10-16 17:02:00.230 I/MumbaiGL( 2328): GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-16 17:02:01.420 I/MumbaiGL( 2328): MUMBAI_SHADERS_OK programs=5/5
-10-16 17:02:01.657 I/MumbaiGL( 2328): atlas: 15 layers of 128x128 in 190 ms
-10-16 17:02:01.694 I/MumbaiGL( 2328): GL ready, programs linked
-10-16 17:02:03.867 I/Mumbai  ( 2328): world loaded in 4166 ms: 3869 chunks, 1284 places, build b2f3a175af984b6299345ed4777af0e4
-10-16 17:02:03.867 I/Mumbai  ( 2328): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
-10-16 17:02:03.966 I/MumbaiGL( 2328): 1 decode workers started
-10-16 17:02:04.129 I/Mumbai  ( 2328): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-16 17:02:04.491 I/MumbaiGL( 2328): MUMBAI_LANDMASK_OK 1314x1814
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
-10-16 17:02:04.493 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
-10-16 17:02:05.261 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:46.989 I/Mumbai  ( 2367): thermal status 0 (none)
+10-16 17:14:47.385 I/MumbaiGL( 2367): GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-16 17:14:48.658 I/MumbaiGL( 2367): MUMBAI_SHADERS_OK programs=5/5
+10-16 17:14:48.909 I/MumbaiGL( 2367): atlas: 15 layers of 128x128 in 222 ms
+10-16 17:14:48.948 I/MumbaiGL( 2367): GL ready, programs linked
+10-16 17:14:51.440 I/Mumbai  ( 2367): world loaded in 4373 ms: 3869 chunks, 1284 places, build b2f3a175af984b6299345ed4777af0e4
+10-16 17:14:51.440 I/Mumbai  ( 2367): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
+10-16 17:14:51.470 I/MumbaiGL( 2367): 1 decode workers started
+10-16 17:14:51.519 I/Mumbai  ( 2367): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_LANDMASK_OK 1314x1814
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.055 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP transit0 n=9 idx=216 cap=160
 --- emulator ---
  LDR emulation mode: Gpu
 INFO         |     enable ETC2 emulation: true
@@ -131,7 +133,7 @@ INFO         |     useDedicatedAllocations: false
 INFO         |     guestVulkanMaxApiVersion: 1.3.0
 INFO         |     enableProtectedMemoryEmulation: false
 INFO         | Graphics Adapter Vendor Google (Google Inc.)
-INFO         | GraphWARNING: cannnot unmap ptr 0x7f7022601000 as it is in the protected range from 0x7f6f82600000 to 0x7f7022800000
+INFO         | GraphWARNING: cannnot unmap ptr 0x7fb0c1a01000 as it is in the protected range from 0x7fb021a00000 to 0x7fb0c1c00000
 ics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
 INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
 INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
@@ -168,75 +170,79 @@ INFO         |   qemu.wifi=1
 INFO         | Monitoring duration of emulator setup.
 WARNING      | The emulator now requires a signed jwt token for gRPC access! Use the -grpc flag if you really want an open unprotected grpc port
 INFO         | Using security allow list from: /usr/local/lib/android/sdk/emulator/lib/emulator_access.json
-INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2398/jwks/13de2966-5ad3-41d4-8d85-79906a15104a/active.jwk
-INFO         | Scanning /run/user/1001/avd/running/2398/jwks/13de2966-5ad3-41d4-8d85-79906a15104a for jwk keys.
+INFO         | The active JSON Web Key Sets can be found here: /run/user/1001/avd/running/2411/jwks/711172b0-3e81-40c6-906f-4f89266649da/active.jwk
+INFO         | Scanning /run/user/1001/avd/running/2411/jwks/711172b0-3e81-40c6-906f-4f89266649da for jwk keys.
 INFO         | Started GRPC server at 127.0.0.1:8554, security: Local, auth: +token
-INFO         | Advertising in: /run/user/1001/avd/running/pid_2398.ini
+INFO         | Advertising in: /run/user/1001/avd/running/pid_2411.ini
 INFO         | Setting display: 0 configuration to: 1080x2280, dpi: 440x440 
 INFO         | setDisplayActiveConfig: id:0, 1080x2280
 INFO         | emulatorSetupEnvironment: Environment scene is not required
 USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
 WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
-INFO         | Boot completed in 26922 ms
+INFO         | Boot completed in 26390 ms
 INFO         | Increasing screen off timeout, logcat buffer size to 2M.
 --- crashes/GL ---
-10-16 17:01:53.177 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.182 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.196 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.199 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.204 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.315 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.319 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.324 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.333 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.365 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.385 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.396 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.506 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.532 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.543 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.546 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.573 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.575 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.704 W/BestClock(  509): java.time.DateTimeException: Missing NTP fix
-10-16 17:01:53.798 W/UnsafeUtil(  975): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
-10-16 17:01:53.861 W/UnsafeUtil(  934): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
-10-16 17:01:54.548 W/OverlayManager(  509): service 'idmap' died
-10-16 17:01:55.256 W/ModernMediaScanner( 1404): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
-10-16 17:01:55.321 W/ModernMediaScanner( 1404): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
-10-16 17:01:56.079 E/BackupHelper(  747): java.io.FileNotFoundException: /data/user_de/0/com.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
-10-16 17:01:56.079 E/BackupHelper(  747): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
-10-16 17:01:57.547 D/HostConnection(  709): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-16 17:01:57.821 D/ModelWriter(  975): java.lang.Exception
-10-16 17:01:59.720 D/libEGL  ( 2328): loaded /vendor/lib64/egl/libEGL_emulation.so
-10-16 17:01:59.721 D/libEGL  ( 2328): loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
-10-16 17:01:59.723 I/Mumbai  ( 2328): thermal status 0 (none)
-10-16 17:01:59.725 D/libEGL  ( 2328): loaded /vendor/lib64/egl/libGLESv2_emulation.so
-10-16 17:01:59.934 D/HostConnection( 2328): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-16 17:02:00.051 D/HostConnection( 2328): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-16 17:02:00.157 D/HostConnection( 2328): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
-10-16 17:02:00.230 I/MumbaiGL( 2328): GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
-10-16 17:02:01.420 I/MumbaiGL( 2328): MUMBAI_SHADERS_OK programs=5/5
-10-16 17:02:01.657 I/MumbaiGL( 2328): atlas: 15 layers of 128x128 in 190 ms
-10-16 17:02:01.694 I/MumbaiGL( 2328): GL ready, programs linked
-10-16 17:02:03.867 I/Mumbai  ( 2328): world loaded in 4166 ms: 3869 chunks, 1284 places, build b2f3a175af984b6299345ed4777af0e4
-10-16 17:02:03.867 I/Mumbai  ( 2328): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
-10-16 17:02:03.966 I/MumbaiGL( 2328): 1 decode workers started
-10-16 17:02:04.129 I/Mumbai  ( 2328): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
-10-16 17:02:04.491 I/MumbaiGL( 2328): MUMBAI_LANDMASK_OK 1314x1814
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
-10-16 17:02:04.492 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
-10-16 17:02:04.493 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
-10-16 17:02:05.250 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
-10-16 17:02:05.260 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
-10-16 17:02:05.261 I/MumbaiGL( 2328): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
-10-16 17:02:05.296 W/ModernMediaScanner( 1404): android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-16 17:14:40.914 W/UnsafeUtil(  931): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-16 17:14:41.085 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.114 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.116 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.177 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.268 W/UnsafeUtil(  506): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-16 17:14:41.282 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.301 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.313 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.330 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.341 W/UnsafeUtil(  959): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-16 17:14:41.375 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.383 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.402 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.405 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.408 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.409 W/BestClock(  506): java.time.DateTimeException: Missing NTP fix
+10-16 17:14:41.412 E/ConnectivityService(  506): Exception adding interface: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-16 17:14:41.600 E/ConnectivityService(  506): Exception in networkAddRouteParcel for non-gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-16 17:14:41.600 E/ConnectivityService(  506): Exception in networkAddRouteParcel for gateway: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+10-16 17:14:42.181 W/OverlayManager(  506): service 'idmap' died
+10-16 17:14:42.321 W/ModernMediaScanner( 1445): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-16 17:14:42.510 W/ModernMediaScanner( 1445): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-16 17:14:43.484 E/BackupHelper(  724): java.io.FileNotFoundException: /data/user_de/0/com.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
+10-16 17:14:43.484 E/BackupHelper(  724): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-16 17:14:45.400 D/ModelWriter(  931): java.lang.Exception
+10-16 17:14:46.798 W/ModernMediaScanner( 1445): android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-16 17:14:46.820 D/libEGL  ( 2367): loaded /vendor/lib64/egl/libEGL_emulation.so
+10-16 17:14:46.821 D/libEGL  ( 2367): loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-16 17:14:46.822 D/libEGL  ( 2367): loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-16 17:14:46.989 I/Mumbai  ( 2367): thermal status 0 (none)
+10-16 17:14:47.147 D/HostConnection( 2367): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-16 17:14:47.234 D/HostConnection( 2367): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-16 17:14:47.374 D/HostConnection( 2367): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-16 17:14:47.385 I/MumbaiGL( 2367): GL vendor Google (Google Inc.) renderer Android Emulator OpenGL ES Translator (Google SwiftShader) version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+10-16 17:14:48.658 I/MumbaiGL( 2367): MUMBAI_SHADERS_OK programs=5/5
+10-16 17:14:48.909 I/MumbaiGL( 2367): atlas: 15 layers of 128x128 in 222 ms
+10-16 17:14:48.948 I/MumbaiGL( 2367): GL ready, programs linked
+10-16 17:14:51.440 I/Mumbai  ( 2367): world loaded in 4373 ms: 3869 chunks, 1284 places, build b2f3a175af984b6299345ed4777af0e4
+10-16 17:14:51.440 I/Mumbai  ( 2367): MUMBAI_WORLD_READY chunks=3869 places=1284 extentX=52540 extentZ=72540
+10-16 17:14:51.470 I/MumbaiGL( 2367): 1 decode workers started
+10-16 17:14:51.519 I/Mumbai  ( 2367): MUMBAI_AUDIO_OK rate=22050 frames=512 buffer=6144
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_LANDMASK_OK 1314x1814
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=5 idx=45 cap=180
+10-16 17:14:51.736 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=3 idx=45 cap=180
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=2 idx=360 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=1 idx=432 cap=192
+10-16 17:14:51.737 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:52.288 W/MediaProvider( 1445): java.io.IOException: Failed to update quota type for /storage/emulated/0/Android
+10-16 17:14:52.292 W/MediaProvider( 1445): java.io.IOException: Failed to update quota type for /storage/emulated/0/Android/media
+10-16 17:14:52.298 W/ModernMediaScanner( 1445): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-16 17:14:52.299 W/ModernMediaScanner( 1445): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow0 n=16 idx=45 cap=180
+10-16 17:14:53.052 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP shadow1 n=5 idx=45 cap=180
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic0 n=1 idx=468 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic5 n=7 idx=360 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic6 n=2 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic7 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP traffic8 n=1 idx=432 cap=192
+10-16 17:14:53.054 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP craft0 n=2 idx=612 cap=48
+10-16 17:14:53.055 I/MumbaiGL( 2367): MUMBAI_DRAWSTEP transit0 n=9 idx=216 cap=160
+10-16 17:14:53.555 W/OverlayManager(  506): service 'idmap' died
