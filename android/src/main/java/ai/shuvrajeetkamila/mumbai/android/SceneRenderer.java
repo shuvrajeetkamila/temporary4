@@ -136,7 +136,10 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
      * draw. The simulation is unaffected - trains still run, call and
      * board.
      */
-    private static final boolean TRANSIT_DRAWN = false;
+    private static final boolean TRANSIT_DRAWN = true;
+
+    /** Vertex and index bytes that may be sent to the GPU in one frame. */
+    private static final long UPLOAD_BYTES_PER_FRAME = 768 * 1024;
 
     /** Squared distance of the furthest instance uploaded this frame. */
     private double maxInstSq;
@@ -365,9 +368,27 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
         // Bounded GPU upload. More than a handful of buffer creations in one
         // frame stalls the driver and shows as a hitch exactly when the
         // player is moving fastest, which is the worst possible moment.
+        // Bounded by BYTES as well as by count. A chunk mesh runs to a
+        // megabyte at the near detail level, and creating two of those
+        // as fresh vertex buffers every frame, sustained, is a great
+        // deal more work than "two uploads" sounds like. It was never
+        // reached before: a bug in the request queue stranded tiles, so
+        // the uploader was usually idle and the real cost of a full
+        // streaming ring had never once been paid.
         uploadScratch.clear();
         uploadScratch.addAll(e.streamer.pollReady(q.uploadsPerFrame));
+        long budget = UPLOAD_BYTES_PER_FRAME;
         for (WorldStreamer.Tile t : uploadScratch) {
+            ChunkMesher.Mesh pending = t.mesh;
+            if (budget <= 0 && pending != null) {
+                // Hand it back rather than uploading it this frame.
+                e.streamer.deferUpload(t);
+                continue;
+            }
+            if (pending != null) {
+                budget -= (long) pending.vertexCount * ChunkMesher.STRIDE * 4
+                        + (long) pending.indexCount * 4;
+            }
             try {
                 e.streamer.markUploaded(t, uploadTile(t));
             } catch (Throwable err) {
@@ -643,8 +664,13 @@ final class SceneRenderer implements GLSurfaceView.Renderer {
 
         // --- trains, metros and vessels ----------------------------------------
         //
-        // NOT DRAWN, and this is a known defect rather than an
-        // oversight. Isolated on a real device: the app is healthy -
+        // Drawn. This was suspected and then exonerated by experiment:
+        // with the carriage draw removed the device still died after
+        // the same frame, with craft0 as the last line instead. Frames
+        // one and two draw the same groups and only the second is
+        // fatal, so it is not any particular draw - it is the work
+        // accumulating between frames, which is the tile uploads.
+        // Kept here because it is the record of how that was found: the app is healthy -
         // 5/5 shaders linked, world loaded, audio open, land mask
         // built - frame one draws shadows, traffic and craft and
         // survives, and frame two draws all of that plus the first

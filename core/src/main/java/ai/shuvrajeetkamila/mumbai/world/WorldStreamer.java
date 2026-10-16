@@ -566,6 +566,18 @@ public final class WorldStreamer {
     /** Tiles reclaimed by the stranded sweep. Should stay at zero. */
     public int strandedCount() { return statStranded; }
 
+    /**
+     * The host is not ready to upload this tile yet; put it back.
+     *
+     * <p>Not a failure: the mesh is good and still wanted, the frame's
+     * upload budget simply ran out. It goes back on the ready queue in
+     * the state it came off in.
+     */
+    public void deferUpload(Tile t) {
+        if (t.state == S_QUEUED_GPU) { t.state = S_READY_CPU; }
+        decoded.add(t);
+    }
+
     /** The host reports that the upload failed, and nothing was allocated. */
     public void markUploadFailed(Tile t) {
         statUploadFailures++;
